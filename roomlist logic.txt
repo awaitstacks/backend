@@ -1,0 +1,44 @@
+i will explain cases from scratch you modify fully
+ 
+ 
+first of all check that advance is paid or not if not then exclude that trvallers alone and start alloting roms for other trvallers
+ 
+concept is explained below
+ 
+Case 1
+ 
+if the booking id has proper allotments and mixed genders that there may be 5 trvallers (2 trvallers chosed double and three trvalers chosen triple ) then dont merge with other trvalelers or booking ids just allot as per there allocations 2 rooms one is double and another one is triple ... also include one conditions if there is any child present in that bookking that is sharing type is child with berth or without berth then allot that child in any one rooms alloted for that booking id
+ 
+Case 2
+ 
+if the booking id has improper allotments that is there may be 5 travellers all are chosen triple in this case for the second room remaning two trvallers combine another trvaller from another booking id but should match same gender if there is no pair available like that then just give them two sharing accomodation rooms only if not available
+ 
+Case 3
+ 
+if the booking has improper allotments and improper shairng that is 5 trvallers in that two of them double sharing and another two is double shairng and remainging one is triple sharing then allot as usual proper sharing basis that is first two trvaller double sharing and another two trvallers double sharing and then for remaining one try to search for paid if not is available only single sharing if availble then check for gender and match the fgender and allot the room as per the sharing
+ 
+ 
+Case 4 if some time s there may booking like this that is single traveller with double sharing and single trvaller with triple sharing but there will be no paid available for them so try to manage to reduce single rooms in this case combine them in one rooms so we should give prority for double sharing so that that the double sharing trvaller geting paid but now triple shairng trbveller getting bemnefitted as a double accomation no issue in this case
+ 
+case 5 it may some time in booking id has two trvaller both of them is double sharing but gender is different no issues h=they are maaied couple so combine them in one room as a double sharing but dont mix with others
+ 
+like wise there may be same genders with proper aotwments that is three meber d booking with triple sharing allot three of them in same rooms as a proper triple sharing liekt hsi
+ 
+case 6 if any booking id found with same mobile number then treat them as a guest that is boking id 1 has same mobile number as booking id 2 then try to allot them togtheer no need to care baout sharing type but gender should not be mixed
+ 
+eg booing id 1 has 9999999999 with one trvallers with triple sharingand booking id 2 has 999999999 has one trvaller with triple sharing and booking id 3 has mobile 8888888888 with one trbvaller with triplr sharing
+ 
+combine three of them in one room hopw you got it they are friends
+
+for the booking id has single trvallers group them gender wise and sharing wise
+ 
+that is double sharing male and double sharing female and triple sharing ma enad triplke sharing female
+ 
+for all single trvallers try utmost to reduce single rooms combine them as per there sahring baseis and also that friend logice if phone number same and identical try them to keep together while groupoing should not mix the gender in any cases even when phone number is identical
+
+
+add another conditions tht is if any ttrvallerremaning with sharing you can match with same gender and sharing with other booking id also that is
+ 
+if one booking has 6 travvelers four of them triple and two of them double and anohter booking has single trvaller with triple sharing also two booking gender same then
+ 
+for that amoung 4 trvaller first 3 trvallers in one room with triple sharing and another one remaing trvaller combine with second booking with triple sharing so that the single count room will be reduced

@@ -17,7 +17,7 @@ const googleSignIn = async (req, res) => {
     if (!idToken) {
       return res.status(400).json({
         success: false,
-        message: "Google token is required",
+        message: "Google tokens is required",
       });
     }
 

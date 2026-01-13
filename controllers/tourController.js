@@ -32,16 +32,44 @@ const changeTourAvailability = async (req, res) => {
   }
 };
 
+// const tourList = async (req, res) => {
+//   try {
+//     const tours = await tourModel.find({});
+//     res.json({ success: true, tours });
+//   } catch (error) {
+//     console.log("Error fetching tours", error);
+
+//     res.json({ success: false, message: error.message });
+//   }
+// };
+
 const tourList = async (req, res) => {
   try {
-    const tours = await tourModel.find({});
-    res.json({ success: true, tours });
-  } catch (error) {
-    console.log("Error fetching tours", error);
+    const tours = await tourModel
+      .find({})
+      .sort({
+        // 1. lastBookingDate year (descending) – newest year first
+        "lastBookingDate": -1,
+        // 2. same year la irundha createdAt newest first
+        "createdAt": -1
+      })
+      .lean();
 
-    res.json({ success: false, message: error.message });
+    res.json({
+      success: true,
+      total: tours.length,
+      tours,
+    });
+  } catch (error) {
+    console.error("Error in tourList:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch all tours",
+      error: error.message,
+    });
   }
 };
+
 
 const loginTour = async (req, res) => {
   try {
@@ -2459,6 +2487,211 @@ const getSharingTypeFromSize = (size) => {
 
 const assignRoomNumbers = (rooms) =>
   rooms.map((r, i) => ({ ...r, roomNumber: i + 1 }));
+
+
+// const getToursByYear = async (req, res) => {
+//   try {
+//     const { year } = req.params;
+
+//     // Basic validation for year
+//     if (!year || isNaN(year) || year.length !== 4) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Please provide a valid 4-digit year (example: 2025, 2026)",
+//       });
+//     }
+
+//     const yearNum = parseInt(year);
+
+//     const startOfYear = new Date(`${yearNum}-01-01T00:00:00.000Z`);
+//     const endOfYear = new Date(`${yearNum}-12-31T23:59:59.999Z`);
+
+//     const tours = await tourModel
+//       .find({
+//         $or: [
+//           // Primary condition: based on lastBookingDate (your main requirement)
+//           {
+//             lastBookingDate: {
+//               $gte: startOfYear,
+//               $lte: endOfYear,
+//             },
+//           },
+
+//           // Fallback if lastBookingDate is missing → check batch
+//           {
+//             lastBookingDate: { $exists: false },
+//             batch: { $regex: yearNum.toString(), $options: "i" },
+//           },
+//         ],
+//       })
+//       .sort({ lastBookingDate: -1, createdAt: -1 }) // Newest first
+//       .lean(); // Better performance for read-only
+
+//     // Prepare useful summary for frontend
+//     const response = {
+//       success: true,
+//       selectedYear: yearNum,
+//       totalTours: tours.length,
+//       availableCount: tours.filter((t) => t.available === true).length,
+//       soldOutCount: tours.filter((t) => t.available === false).length,
+//       tours, // contains both available & unavailable tours
+//     };
+
+//     res.json(response);
+//   } catch (error) {
+//     console.error("Error in getToursByYear:", error);
+//     res.status(500).json({
+//       success: false,
+//       message: "Server error while fetching tours for this year",
+//       error: error.message,
+//     });
+//   }
+// };
+
+const getToursByYear = async (req, res) => {
+  try {
+    const { year } = req.params;
+
+    let query = {};
+
+    // Handle "all" case
+    if (year !== "all") {
+      if (!year || isNaN(year) || year.length !== 4) {
+        return res.status(400).json({
+          success: false,
+          message: "Please provide a valid 4-digit year or 'all'",
+        });
+      }
+
+      const yearNum = parseInt(year);
+      const start = new Date(`${yearNum}-01-01T00:00:00.000Z`);
+      const end = new Date(`${yearNum}-12-31T23:59:59.999Z`);
+
+      query = {
+        $or: [
+          { lastBookingDate: { $gte: start, $lte: end } },
+          {
+            lastBookingDate: { $exists: false },
+            batch: { $regex: yearNum.toString(), $options: "i" },
+          },
+        ],
+      };
+    }
+
+    // Fetch tours
+    const allTours = await tourModel
+      .find(query)
+      .sort({ lastBookingDate: -1, createdAt: -1 })
+      .lean();
+
+    // Split into available & sold out
+    const availableTours = allTours.filter(t => t.available === true);
+    const soldOutTours = allTours.filter(t => t.available === false);
+
+    res.json({
+      success: true,
+      requestedYear: year === "all" ? "All Years" : parseInt(year),
+      totalTours: allTours.length,
+      availableCount: availableTours.length,
+      soldOutCount: soldOutTours.length,
+      availableTours,   // Available always come first
+      soldOutTours,     // Sold out come after
+    });
+  } catch (error) {
+    console.error("Error in getToursByYear:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error while fetching tours",
+      error: error.message,
+    });
+  }
+};
+
+// const getAvailableTourYears = async (req, res) => {
+//   try {
+//     const years = await tourModel.aggregate([
+//       {
+//         $group: {
+//           _id: {
+//             $year: "$lastBookingDate"
+//           }
+//         }
+//       },
+//       {
+//         $match: {
+//           "_id": { $ne: null }
+//         }
+//       },
+//       {
+//         $sort: { "_id": -1 } // Newest first
+//       }
+//     ]);
+
+//     const yearList = years.map(item => item._id);
+
+//     // Optional: Add fallback years from batch if lastBookingDate is missing
+//     if (yearList.length === 0) {
+//       const batchYears = await tourModel.distinct("batch");
+//       const extracted = [...new Set(
+//         batchYears
+//           .map(b => b?.match(/\d{4}/)?.[0])
+//           .filter(Boolean)
+//       )].sort((a, b) => b - a);
+      
+//       return res.json({ success: true, years: extracted });
+//     }
+
+//     res.json({
+//       success: true,
+//       years: yearList
+//     });
+//   } catch (error) {
+//     console.error("Error fetching available years:", error);
+//     res.status(500).json({ success: false, message: "Server error" });
+//   }
+// };
+
+const getAvailableTourYears = async (req, res) => {
+  try {
+    // Primary: years from lastBookingDate
+    const yearsFromDate = await tourModel.aggregate([
+      {
+        $group: {
+          _id: { $year: "$lastBookingDate" }
+        }
+      },
+      { $match: { "_id": { $ne: null } } },
+      { $sort: { "_id": -1 } } // Newest first
+    ]);
+
+    let yearList = yearsFromDate.map(item => item._id);
+
+    // Fallback: extract from batch if no dates found
+    if (yearList.length === 0) {
+      const batchYears = await tourModel.distinct("batch");
+      yearList = [...new Set(
+        batchYears
+          .map(b => b?.match(/\d{4}/)?.[0])
+          .filter(Boolean)
+      )].sort((a, b) => b - a);
+    }
+
+    res.json({
+      success: true,
+      count: yearList.length,
+      years: yearList, // e.g. [2026, 2025, 2024, ...]
+    });
+  } catch (error) {
+    console.error("Error in getAvailableTourYears:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch available years",
+      error: error.message,
+    });
+  }
+};
+
+
 export {
   tourList,
   changeTourAvailability,
@@ -2483,4 +2716,6 @@ export {
   updateBookingBalance,
   getManagedBookingsHistory,
   allotRooms,
+  getToursByYear,
+  getAvailableTourYears
 };

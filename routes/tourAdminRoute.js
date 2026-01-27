@@ -17,6 +17,8 @@ import {
   rejectCancellation,
   tourAdminDashboard,
   upsertCancellationChart,
+  
+  getAllUsers
 } from "../controllers/tourAdminController.js";
 import authAdmin from "../middlewares/authAdmin.js";
 import { tourUpload } from "../middlewares/multer.js"; // ✅ Correct import (pre-configured fields)
@@ -52,6 +54,7 @@ touradminRouter.post("/approvecancellation", authAdmin, approveCancellation);
 touradminRouter.post("/rejectcancellation", authAdmin, rejectCancellation);
 touradminRouter.post("/approvebookingupdate", authAdmin, approveBookingUpdate);
 touradminRouter.post("/rejectbookingupdate", authAdmin, rejectBookingUpdate);
+touradminRouter.get("/alluser-profile", authAdmin, getAllUsers);
 
 //Crictical
 touradminRouter.post(

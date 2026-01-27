@@ -2691,6 +2691,60 @@ const getAvailableTourYears = async (req, res) => {
   }
 };
 
+// Get ALL bookings (no tourId filter)
+const getAllBookings = async (req, res) => {
+  try {
+    const bookings = await tourBookingModel
+      .find({})
+      .populate({
+        path: "userId",
+        select: "name email mobile", // Only needed user fields
+      })
+      .populate({
+        path: "tourId",
+        select: "title destination startDate endDate available", // Tour details
+      })
+      .sort({ bookingDate: -1 }) // Latest bookings first
+      .lean(); // Better performance for large data
+
+    if (!bookings || bookings.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: "No bookings found in the system.",
+        total: 0,
+        bookings: [],
+      });
+    }
+
+    // Optional: Add quick stats
+    const totalBookings = bookings.length;
+    const totalEarnings = bookings.reduce((sum, b) => {
+      let earnings = 0;
+      if (b.payment?.advance?.paid) earnings += b.payment.advance.amount || 0;
+      if (b.payment?.balance?.paid) earnings += b.payment.balance.amount || 0;
+      return sum + earnings;
+    }, 0);
+
+    const completedBookings = bookings.filter(b => b.isBookingCompleted).length;
+    const pendingBookings = totalBookings - completedBookings;
+
+    res.status(200).json({
+      success: true,
+      totalBookings,
+      totalEarnings,
+      completedBookings,
+      pendingBookings,
+      bookings,
+    });
+  } catch (error) {
+    console.error("Error in getAllBookings:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch all bookings",
+      error: error.message,
+    });
+  }
+};
 
 export {
   tourList,
@@ -2717,5 +2771,6 @@ export {
   getManagedBookingsHistory,
   allotRooms,
   getToursByYear,
-  getAvailableTourYears
+  getAvailableTourYears,
+  getAllBookings
 };

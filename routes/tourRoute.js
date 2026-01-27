@@ -23,7 +23,8 @@ import {
   viewTourAdvance,
   allotRooms, // Ensure this is imported
   getToursByYear,
-  getAvailableTourYears
+  getAvailableTourYears,
+  getAllBookings
 } from "../controllers/tourController.js";
 import authTour from "../middlewares/authTour.js";
 import { tourUpload } from "../middlewares/multer.js";
@@ -61,5 +62,5 @@ tourRouter.get("/managed-bookings/history", getManagedBookingsHistory);
 tourRouter.get("/allot-rooms/:tourId", allotRooms);
 tourRouter.get("/year/:year", getToursByYear);
 tourRouter.get("/year", getAvailableTourYears);
-
+tourRouter.get("/bookings-all", authTour, getAllBookings);
 export default tourRouter;

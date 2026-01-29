@@ -1500,33 +1500,6 @@ const rejectBookingUpdate = async (req, res) => {
   }
 };
 
-// const getAllUsers = async (req, res) => {
-//   try {
-//     const tours = await userModel
-//       .find({})
-//       .sort({
-//         // 1. lastBookingDate year (descending) – newest year first
-//         "lastBookingDate": -1,
-//         // 2. same year la irundha createdAt newest first
-//         "createdAt": -1
-//       })
-//       .lean();
-
-//     res.json({
-//       success: true,
-//       total: tours.length,
-//       tours,
-//     });
-//   } catch (error) {
-//     console.error("Error in tourList:", error);
-//     res.status(500).json({
-//       success: false,
-//       message: "Failed to fetch all tours",
-//       error: error.message,
-//     });
-//   }
-// };
-
 const getAllUsers = async (req, res) => {
   try {
     const users = await userModel

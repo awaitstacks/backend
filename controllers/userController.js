@@ -583,9 +583,9 @@ const razorpayInstance = new razorpay({
   key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
-// ===============================
-// CREATE PAYMENT ORDER
-// ===============================
+// // ===============================
+// // CREATE PAYMENT ORDER
+// // ===============================
 const paymentRazorpay = async (req, res) => {
   try {
     const { bookingId, paymentType } = req.body; // 'advance' | 'balance'

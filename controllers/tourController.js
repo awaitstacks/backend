@@ -252,6 +252,12 @@ const bookingComplete = async (req, res) => {
           message: "Balance receipt has not been sent.",
         });
       }
+         if (booking.isTripCompleted) {
+        return res.json({
+          success: false,
+          message: "modifed receipt has not been sent.",
+        });
+      }
     }
 
     // 7. Mark booking as completed
@@ -272,6 +278,213 @@ const bookingComplete = async (req, res) => {
     });
   }
 };
+// const TaskBookingComplete = async (req, res) => {
+//   try {
+//     const { bookingId } = req.body;
+
+//     // 1. Validate input
+//     if (!bookingId) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Booking ID is required.",
+//       });
+//     }
+
+//     // 2. Find the booking (no population needed anymore)
+//     const booking = await tourBookingModel.findById(bookingId);
+
+//     if (!booking) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Booking not found.",
+//       });
+//     }
+
+//     // 5. Already completed?
+//     if (booking.isBookingCompleted) {
+//       return res.json({
+//         success: false,
+//         message: "This booking is already marked as completed.",
+//       });
+//     }
+
+//     // 6. Cancellation logic (unchanged)
+//     const allTravellersCancelledValid = booking.travellers.every(
+//       (traveller) =>
+//         (traveller.cancelled?.byTraveller === true &&
+//           traveller.cancelled?.byAdmin === true) ||
+//         (traveller.cancelled?.byAdmin === true &&
+//           traveller.cancelled?.byTraveller !== true)
+//     );
+
+//     if (!allTravellersCancelledValid) {
+//       const travellerCancellationIssues = booking.travellers.filter(
+//         (traveller) =>
+//           traveller.cancelled?.byTraveller === true &&
+//           traveller.cancelled?.byAdmin !== true
+//       );
+
+//       if (travellerCancellationIssues.length > 0) {
+//         const cancelledTravellersList = travellerCancellationIssues
+//           .map((t) => `${t.firstName || "Unnamed"} ${t.lastName || ""}`)
+//           .join(", ");
+
+//         return res.json({
+//           success: false,
+//           message: `Cancellation request pending for traveller(s): ${cancelledTravellersList}`,
+//         });
+//       }
+
+//       // Payment + Receipt checks (only if not fully cancelled)
+//       const { advance, balance } = booking.payment || {};
+//       const { receipts } = booking;
+
+//       if (!advance?.paid) {
+//         return res.json({ success: false, message: "Advance payment not made." });
+//       }
+//       if (!advance?.paymentVerified) {
+//         return res.json({ success: false, message: "Advance payment not verified." });
+//       }
+//       if (!receipts?.advanceReceiptSent) {
+//         return res.json({ success: false, message: "Advance receipt not sent." });
+//       }
+
+//       if (!balance?.paid) {
+//         return res.json({ success: false, message: "Balance payment not made." });
+//       }
+//       if (!balance?.paymentVerified) {
+//         return res.json({ success: false, message: "Balance payment not verified." });
+//       }
+//       if (!receipts?.balanceReceiptSent) {
+//         return res.json({ success: false, message: "Balance receipt not sent." });
+//       }
+
+//       if (booking.isTripCompleted) {
+//         return res.json({ success: false, message: "Modified receipt pending." });
+//       }
+//     }
+
+//     // 7. Mark as completed
+//     booking.isBookingCompleted = true;
+//     booking.bookingCompletedAt = new Date();
+
+//     await booking.save({ validateModifiedOnly: true });
+
+//     return res.json({
+//       success: true,
+//       message: "Booking marked as completed successfully.",
+//     });
+//   } catch (error) {
+//     console.error("bookingComplete error:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Server error while completing booking.",
+//       error: error.message,
+//     });
+//   }
+// };
+
+const TaskBookingComplete = async (req, res) => {
+  try {
+    const { bookingId } = req.body;
+
+    if (!bookingId) {
+      return res.status(400).json({
+        success: false,
+        message: "Booking ID is required.",
+      });
+    }
+
+    const booking = await tourBookingModel.findById(bookingId);
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: "Booking not found.",
+      });
+    }
+
+    if (booking.isBookingCompleted) {
+      return res.json({
+        success: false,
+        message: "This booking is already marked as completed.",
+      });
+    }
+
+    const allTravellersCancelledValid = booking.travellers.every(
+      (traveller) =>
+        (traveller.cancelled?.byTraveller === true &&
+          traveller.cancelled?.byAdmin === true) ||
+        (traveller.cancelled?.byAdmin === true &&
+          traveller.cancelled?.byTraveller !== true)
+    );
+
+    if (!allTravellersCancelledValid) {
+      const travellerCancellationIssues = booking.travellers.filter(
+        (traveller) =>
+          traveller.cancelled?.byTraveller === true &&
+          traveller.cancelled?.byAdmin !== true
+      );
+
+      if (travellerCancellationIssues.length > 0) {
+        const cancelledTravellersList = travellerCancellationIssues
+          .map((t) => `${t.firstName || "Unnamed"} ${t.lastName || ""}`)
+          .join(", ");
+
+        return res.json({
+          success: false,
+          message: `Cancellation request pending for traveller(s): ${cancelledTravellersList}`,
+        });
+      }
+
+      const { advance, balance } = booking.payment || {};
+      const { receipts } = booking;
+
+      if (!advance?.paid) {
+        return res.json({ success: false, message: "Advance payment not made." });
+      }
+      if (!advance?.paymentVerified) {
+        return res.json({ success: false, message: "Advance payment not verified." });
+      }
+      if (!receipts?.advanceReceiptSent) {
+        return res.json({ success: false, message: "Advance receipt not sent." });
+      }
+
+      if (!balance?.paid) {
+        return res.json({ success: false, message: "Balance payment not made." });
+      }
+      if (!balance?.paymentVerified) {
+        return res.json({ success: false, message: "Balance payment not verified." });
+      }
+      if (!receipts?.balanceReceiptSent) {
+        return res.json({ success: false, message: "Balance receipt not sent." });
+      }
+
+      if (booking.isTripCompleted) {
+        return res.json({ success: false, message: "Modified receipt pending." });
+      }
+    }
+
+    // Mark as completed
+    booking.isBookingCompleted = true;
+    booking.bookingCompletedAt = new Date();
+
+    await booking.save({ validateModifiedOnly: true });
+
+    return res.status(200).json({
+      success: true,  // boolean true
+      message: "Booking marked as completed successfully.",
+      booking,
+    });
+  } catch (error) {
+    console.error("bookingComplete error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error while completing booking.",
+      error: error.message,
+    });
+  }
+};
+
 
 const markOfflineAdvancePaid = async (req, res) => {
   try {
@@ -515,6 +728,7 @@ const markOfflineBalancePaid = async (req, res) => {
     });
   }
 };
+
 // Update traveller-specific data in a booking
 const updateTraveller = async (req, res) => {
   try {
@@ -1002,6 +1216,72 @@ const markAdvanceReceiptSent = async (req, res) => {
     });
   }
 };
+// const taskMarkAdvanceReceiptSent = async (bookingId) => {
+//   try {
+//     const { data } = await axios.put(
+//       `${backendUrl}/api/tour/task/mark-advance-receipt-sent`, // adjust route name if different
+//       { bookingId },  // ← only bookingId
+//       { headers: { ttoken } }
+//     );
+
+//     if (data.success) {
+//       // Optional: optimistic update in local state if needed
+//       setBookings((prev) =>
+//         prev.map((b) =>
+//           b._id === bookingId
+//             ? {
+//                 ...b,
+//                 receipts: {
+//                   ...b.receipts,
+//                   advanceReceiptSent: true,
+//                   advanceReceiptSentAt: new Date(),
+//                 },
+//               }
+//             : b
+//         )
+//       );
+//     }
+
+//     return data;
+//   } catch (error) {
+//     console.error("markAdvanceReceiptSent error:", error);
+//     return {
+//       success: false,
+//       message: error.response?.data?.message || "Failed to mark advance receipt sent",
+//     };
+//   }
+// };
+
+const taskMarkAdvanceReceiptSent = async (req, res) => {
+  try {
+    const { bookingId } = req.body;
+    if (!bookingId) {
+      return res.status(400).json({ success: false, message: "bookingId is required" });
+    }
+
+    const booking = await tourBookingModel.findById(bookingId);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: "Booking not found" });
+    }
+
+    booking.receipts.advanceReceiptSent = true;
+    booking.receipts.advanceReceiptSentAt = new Date();
+    await booking.save({ validateModifiedOnly: true });
+
+    return res.status(200).json({
+      success: true,  // boolean true
+      message: "Advance receipt marked as sent successfully",
+      booking,
+    });
+  } catch (error) {
+    console.error("taskMarkAdvanceReceiptSent error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Something went wrong",
+    });
+  }
+};
+
 
 const markBalanceReceiptSent = async (req, res) => {
   try {
@@ -1057,6 +1337,85 @@ const markBalanceReceiptSent = async (req, res) => {
     });
   }
 };
+// const taskMarkBalanceReceiptSent = async (req, res) => {
+//   try {
+//     const { bookingId } = req.body;
+
+//     if (!bookingId) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "bookingId is required",
+//       });
+//     }
+
+//     // Fetch booking
+//     const booking = await tourBookingModel.findById(bookingId);
+//     if (!booking) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Booking not found",
+//       });
+//     }
+
+//     // Mark receipt as sent
+//     booking.receipts.balanceReceiptSent = true;
+//     booking.receipts.balanceReceiptSentAt = new Date();
+
+//     await booking.save({ validateModifiedOnly: true });
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Balance receipt marked as sent successfully",
+//       booking,
+//     });
+//   } catch (error) {
+//     console.error("markBalanceReceiptSent error:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message || "Something went wrong",
+//     });
+//   }
+// };
+
+const taskMarkBalanceReceiptSent = async (req, res) => {
+  try {
+    const { bookingId } = req.body;
+
+    if (!bookingId) {
+      return res.status(400).json({
+        success: false,
+        message: "bookingId is required",
+      });
+    }
+
+    const booking = await tourBookingModel.findById(bookingId);
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: "Booking not found",
+      });
+    }
+
+    // Mark receipt as sent
+    booking.receipts.balanceReceiptSent = true;
+    booking.receipts.balanceReceiptSentAt = new Date();
+
+    await booking.save({ validateModifiedOnly: true });
+
+    return res.status(200).json({
+      success: true,  // boolean true
+      message: "Balance receipt marked as sent successfully",
+      booking,
+    });
+  } catch (error) {
+    console.error("taskMarkBalanceReceiptSent error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Something went wrong",
+    });
+  }
+};
+
 
 const viewTourBalance = async (req, res) => {
   try {
@@ -1529,6 +1888,84 @@ const updateModifyReceipt = async (req, res) => {
     });
   } catch (error) {
     console.error("updateModifyReceipt error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Something went wrong",
+    });
+  }
+};
+
+// const taskMarkModifyReceipt = async (req, res) => {
+//   try {
+//     const { bookingId } = req.body;
+
+//     if (!bookingId) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "bookingId is required",
+//       });
+//     }
+
+//     // Fetch booking
+//     const booking = await tourBookingModel.findById(bookingId);
+//     if (!booking) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Booking not found",
+//       });
+//     }
+
+//     // Set isTripCompleted to false
+//     booking.isTripCompleted = false;
+
+//     // Save the updated booking
+//     await booking.save({ validateModifiedOnly: true });
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Trip completion status marked as not completed successfully",
+//       booking,
+//     });
+//   } catch (error) {
+//     console.error("updateModifyReceipt error:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message || "Something went wrong",
+//     });
+//   }
+// };
+
+const taskMarkModifyReceipt = async (req, res) => {
+  try {
+    const { bookingId } = req.body;
+
+    if (!bookingId) {
+      return res.status(400).json({
+        success: false,
+        message: "bookingId is required",
+      });
+    }
+
+    const booking = await tourBookingModel.findById(bookingId);
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: "Booking not found",
+      });
+    }
+
+    // Set isTripCompleted to false
+    booking.isTripCompleted = false;
+
+    await booking.save({ validateModifiedOnly: true });
+
+    return res.status(200).json({
+      success: true,  // boolean true
+      message: "Trip completion status marked as not completed successfully",
+      booking,
+    });
+  } catch (error) {
+    console.error("taskMarkModifyReceipt error:", error);
     return res.status(500).json({
       success: false,
       message: error.message || "Something went wrong",
@@ -2893,6 +3330,7 @@ const getAvailableTourYears = async (req, res) => {
 // Get ALL bookings (no tourId filter)
 const getAllBookings = async (req, res) => {
   try {
+    console.log("Logged-in tour operator ID:", req.tourOperator?._id); // ← add this
     const bookings = await tourBookingModel
       .find({})
       .populate({
@@ -2905,6 +3343,7 @@ const getAllBookings = async (req, res) => {
       })
       .sort({ bookingDate: -1 }) // Latest bookings first
       .lean(); // Better performance for large data
+      console.log("Total bookings found in DB:", bookings.length); // ← add this
 
     if (!bookings || bookings.length === 0) {
       return res.status(200).json({
@@ -2971,5 +3410,9 @@ export {
   allotRooms,
   getToursByYear,
   getAvailableTourYears,
-  getAllBookings
+  getAllBookings,
+  TaskBookingComplete,
+  taskMarkModifyReceipt,
+  taskMarkAdvanceReceiptSent,
+  taskMarkBalanceReceiptSent
 };

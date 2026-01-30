@@ -24,7 +24,12 @@ import {
   allotRooms, // Ensure this is imported
   getToursByYear,
   getAvailableTourYears,
-  getAllBookings
+  getAllBookings,
+  TaskBookingComplete,
+  taskMarkModifyReceipt,
+  taskMarkAdvanceReceiptSent,
+  taskMarkBalanceReceiptSent
+
 } from "../controllers/tourController.js";
 import authTour from "../middlewares/authTour.js";
 import { tourUpload } from "../middlewares/multer.js";
@@ -62,5 +67,12 @@ tourRouter.get("/managed-bookings/history", getManagedBookingsHistory);
 tourRouter.get("/allot-rooms/:tourId", allotRooms);
 tourRouter.get("/year/:year", getToursByYear);
 tourRouter.get("/year", getAvailableTourYears);
-tourRouter.get("/bookings-all", authTour, getAllBookings);
+tourRouter.get("/bookings-all", getAllBookings);
+
+// In your tourRouter file (or wherever you define routes)
+
+tourRouter.put("/task/complete-booking",          authTour, TaskBookingComplete);
+tourRouter.put("/task/modify-receipt",            authTour, taskMarkModifyReceipt);
+tourRouter.put("/task/mark-advance-receipt-sent", authTour, taskMarkAdvanceReceiptSent);
+tourRouter.put("/task/mark-balance-receipt-sent", authTour, taskMarkBalanceReceiptSent);
 export default tourRouter;

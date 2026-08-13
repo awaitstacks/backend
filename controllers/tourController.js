@@ -1123,6 +1123,312 @@ const tourProfile = async (req, res) => {
   }
 };
 
+// const updateTourProfile = async (req, res) => {
+//   try {
+//     const { tourId } = req.body; // Get tourId from the request body
+//     if (!tourId) {
+//       return res.json({ success: false, message: "Tour ID is missing" });
+//     }
+
+//     const tour = await tourModel.findById(tourId);
+//     if (!tour) {
+//       return res.json({ success: false, message: "Tour not found" });
+//     }
+
+//     // 1. Destructure and get files
+//     const { titleImage, mapImage, galleryImages } = req.files || {};
+
+//     // 2. Image upload helper
+//     const uploadImage = async (file) => {
+//       const result = await cloudinary.uploader.upload(file.path, {
+//         resource_type: "image",
+//       });
+//       return result.secure_url;
+//     };
+
+//     let updateFields = {};
+
+//     // 3. Process images
+//     if (titleImage) {
+//       updateFields.titleImage = await uploadImage(titleImage[0]);
+//     }
+//     if (mapImage) {
+//       updateFields.mapImage = await uploadImage(mapImage[0]);
+//     }
+//     if (galleryImages) {
+//       if (galleryImages.length !== 3) {
+//         return res.json({
+//           success: false,
+//           message: "Please upload exactly 3 gallery images",
+//         });
+//       }
+//       updateFields.galleryImages = await Promise.all(
+//         galleryImages.map((img) => uploadImage(img)),
+//       );
+//     }
+
+//     // 4. Get and parse all body fields, including nested ones
+//     const {
+//       title,
+//       batch,
+//       duration,
+//       price,
+//       destination,
+//       sightseeing,
+//       itinerary,
+//       includes,
+//       excludes,
+//       trainDetails,
+//       flightDetails,
+//       lastBookingDate,
+//       completedTripsCount,
+//       available,
+//       advanceAmount,
+//       addons,
+//       boardingPoints,
+//       deboardingPoints,
+//       remarks,
+//       variantPackage,
+//       gst, // New field: GST percentage
+//     } = req.body;
+
+//     // 5. Use existing data as a fallback for calculations
+//     let parsedPrice = tour.price;
+//     if (price) {
+//       try {
+//         parsedPrice = JSON.parse(price);
+//         updateFields.price = parsedPrice;
+//       } catch {
+//         return res.json({ success: false, message: "Invalid JSON in price" });
+//       }
+//     }
+
+//     let parsedAdvanceAmount = tour.advanceAmount;
+//     if (advanceAmount) {
+//       try {
+//         parsedAdvanceAmount = JSON.parse(advanceAmount);
+//         updateFields.advanceAmount = parsedAdvanceAmount;
+//       } catch {
+//         return res.json({
+//           success: false,
+//           message: "Invalid JSON in advanceAmount",
+//         });
+//       }
+//     }
+
+//     if (gst !== undefined && gst !== "") {
+//       const parsedGst = Number(gst);
+//       if (isNaN(parsedGst) || parsedGst < 0) {
+//         return res.json({ success: false, message: "Invalid GST value" });
+//       }
+//       updateFields.gst = parsedGst;
+//     }
+
+//     // 6. Recalculate balances for main tour using the most current data
+
+//     // 6. Recalculate balances for main tour using the most current data
+//     if (parsedPrice && parsedAdvanceAmount) {
+//       const adultAdvance = Number(parsedAdvanceAmount.adult) || 0;
+//       const childAdvance = Number(parsedAdvanceAmount.child) || 0;
+
+//       updateFields.balanceDouble =
+//         Number(parsedPrice.doubleSharing) - adultAdvance;
+//       updateFields.balanceTriple =
+//         Number(parsedPrice.tripleSharing) - adultAdvance;
+//       updateFields.balanceChildWithBerth =
+//         Number(parsedPrice.childWithBerth || 0) - childAdvance;
+//       updateFields.balanceChildWithoutBerth =
+//         Number(parsedPrice.childWithoutBerth || 0) - childAdvance;
+//     }
+
+//     // 7. Handle variantPackage array
+//     if (variantPackage) {
+//       try {
+//         const parsedVariantPackage = JSON.parse(variantPackage);
+//         if (!Array.isArray(parsedVariantPackage)) {
+//           return res.json({
+//             success: false,
+//             message: "variantPackage must be an array",
+//           });
+//         }
+
+//         // Validate and process each variant package
+//         updateFields.variantPackage = parsedVariantPackage.map((variant) => {
+//           // Initialize defaults
+//           const variantPrice = variant.price || {};
+//           const variantAdvanceAmount = variant.advanceAmount || {};
+
+//           // Calculate balances for this variant
+//           const adultAdvance = Number(variantAdvanceAmount.adult) || 0;
+//           const childAdvance = Number(variantAdvanceAmount.child) || 0;
+
+//           return {
+//             ...variant,
+//             balanceDouble:
+//               Number(variantPrice.doubleSharing || 0) - adultAdvance,
+//             balanceTriple:
+//               Number(variantPrice.tripleSharing || 0) - adultAdvance,
+//             balanceChildWithBerth:
+//               Number(variantPrice.childWithBerth || 0) - childAdvance,
+//             balanceChildWithoutBerth:
+//               Number(variantPrice.childWithoutBerth || 0) - childAdvance,
+//             // Ensure nested arrays are properly formatted
+//             destination: Array.isArray(variant.destination)
+//               ? variant.destination
+//               : [],
+//             sightseeing: Array.isArray(variant.sightseeing)
+//               ? variant.sightseeing
+//               : [],
+//             itinerary: Array.isArray(variant.itinerary)
+//               ? variant.itinerary
+//               : [],
+//             includes: Array.isArray(variant.includes) ? variant.includes : [],
+//             excludes: Array.isArray(variant.excludes) ? variant.excludes : [],
+//             trainDetails: Array.isArray(variant.trainDetails)
+//               ? variant.trainDetails.map((train) => ({
+//                 trainNo: train.trainNo || "",
+//                 trainName: train.trainName || "",
+//                 fromCode: train.fromCode || "",
+//                 fromStation: train.fromStation || "",
+//                 toCode: train.toCode || "",
+//                 toStation: train.toStation || "",
+//                 class: train.class || "",
+//                 departureTime: train.departureTime || "",
+//                 arrivalTime: train.arrivalTime || "",
+//                 ticketOpenDate: train.ticketOpenDate || null,
+//               }))
+//               : [],
+//             flightDetails: Array.isArray(variant.flightDetails)
+//               ? variant.flightDetails.map((flight) => ({
+//                 airline: flight.airline || "",
+//                 flightNo: flight.flightNo || "",
+//                 fromCode: flight.fromCode || "",
+//                 fromAirport: flight.fromAirport || "",
+//                 toCode: flight.toCode || "",
+//                 toAirport: flight.toAirport || "",
+//                 class: flight.class || "",
+//                 departureTime: flight.departureTime || "",
+//                 arrivalTime: flight.arrivalTime || "",
+//               }))
+//               : [],
+//             addons: Array.isArray(variant.addons)
+//               ? variant.addons.map((addon) => ({
+//                 name: addon.name || "",
+//                 amount: Number(addon.amount) || 0,
+//               }))
+//               : [],
+//             boardingPoints: Array.isArray(variant.boardingPoints)
+//               ? variant.boardingPoints.map((bp) => ({
+//                 stationCode: bp.stationCode || "",
+//                 stationName: bp.stationName || "",
+//               }))
+//               : [],
+//             deboardingPoints: Array.isArray(variant.deboardingPoints)
+//               ? variant.deboardingPoints.map((dp) => ({
+//                 stationCode: dp.stationCode || "",
+//                 stationName: dp.stationName || "",
+//               }))
+//               : [],
+//           };
+//         });
+//       } catch {
+//         return res.json({
+//           success: false,
+//           message: "Invalid JSON in variantPackage",
+//         });
+//       }
+//     }
+
+//     // 8. Update other fields
+//     if (title) updateFields.title = title;
+//     if (remarks) updateFields.remarks = remarks;
+//     if (batch) updateFields.batch = batch;
+//     if (lastBookingDate) updateFields.lastBookingDate = lastBookingDate;
+//     if (typeof available !== "undefined") updateFields.available = available;
+
+//     if (duration) {
+//       try {
+//         const parsed = JSON.parse(duration);
+//         const days = Number(parsed.days);
+//         const nights = Number(parsed.nights);
+//         if (isNaN(days) || isNaN(nights)) {
+//           return res.json({
+//             success: false,
+//             message: "Invalid duration format",
+//           });
+//         }
+//         updateFields.duration = { days, nights };
+//       } catch {
+//         return res.json({
+//           success: false,
+//           message: "Invalid JSON in duration",
+//         });
+//       }
+//     }
+
+//     if (completedTripsCount) {
+//       const trips = Number(completedTripsCount);
+//       if (isNaN(trips) || trips < 0) {
+//         return res.json({
+//           success: false,
+//           message: "Invalid completedTripsCount",
+//         });
+//       }
+//       updateFields.completedTripsCount = trips;
+//     }
+
+//     // 9. Handle all optional arrays
+//     const optionalArrays = {
+//       destination,
+//       sightseeing,
+//       itinerary,
+//       includes,
+//       excludes,
+//       trainDetails,
+//       flightDetails,
+//       addons,
+//       boardingPoints,
+//       deboardingPoints,
+//     };
+
+//     for (let key in optionalArrays) {
+//       if (optionalArrays[key]) {
+//         try {
+//           const parsedArray = JSON.parse(optionalArrays[key]);
+//           if (!Array.isArray(parsedArray)) throw new Error();
+
+//           if (key === "addons") {
+//             updateFields[key] = parsedArray.map((a) => ({
+//               name: a.name || "",
+//               amount: Number(a.amount) || 0,
+//             }));
+//           } else if (key === "boardingPoints" || key === "deboardingPoints") {
+//             updateFields[key] = parsedArray.map((a) => ({
+//               stationCode: a.stationCode || "",
+//               stationName: a.stationName || "",
+//             }));
+//           } else {
+//             updateFields[key] = parsedArray;
+//           }
+//         } catch {
+//           return res.json({
+//             success: false,
+//             message: `Invalid JSON in ${key}`,
+//           });
+//         }
+//       }
+//     }
+
+//     // 10. Final update
+//     await tourModel.findByIdAndUpdate(tourId, { $set: updateFields });
+
+//     res.json({ success: true, message: "Tour updated successfully" });
+//   } catch (error) {
+//     console.error("Update Tour Error:", error);
+//     res.json({ success: false, message: error.message });
+//   }
+// };
+
 const updateTourProfile = async (req, res) => {
   try {
     const { tourId } = req.body; // Get tourId from the request body
@@ -1189,8 +1495,17 @@ const updateTourProfile = async (req, res) => {
       deboardingPoints,
       remarks,
       variantPackage,
-      gst, // New field: GST percentage
+      gst, // GST percentage
     } = req.body;
+
+    // ── NEW: helper to parse train/flight addons sub-array ──
+    const parseAddonsArray = (arr) => {
+      if (!Array.isArray(arr)) return [];
+      return arr.map((a) => ({
+        name: a.name || "",
+        amount: Number(a.amount) || 0,
+      }));
+    };
 
     // 5. Use existing data as a fallback for calculations
     let parsedPrice = tour.price;
@@ -1223,8 +1538,6 @@ const updateTourProfile = async (req, res) => {
       }
       updateFields.gst = parsedGst;
     }
-
-    // 6. Recalculate balances for main tour using the most current data
 
     // 6. Recalculate balances for main tour using the most current data
     if (parsedPrice && parsedAdvanceAmount) {
@@ -1296,6 +1609,8 @@ const updateTourProfile = async (req, res) => {
                 departureTime: train.departureTime || "",
                 arrivalTime: train.arrivalTime || "",
                 ticketOpenDate: train.ticketOpenDate || null,
+                tripType: train.tripType || "", // ← NEW
+                addons: parseAddonsArray(train.addons),
               }))
               : [],
             flightDetails: Array.isArray(variant.flightDetails)
@@ -1309,6 +1624,8 @@ const updateTourProfile = async (req, res) => {
                 class: flight.class || "",
                 departureTime: flight.departureTime || "",
                 arrivalTime: flight.arrivalTime || "",
+                // ── NEW: flight-wise addons for this variant ──
+                addons: parseAddonsArray(flight.addons),
               }))
               : [],
             addons: Array.isArray(variant.addons)
@@ -1406,6 +1723,12 @@ const updateTourProfile = async (req, res) => {
             updateFields[key] = parsedArray.map((a) => ({
               stationCode: a.stationCode || "",
               stationName: a.stationName || "",
+            }));
+          } else if (key === "trainDetails" || key === "flightDetails") {
+            // ── if/else — attach addons; tripType carries through via spread ──
+            updateFields[key] = parsedArray.map((item) => ({
+              ...item, // tripType already included here automatically
+              addons: parseAddonsArray(item.addons),
             }));
           } else {
             updateFields[key] = parsedArray;
@@ -2268,6 +2591,432 @@ const getCancellationsByBooking = async (req, res) => {
     });
   }
 };
+// const updateBookingBalance = async (req, res) => {
+//   try {
+//     const { bookingId } = req.params;
+//     const { updates = {} } = req.body;
+
+//     console.log(`[updateBookingBalance] Processing bookingId: ${bookingId}`);
+//     console.log(
+//       `[updateBookingBalance] Received updates keys:`,
+//       Object.keys(updates),
+//     );
+
+//     if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+//       return res
+//         .status(400)
+//         .json({ success: false, message: "Invalid bookingId" });
+//     }
+
+//     const original = await tourBookingModel
+//       .findById(bookingId)
+//       .populate("tourId")
+//       .lean();
+
+//     if (!original) {
+//       return res
+//         .status(404)
+//         .json({ success: false, message: "Booking not found" });
+//     }
+
+//     const tour = original.tourId;
+
+//     console.log(
+//       `[ORIGINAL] Advance paid: ${original.payment?.advance?.paid}, amount: ${original.payment?.advance?.amount || 0}`,
+//     );
+//     console.log(
+//       `[ORIGINAL] Balance paid: ${original.payment?.balance?.paid}, amount: ${original.payment?.balance?.amount || 0}`,
+//     );
+
+//     // Early blocks
+//     const hasPendingTravellerCancellation = original.travellers.some(
+//       (t) => t.cancelled?.byTraveller === true && !t.cancelled?.byAdmin,
+//     );
+
+//     if (hasPendingTravellerCancellation) {
+//       console.log("[BLOCK] Pending traveller cancellation → blocked");
+//       return res.status(400).json({
+//         success: false,
+//         message: "Pending traveller cancellation request.",
+//         reason: "pending_traveller_cancellation",
+//       });
+//     }
+
+//     if (original.cancellationRequest === true) {
+//       console.log("[BLOCK] Pending full cancellation → blocked");
+//       return res.status(400).json({
+//         success: false,
+//         message: "Pending full cancellation request.",
+//         reason: "pending_full_cancellation",
+//       });
+//     }
+
+//     const advancePaid = original.payment?.advance?.paid ?? false;
+//     const balancePaid = original.payment?.balance?.paid ?? false;
+//     const fullyPaid = advancePaid && balancePaid;
+
+//     // ────────────────────────────────────────────────
+//     // CASE 5: Fully paid → only boarding/deboarding
+//     // ────────────────────────────────────────────────
+//     if (fullyPaid) {
+//       console.log(
+//         "[CASE 5] Fully paid → restricting to boarding/deboarding only",
+//       );
+
+//       const restrictedTravellers = original.travellers.map((origT, i) => {
+//         const updT = updates.travellers?.[i];
+//         if (!updT) return origT;
+//         return {
+//           ...origT,
+//           boardingPoint: updT.boardingPoint || origT.boardingPoint,
+//           deboardingPoint: updT.deboardingPoint || origT.deboardingPoint,
+//         };
+//       });
+
+//       const merged = { ...original, travellers: restrictedTravellers };
+
+//       // ────────────────────────────────────────────────────────────────
+//       // FIXED: Do NOT use ...merged here — it copies the original _id!
+//       // Explicitly list only the fields we want (new _id will be auto-generated)
+//       // ────────────────────────────────────────────────────────────────
+//       const manageDoc = {
+//         userId: merged.userId,
+//         tourId: tour._id,
+//         bookingId: original._id,
+
+//         userData: merged.userData,
+//         tourData: merged.tourData,
+//         travellers: merged.travellers,
+//         contact: merged.contact,
+//         billingAddress: merged.billingAddress,
+//         bookingType: merged.bookingType,
+//         payment: merged.payment,
+//         receipts: merged.receipts,
+
+//         isTripCompleted: merged.isTripCompleted,
+//         isBookingCompleted: merged.isBookingCompleted,
+//         cancelled: merged.cancelled,
+
+//         bookingDate: merged.bookingDate,
+//         gvCancellationPool: merged.gvCancellationPool,
+//         irctcCancellationPool: merged.irctcCancellationPool,
+
+//         adminRemarks: merged.adminRemarks || [],
+
+//         manageBooking: true,
+//         approvedBy: false,
+//         raisedBy: true,
+//         raisedAt: new Date(Date.now() + 5.5 * 60 * 60 * 1000),
+
+//         // If you have this flag:
+//         travellersReduced: false, // or your logic — usually false in fully-paid case
+
+//         updatableAdvance: original.payment.advance.amount || 0,
+//         updatedAdvance: original.payment.advance.amount || 0,
+//         updatableBalance: original.payment.balance.amount || 0,
+//         updatedBalance: original.payment.balance.amount || 0,
+//       };
+
+//       const saved = await manageBookingModel.create(manageDoc);
+
+//       console.log(
+//         "[CASE 5] Created manage doc with locked values → new _id:",
+//         saved._id,
+//       );
+
+//       return res.status(201).json({
+//         success: true,
+//         message: "Manage booking raised (boarding/deboarding only)",
+//         warning: "Fully paid → package & addons locked",
+//         data: saved,
+//       });
+//     }
+//     // Merge updates + preserve cancelled flags
+//     const mergedTravellers = (updates.travellers || original.travellers).map(
+//       (newT) => {
+//         const origT = original.travellers.find(
+//           (o) => o._id?.toString() === newT._id?.toString(),
+//         );
+//         if (origT?.cancelled) {
+//           return { ...newT, cancelled: { ...origT.cancelled } };
+//         }
+//         return newT;
+//       },
+//     );
+
+//     const merged = {
+//       ...original,
+//       ...updates,
+//       travellers: mergedTravellers,
+//       contact: { ...original.contact, ...(updates.contact || {}) },
+//       billingAddress: {
+//         ...original.billingAddress,
+//         ...(updates.billingAddress || {}),
+//       },
+//     };
+
+//     const getPackage = (t) => {
+//       return t.packageType === "main"
+//         ? tour
+//         : (tour.variantPackage?.[t.variantPackageIndex] ?? tour);
+//     };
+
+//     const activeTravellers = merged.travellers.filter(
+//       (t) => !t.cancelled?.byTraveller && !t.cancelled?.byAdmin,
+//     );
+
+//     // Identify newly added travellers
+//     const originalTravellerIds = new Set(
+//       original.travellers.filter((t) => t._id).map((t) => t._id.toString()),
+//     );
+
+//     const newAddedTravellers = activeTravellers.filter((t) => {
+//       if (!t._id) return true;
+//       return !originalTravellerIds.has(t._id.toString());
+//     });
+
+//     console.log(
+//       `[NEW TRAVELLERS DETECTED] Count: ${newAddedTravellers.length}`,
+//     );
+
+//     // ────────────────────────────────────────────────
+//     // Calculate A, B, D, T
+//     // ────────────────────────────────────────────────
+//     let A = 0,
+//       B = 0,
+//       D = 0,
+//       T = 0; // T = total current full package price of active travellers
+
+//     activeTravellers.forEach((t) => {
+//       const pkg = getPackage(t);
+//       let advanceVal = 0;
+//       let balanceVal = 0;
+//       let fullPackagePrice = 0;
+
+//       if (t.sharingType === "double" || t.sharingType === "triple") {
+//         advanceVal = pkg?.advanceAmount?.adult || 0;
+//         balanceVal =
+//           t.sharingType === "double"
+//             ? pkg?.balanceDouble || 0
+//             : pkg?.balanceTriple || 0;
+//         fullPackagePrice =
+//           t.sharingType === "double"
+//             ? pkg?.price?.doubleSharing || 0
+//             : pkg?.price?.tripleSharing || 0;
+//       } else if (
+//         t.sharingType === "withBerth" ||
+//         t.sharingType === "withoutBerth"
+//       ) {
+//         advanceVal = pkg?.advanceAmount?.child || 0;
+//         balanceVal =
+//           t.sharingType === "withBerth"
+//             ? pkg?.balanceChildWithBerth || 0
+//             : pkg?.balanceChildWithoutBerth || 0;
+//         fullPackagePrice =
+//           t.sharingType === "withBerth"
+//             ? pkg?.price?.childWithBerth || 0
+//             : pkg?.price?.childWithoutBerth || 0;
+//       }
+
+//       A += advanceVal;
+//       B += balanceVal;
+//       D += t.selectedAddon?.price || 0;
+//       T += fullPackagePrice;
+//     });
+
+//     // ────────────────────────────────────────────────
+//     // Calculate J & K → only new travellers
+//     // ────────────────────────────────────────────────
+//     let J = 0,
+//       K = 0;
+
+//     newAddedTravellers.forEach((t) => {
+//       const pkg = getPackage(t);
+//       let packagePrice = 0;
+
+//       if (t.sharingType === "double")
+//         packagePrice = pkg?.price?.doubleSharing || 0;
+//       else if (t.sharingType === "triple")
+//         packagePrice = pkg?.price?.tripleSharing || 0;
+//       else if (t.sharingType === "withBerth")
+//         packagePrice = pkg?.price?.childWithBerth || 0;
+//       else if (t.sharingType === "withoutBerth")
+//         packagePrice = pkg?.price?.childWithoutBerth || 0;
+
+//       J += packagePrice;
+//       K += t.selectedAddon?.price || 0;
+//     });
+
+//     // ────────────────────────────────────────────────
+//     // Other variables
+//     // ────────────────────────────────────────────────
+//     const C = original.payment?.advance?.amount || 0;
+//     const I = original.payment?.balance?.amount || 0;
+
+//     const E = (merged.adminRemarks || [])
+//       .filter((r) => (r.amount || 0) > 0)
+//       .reduce((sum, r) => sum + (r.amount || 0), 0);
+
+//     const F = Math.abs(
+//       (merged.adminRemarks || [])
+//         .filter((r) => (r.amount || 0) < 0)
+//         .reduce((sum, r) => sum + (r.amount || 0), 0),
+//     );
+
+//     const G = merged.gvCancellationPool || 0;
+//     const H = merged.irctcCancellationPool || 0;
+
+//     // ────────────────────────────────────────────────
+//     // Logging — added T
+//     // ────────────────────────────────────────────────
+//     console.log("┌──────────────────────────────────────────────┐");
+//     console.log("│         CALCULATED VARIABLES                 │");
+//     console.log("├──────────────────────────────────────────────┤");
+//     console.log(`│ A (total advance)     = ₹${A}`);
+//     console.log(`│ B (total balance portion) = ₹${B}`);
+//     console.log(`│ T (total full package price) = ₹${T}`);
+//     console.log(`│ C (paid advance)      = ₹${C}`);
+//     console.log(`│ I (paid balance)      = ₹${I}`);
+//     console.log(`│ D (total addons)      = ₹${D}`);
+//     console.log(`│ J (new pkg full price)= ₹${J}`);
+//     console.log(`│ K (new addons)        = ₹${K}`);
+//     console.log(`│ E (pos remarks)       = ₹${E}`);
+//     console.log(`│ F (neg remarks abs)   = ₹${F}`);
+//     console.log(`│ G (GV pool)           = ₹${G}`);
+//     console.log(`│ H (IRCTC pool)        = ₹${H}`);
+//     console.log("└──────────────────────────────────────────────┘");
+
+//     const originalActiveCount = original.travellers.filter(
+//       (t) => !t.cancelled?.byTraveller && !t.cancelled?.byAdmin,
+//     ).length;
+//     const currentActiveCount = activeTravellers.length;
+
+//     const travellerReduced = currentActiveCount < originalActiveCount;
+//     const travellerAdded = currentActiveCount > originalActiveCount;
+//     const countSame = currentActiveCount === originalActiveCount;
+
+//     console.log(
+//       `[TRAVELLERS] Original active: ${originalActiveCount} → Current: ${currentActiveCount}`,
+//     );
+//     console.log(
+//       `[CHANGE] Reduced=${travellerReduced} | Added=${travellerAdded} | Same=${countSame}`,
+//     );
+
+//     // ────────────────────────────────────────────────
+//     // Calculation logic — updated Case 1 to use T instead of B
+//     // ────────────────────────────────────────────────
+//     let updatableAdvance = 0;
+//     let updatedAdvance = 0;
+//     let updatableBalance = 0;
+//     let updatedBalance = 0;
+
+//     let appliedCase = "unknown";
+
+//     if (advancePaid && !balancePaid) {
+//       if (travellerAdded) {
+//         appliedCase = "Case 3 - travellers added";
+//         updatableAdvance = updatedAdvance = C;
+//         updatableBalance = T + D + E + G + H; // ← YOUR NEW FORMULA
+//         updatedBalance = updatableBalance - (updatedAdvance + F); // ← YOUR NEW FORMULA
+//       } else if (countSame) {
+//         // Case 1 - same count, existing travellers edited
+//         appliedCase = "Case 1 - same count (existing edited)";
+//         updatableAdvance = updatedAdvance = C;
+//         updatableBalance = T + D + E + G + H;
+//         updatedBalance = updatableBalance - (C + F);
+//       } else if (travellerReduced) {
+//         appliedCase = "Case 2 - travellers reduced (advance paid)";
+//         updatableAdvance = A;
+//         updatedAdvance = A + D;
+//         updatableBalance = B;
+//         updatedBalance = B;
+//       }
+//     } else {
+//       // No advance paid
+//       appliedCase = travellerReduced
+//         ? "Case 2 variant (no advance + reduced)"
+//         : "Case 4";
+//       updatableAdvance = A;
+//       updatedAdvance = A + D;
+//       updatableBalance = B;
+//       updatedBalance = B;
+//     }
+
+//     console.log(`[APPLIED CASE] ${appliedCase}`);
+//     console.log(`[RESULT] updatableAdvance   = ${updatableAdvance}`);
+//     console.log(`[RESULT] updatedAdvance     = ${updatedAdvance}`);
+//     console.log(`[RESULT] updatableBalance   = ${updatableBalance}`);
+//     console.log(`[RESULT] updatedBalance     = ${updatedBalance}`);
+//     // ────────────────────────────────────────────────
+//     // Create manage booking document
+//     // ────────────────────────────────────────────────
+//     const manageDoc = {
+//       userId: merged.userId,
+//       tourId: tour._id,
+//       bookingId: original._id,
+//       userData: merged.userData,
+//       tourData: merged.tourData,
+//       travellers: merged.travellers,
+//       contact: merged.contact,
+//       billingAddress: merged.billingAddress,
+//       bookingType: merged.bookingType,
+//       payment: merged.payment,
+//       receipts: merged.receipts,
+//       isTripCompleted: merged.isTripCompleted,
+//       isBookingCompleted: merged.isBookingCompleted,
+//       cancelled: merged.cancelled,
+//       bookingDate: merged.bookingDate,
+//       gvCancellationPool: merged.gvCancellationPool,
+//       irctcCancellationPool: merged.irctcCancellationPool,
+//       adminRemarks: merged.adminRemarks || [],
+//       manageBooking: true,
+//       approvedBy: false,
+//       raisedBy: true,
+//       raisedAt: new Date(Date.now() + 5.5 * 60 * 60 * 1000),
+
+//       // ────────────────────────────────────────────────────────────────
+//       // travellersReduced = true ONLY when:
+//       //   1. Traveller count actually reduced
+//       //   2. AND (advance paid & balance unpaid) OR (both unpaid)
+//       // ────────────────────────────────────────────────────────────────
+//       travellersReduced:
+//         travellerReduced === true &&
+//         ((advancePaid && !balancePaid) || // advance paid + balance unpaid
+//           (!advancePaid && !balancePaid)), // both unpaid
+
+//       updatableAdvance,
+//       updatedAdvance,
+//       updatableBalance,
+//       updatedBalance,
+//     };
+
+//     const saved = await manageBookingModel.create(manageDoc);
+
+//     console.log(`[SUCCESS] Manage booking created → _id: ${saved._id}`);
+//     console.log(
+//       `[FLAG] travellersReduced set to: ${manageDoc.travellersReduced} (reduced=${travellerReduced}, advancePaid=${advancePaid}, balancePaid=${balancePaid})`,
+//     );
+
+//     return res.status(201).json({
+//       success: true,
+//       message: `Manage booking raised (${appliedCase})`,
+//       warning: travellerReduced
+//         ? "Traveller count reduced"
+//         : travellerAdded
+//           ? "New travellers added"
+//           : null,
+//       data: saved,
+//     });
+//   } catch (err) {
+//     console.error("[ERROR] updateBookingBalance failed:", err);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Server error",
+//       error: err.message,
+//     });
+//   }
+// };
+
 const updateBookingBalance = async (req, res) => {
   try {
     const { bookingId } = req.params;
@@ -2438,6 +3187,27 @@ const updateBookingBalance = async (req, res) => {
         : (tour.variantPackage?.[t.variantPackageIndex] ?? tour);
     };
 
+    // ────────────────────────────────────────────────
+    // Addon amount for a traveller — supports BOTH shapes:
+    //   - OLD (flat, old bookings):        t.selectedAddon?.price
+    //   - NEW (train/flight-wise, new bookings): sum of
+    //         t.selectedAddons[].amount
+    // Whichever is populated for that traveller is used — no
+    // double counting, no change to any other part of the
+    // calculation below (A, B, T, C, I, E, F, G, H, case logic,
+    // manageDoc) — this ONLY changes where D and K get their
+    // rupee value from.
+    // ────────────────────────────────────────────────
+    const getTravellerAddonTotal = (t) => {
+      if (Array.isArray(t.selectedAddons) && t.selectedAddons.length > 0) {
+        return t.selectedAddons.reduce(
+          (sum, a) => sum + (Number(a.amount) || 0),
+          0,
+        );
+      }
+      return Number(t.selectedAddon?.price) || 0;
+    };
+
     const activeTravellers = merged.travellers.filter(
       (t) => !t.cancelled?.byTraveller && !t.cancelled?.byAdmin,
     );
@@ -2497,7 +3267,7 @@ const updateBookingBalance = async (req, res) => {
 
       A += advanceVal;
       B += balanceVal;
-      D += t.selectedAddon?.price || 0;
+      D += getTravellerAddonTotal(t);
       T += fullPackagePrice;
     });
 
@@ -2521,7 +3291,7 @@ const updateBookingBalance = async (req, res) => {
         packagePrice = pkg?.price?.childWithoutBerth || 0;
 
       J += packagePrice;
-      K += t.selectedAddon?.price || 0;
+      K += getTravellerAddonTotal(t);
     });
 
     // ────────────────────────────────────────────────
@@ -4478,6 +5248,380 @@ const deleteTourVehicle = async (req, res) => {
     session.endSession();
   }
 };
+// const addTour = async (req, res) => {
+//   try {
+//     const {
+//       title,
+//       batch,
+//       duration,
+//       price,
+//       destination,
+//       sightseeing,
+//       itinerary,
+//       includes,
+//       excludes,
+//       trainDetails,
+//       flightDetails,
+//       lastBookingDate,
+//       completedTripsCount,
+//       available,
+//       advanceAmount,
+//       addons,
+//       remarks,
+//       boardingPoints,
+//       deboardingPoints,
+//       variantPackage,
+//       gst,
+//     } = req.body;
+
+//     // Image handling
+//     const files = req.files || {};
+//     const titleImage = files.titleImage?.[0];
+//     const mapImage = files.mapImage?.[0];
+//     const galleryImages = files.galleryImages || [];
+
+//     // Validate required fields
+//     if (
+//       !title ||
+//       !batch ||
+//       !duration ||
+//       !price ||
+//       !destination ||
+//       !sightseeing ||
+//       !itinerary ||
+//       !includes ||
+//       !excludes ||
+//       !titleImage ||
+//       !mapImage ||
+//       galleryImages.length === 0 ||
+//       !lastBookingDate ||
+//       !advanceAmount ||
+//       !boardingPoints ||
+//       !deboardingPoints
+//     ) {
+//       return res.json({
+//         success: false,
+//         message: "Missing required tour details",
+//       });
+//     }
+
+//     // Image upload function
+//     const uploadImage = async (file) => {
+//       const result = await cloudinary.uploader.upload(file.path, {
+//         resource_type: "image",
+//       });
+//       return result.secure_url;
+//     };
+
+//     // Upload images
+//     const titleImageUrl = await uploadImage(titleImage);
+//     const mapImageUrl = await uploadImage(mapImage);
+//     const galleryImageUrls = await Promise.all(
+//       galleryImages.map((img) => uploadImage(img)),
+//     );
+
+//     // Parse and validate fields
+//     let parsedDuration, parsedPrice, parsedAdvance;
+//     try {
+//       parsedDuration = JSON.parse(duration);
+//       parsedPrice = JSON.parse(price);
+//       parsedAdvance = JSON.parse(advanceAmount);
+//     } catch {
+//       return res.json({
+//         success: false,
+//         message: "Invalid JSON format for duration, price, or advanceAmount",
+//       });
+//     }
+
+//     // Validate main tour price and advance amounts
+//     const doubleSharing = Number(parsedPrice.doubleSharing);
+//     const tripleSharing = Number(parsedPrice.tripleSharing);
+//     const childWithBerth = Number(parsedPrice.childWithBerth) || 0;
+//     const childWithoutBerth = Number(parsedPrice.childWithoutBerth) || 0;
+//     const advanceAdult = Number(parsedAdvance.adult) || 0;
+//     const advanceChild = Number(parsedAdvance.child) || 0;
+
+//     if (
+//       isNaN(doubleSharing) ||
+//       isNaN(tripleSharing) ||
+//       isNaN(advanceAdult) ||
+//       isNaN(advanceChild)
+//     ) {
+//       return res.json({
+//         success: false,
+//         message: "Invalid number in price or advance amount",
+//       });
+//     }
+
+//     const parsedGst = gst !== undefined && gst !== "" ? Number(gst) : 0;
+//     if (isNaN(parsedGst) || parsedGst < 0) {
+//       return res.json({
+//         success: false,
+//         message: "Invalid GST value",
+//       });
+//     }
+
+//     // Calculate balances for main tour
+
+//     // Calculate balances for main tour
+//     const balanceDouble = doubleSharing - advanceAdult;
+//     const balanceTriple = tripleSharing - advanceAdult;
+//     const balanceChildWithBerth =
+//       childWithBerth > 0 ? childWithBerth - advanceChild : null;
+//     const balanceChildWithoutBerth =
+//       childWithoutBerth > 0 ? childWithoutBerth - advanceChild : null;
+
+//     // Parse arrays safely
+//     const parseArrayField = (field, fieldName) => {
+//       try {
+//         const parsed = JSON.parse(field);
+//         if (!Array.isArray(parsed)) {
+//           throw new Error(`Invalid format for ${fieldName}`);
+//         }
+//         return parsed;
+//       } catch {
+//         throw new Error(`Invalid format for ${fieldName}`);
+//       }
+//     };
+
+//     // Parse addons
+//     let parsedAddons = [];
+//     if (addons) {
+//       try {
+//         const temp = JSON.parse(addons);
+//         if (Array.isArray(temp)) {
+//           parsedAddons = temp.map((a) => ({
+//             name: a.name || "",
+//             amount: Number(a.amount) || 0,
+//           }));
+//         }
+//       } catch {
+//         return res.json({
+//           success: false,
+//           message: "Invalid format for addons",
+//         });
+//       }
+//     }
+
+//     // Parse boarding and deboarding points
+//     let parsedBoardingPoints = [];
+//     let parsedDeboardingPoints = [];
+//     try {
+//       parsedBoardingPoints = parseArrayField(
+//         boardingPoints,
+//         "boardingPoints",
+//       ).map((b) => ({
+//         stationCode: b.stationCode || "",
+//         stationName: b.stationName || "",
+//       }));
+//       parsedDeboardingPoints = parseArrayField(
+//         deboardingPoints,
+//         "deboardingPoints",
+//       ).map((b) => ({
+//         stationCode: b.stationCode || "",
+//         stationName: b.stationName || "",
+//       }));
+//     } catch (error) {
+//       return res.json({
+//         success: false,
+//         message: error.message,
+//       });
+//     }
+
+//     // Parse variantPackage
+//     let parsedVariants = [];
+//     if (variantPackage) {
+//       try {
+//         const temp = JSON.parse(variantPackage);
+//         if (Array.isArray(temp)) {
+//           parsedVariants = temp.map((v) => {
+//             const vpPrice = v.price || {};
+//             const vpAdvance = v.advanceAmount || {};
+//             const vpDuration = v.duration || {};
+
+//             const vpDouble = Number(vpPrice.doubleSharing) || 0;
+//             const vpTriple = Number(vpPrice.tripleSharing) || 0;
+//             const vpChildWithBerth = Number(vpPrice.childWithBerth) || 0;
+//             const vpChildWithoutBerth = Number(vpPrice.childWithoutBerth) || 0;
+//             const vpAdvanceAdult = Number(vpAdvance.adult) || 0;
+//             const vpAdvanceChild = Number(vpAdvance.child) || 0;
+
+//             return {
+//               duration: {
+//                 days: Number(vpDuration.days) || 0,
+//                 nights: Number(vpDuration.nights) || 0,
+//               },
+//               price: {
+//                 doubleSharing: vpDouble,
+//                 tripleSharing: vpTriple,
+//                 childWithBerth: vpChildWithBerth,
+//                 childWithoutBerth: vpChildWithoutBerth,
+//               },
+//               advanceAmount: {
+//                 adult: vpAdvanceAdult,
+//                 child: vpAdvanceChild,
+//               },
+//               balanceDouble: vpDouble - vpAdvanceAdult,
+//               balanceTriple: vpTriple - vpAdvanceAdult,
+//               balanceChildWithBerth:
+//                 vpChildWithBerth > 0 ? vpChildWithBerth - vpAdvanceChild : null,
+//               balanceChildWithoutBerth:
+//                 vpChildWithoutBerth > 0
+//                   ? vpChildWithoutBerth - vpAdvanceChild
+//                   : null,
+//               destination: Array.isArray(v.destination) ? v.destination : [],
+//               sightseeing: Array.isArray(v.sightseeing) ? v.sightseeing : [],
+//               itinerary: Array.isArray(v.itinerary) ? v.itinerary : [],
+//               includes: Array.isArray(v.includes) ? v.includes : [],
+//               excludes: Array.isArray(v.excludes) ? v.excludes : [],
+//               trainDetails: Array.isArray(v.trainDetails)
+//                 ? v.trainDetails.map((t) => ({
+//                   trainNo: t.trainNo || "",
+//                   trainName: t.trainName || "",
+//                   fromCode: t.fromCode || "",
+//                   fromStation: t.fromStation || "",
+//                   toCode: t.toCode || "",
+//                   toStation: t.toStation || "",
+//                   class: t.class || "",
+//                   departureTime: t.departureTime || "",
+//                   arrivalTime: t.arrivalTime || "",
+//                   ticketOpenDate: t.ticketOpenDate
+//                     ? new Date(t.ticketOpenDate)
+//                     : null,
+//                 }))
+//                 : [],
+//               flightDetails: Array.isArray(v.flightDetails)
+//                 ? v.flightDetails.map((f) => ({
+//                   airline: f.airline || "",
+//                   flightNo: f.flightNo || "",
+//                   fromCode: f.fromCode || "",
+//                   fromAirport: f.fromAirport || "",
+//                   toCode: f.toCode || "",
+//                   toAirport: f.toAirport || "",
+//                   class: f.class || "",
+//                   departureTime: f.departureTime || "",
+//                   arrivalTime: f.arrivalTime || "",
+//                 }))
+//                 : [],
+//               addons: Array.isArray(v.addons)
+//                 ? v.addons.map((a) => ({
+//                   name: a.name || "",
+//                   amount: Number(a.amount) || 0,
+//                 }))
+//                 : [],
+//               remarks: v.remarks || "",
+//               boardingPoints: Array.isArray(v.boardingPoints)
+//                 ? v.boardingPoints.map((b) => ({
+//                   stationCode: b.stationCode || "",
+//                   stationName: b.stationName || "",
+//                 }))
+//                 : [],
+//               deboardingPoints: Array.isArray(v.deboardingPoints)
+//                 ? v.deboardingPoints.map((b) => ({
+//                   stationCode: b.stationCode || "",
+//                   stationName: b.stationName || "",
+//                 }))
+//                 : [],
+//               lastBookingDate: v.lastBookingDate
+//                 ? new Date(v.lastBookingDate)
+//                 : null,
+//             };
+//           });
+//         }
+//       } catch {
+//         return res.json({
+//           success: false,
+//           message: "Invalid format for variantPackage",
+//         });
+//       }
+//     }
+
+//     // Create tour data object
+//     const tourData = {
+//       title,
+//       batch,
+//       duration: {
+//         days: Number(parsedDuration.days) || 0,
+//         nights: Number(parsedDuration.nights) || 0,
+//       },
+//       price: {
+//         doubleSharing,
+//         tripleSharing,
+//         childWithBerth,
+//         childWithoutBerth,
+//       },
+//       gst: parsedGst,
+//       advanceAmount: {
+//         adult: advanceAdult,
+//         child: advanceChild,
+//       },
+//       balanceDouble,
+//       balanceTriple,
+//       balanceChildWithBerth,
+//       balanceChildWithoutBerth,
+//       destination: parseArrayField(destination, "destination"),
+//       sightseeing: parseArrayField(sightseeing, "sightseeing"),
+//       itinerary: parseArrayField(itinerary, "itinerary"),
+//       includes: parseArrayField(includes, "includes"),
+//       excludes: parseArrayField(excludes, "excludes"),
+//       trainDetails: trainDetails
+//         ? parseArrayField(trainDetails, "trainDetails").map((t) => ({
+//           trainNo: t.trainNo || "",
+//           trainName: t.trainName || "",
+//           fromCode: t.fromCode || "",
+//           fromStation: t.fromStation || "",
+//           toCode: t.toCode || "",
+//           toStation: t.toStation || "",
+//           class: t.class || "",
+//           departureTime: t.departureTime || "",
+//           arrivalTime: t.arrivalTime || "",
+//           ticketOpenDate: t.ticketOpenDate
+//             ? new Date(t.ticketOpenDate)
+//             : null,
+//         }))
+//         : [],
+//       flightDetails: flightDetails
+//         ? parseArrayField(flightDetails, "flightDetails").map((f) => ({
+//           airline: f.airline || "",
+//           flightNo: f.flightNo || "",
+//           fromCode: f.fromCode || "",
+//           fromAirport: f.fromAirport || "",
+//           toCode: f.toCode || "",
+//           toAirport: f.toAirport || "",
+//           class: f.class || "",
+//           departureTime: f.departureTime || "",
+//           arrivalTime: f.arrivalTime || "",
+//         }))
+//         : [],
+//       addons: parsedAddons,
+//       remarks: remarks || "",
+//       boardingPoints: parsedBoardingPoints,
+//       deboardingPoints: parsedDeboardingPoints,
+//       titleImage: titleImageUrl,
+//       mapImage: mapImageUrl,
+//       galleryImages: galleryImageUrls,
+//       lastBookingDate: new Date(lastBookingDate),
+//       completedTripsCount: Number(completedTripsCount) || 0,
+//       available: available ?? true,
+//       variantPackage: parsedVariants,
+//     };
+
+//     // Save tour to database
+//     const newTour = new tourModel(tourData);
+//     await newTour.save();
+
+//     res.json({
+//       success: true,
+//       message: "Tour added successfully",
+//       data: newTour,
+//     });
+//   } catch (error) {
+//     console.error(error);
+//     res.json({ success: false, message: error.message });
+//   }
+// };
+
+
 const addTour = async (req, res) => {
   try {
     const {
@@ -4592,8 +5736,6 @@ const addTour = async (req, res) => {
     }
 
     // Calculate balances for main tour
-
-    // Calculate balances for main tour
     const balanceDouble = doubleSharing - advanceAdult;
     const balanceTriple = tripleSharing - advanceAdult;
     const balanceChildWithBerth =
@@ -4614,7 +5756,7 @@ const addTour = async (req, res) => {
       }
     };
 
-    // Parse addons
+    // Parse addons (old flat list)
     let parsedAddons = [];
     if (addons) {
       try {
@@ -4632,6 +5774,15 @@ const addTour = async (req, res) => {
         });
       }
     }
+
+    // ── NEW: helper to parse train/flight addons sub-array ──
+    const parseAddonsArray = (arr) => {
+      if (!Array.isArray(arr)) return [];
+      return arr.map((a) => ({
+        name: a.name || "",
+        amount: Number(a.amount) || 0,
+      }));
+    };
 
     // Parse boarding and deboarding points
     let parsedBoardingPoints = [];
@@ -4715,9 +5866,9 @@ const addTour = async (req, res) => {
                   class: t.class || "",
                   departureTime: t.departureTime || "",
                   arrivalTime: t.arrivalTime || "",
-                  ticketOpenDate: t.ticketOpenDate
-                    ? new Date(t.ticketOpenDate)
-                    : null,
+                  ticketOpenDate: t.ticketOpenDate ? new Date(t.ticketOpenDate) : null,
+                  tripType: t.tripType || "", // ← NEW
+                  addons: parseAddonsArray(t.addons),
                 }))
                 : [],
               flightDetails: Array.isArray(v.flightDetails)
@@ -4731,6 +5882,8 @@ const addTour = async (req, res) => {
                   class: f.class || "",
                   departureTime: f.departureTime || "",
                   arrivalTime: f.arrivalTime || "",
+                  // ── NEW: flight-wise addons for this variant ──
+                  addons: parseAddonsArray(f.addons),
                 }))
                 : [],
               addons: Array.isArray(v.addons)
@@ -4805,9 +5958,9 @@ const addTour = async (req, res) => {
           class: t.class || "",
           departureTime: t.departureTime || "",
           arrivalTime: t.arrivalTime || "",
-          ticketOpenDate: t.ticketOpenDate
-            ? new Date(t.ticketOpenDate)
-            : null,
+          ticketOpenDate: t.ticketOpenDate ? new Date(t.ticketOpenDate) : null,
+          tripType: t.tripType || "", // ← NEW: free-text note
+          addons: parseAddonsArray(t.addons),
         }))
         : [],
       flightDetails: flightDetails
@@ -4821,6 +5974,8 @@ const addTour = async (req, res) => {
           class: f.class || "",
           departureTime: f.departureTime || "",
           arrivalTime: f.arrivalTime || "",
+          // ── NEW: flight-wise addons ──
+          addons: parseAddonsArray(f.addons),
         }))
         : [],
       addons: parsedAddons,

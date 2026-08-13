@@ -1,0 +1,998 @@
+{
+  "legacyFlagAddedTo": [
+    "6990ce16340e95981eae4ffc",
+    "6990b7867c7ad6d0787dfe78",
+    "696f0f401e26172a2cf18b2e",
+    "697a400433f4e44ea0642efa",
+    "6990c01ddf498f6ac2455540",
+    "696f0ddb1e26172a2cf18adf",
+    "6990cef0340e95981eae500f",
+    "69b6689c4c86654cfdc87c37",
+    "696f0cd61e26172a2cf18aa6",
+    "696f0c121e26172a2cf18a9f",
+    "698442fa2802e983f28ee709",
+    "69774d5dc71118da98b282f8",
+    "6a11654bf0fe75ae671aebc9",
+    "6a13fbac8481b93a546fd0da",
+    "6a1fa94cb6b81420b4c485dd",
+    "6a313ed6346369cfff14de43",
+    "6a3145ef534032a44fa8c1e1",
+    "6a322f7933361cf7113cee33",
+    "6a69f33449909b554f30b88f",
+    "6a6dba62c6841060fdb7e053"
+  ],
+  "snapshots": [
+    {
+      "_id": "6990ce16340e95981eae4ffc",
+      "trainDetails": [
+        {
+          "trainNo": "",
+          "trainName": "",
+          "fromCode": "",
+          "fromStation": "",
+          "toCode": "",
+          "toStation": "",
+          "class": "",
+          "departureTime": "",
+          "arrivalTime": "",
+          "ticketOpenDate": null,
+          "_id": "6990ce16340e95981eae4ffd"
+        }
+      ],
+      "flightDetails": [
+        {
+          "airline": "",
+          "flightNo": "",
+          "fromCode": "",
+          "fromAirport": "",
+          "toCode": "",
+          "toAirport": "",
+          "class": "",
+          "departureTime": "",
+          "arrivalTime": "",
+          "_id": "6990ce16340e95981eae4ffe"
+        }
+      ],
+      "variantPackage": []
+    },
+    {
+      "_id": "6990b7867c7ad6d0787dfe78",
+      "trainDetails": [
+        {
+          "trainNo": "",
+          "trainName": "",
+          "fromCode": "",
+          "fromStation": "",
+          "toCode": "",
+          "toStation": "",
+          "class": "",
+          "departureTime": "",
+          "arrivalTime": "",
+          "ticketOpenDate": null,
+          "_id": "6990b7867c7ad6d0787dfe79"
+        }
+      ],
+      "flightDetails": [
+        {
+          "airline": "",
+          "flightNo": "",
+          "fromCode": "",
+          "fromAirport": "",
+          "toCode": "",
+          "toAirport": "",
+          "class": "",
+          "departureTime": "",
+          "arrivalTime": "",
+          "_id": "6990b7867c7ad6d0787dfe7a"
+        }
+      ],
+      "variantPackage": []
+    },
+    {
+      "_id": "696f0f401e26172a2cf18b2e",
+      "trainDetails": [
+        {
+          "trainNo": "",
+          "trainName": "",
+          "fromCode": "",
+          "fromStation": "",
+          "toCode": "",
+          "toStation": "",
+          "class": "",
+          "departureTime": "",
+          "arrivalTime": "",
+          "ticketOpenDate": null,
+          "_id": "696f0f401e26172a2cf18b2f"
+        }
+      ],
+      "flightDetails": [
+        {
+          "airline": "",
+          "flightNo": "",
+          "fromCode": "",
+          "fromAirport": "",
+          "toCode": "",
+          "toAirport": "",
+          "class": "",
+          "departureTime": "",
+          "arrivalTime": "",
+          "_id": "696f0f401e26172a2cf18b30"
+        }
+      ],
+      "variantPackage": [
+        {
+          "duration": {
+            "days": 6,
+            "nights": 5
+          },
+          "price": {
+            "doubleSharing": 40000,
+            "tripleSharing": 30000,
+            "childWithBerth": 25000,
+            "childWithoutBerth": 20000
+          },
+          "advanceAmount": {
+            "adult": 20000,
+            "child": 10000
+          },
+          "balanceDouble": 20000,
+          "balanceTriple": 10000,
+          "balanceChildWithBerth": 15000,
+          "balanceChildWithoutBerth": 10000,
+          "destination": [
+            "MADURAI"
+          ],
+          "sightseeing": [
+            "TEMPLE"
+          ],
+          "itinerary": [
+            "jvhvfucrvd"
+          ],
+          "includes": [
+            "WATER"
+          ],
+          "excludes": [
+            "AUTO CHARGE"
+          ],
+          "trainDetails": [],
+          "flightDetails": [
+            {
+              "airline": "vhgvubf",
+              "flightNo": "",
+              "fromCode": "",
+              "fromAirport": "",
+              "toCode": "",
+              "toAirport": "",
+              "class": "",
+              "departureTime": "",
+              "arrivalTime": "",
+              "_id": "698ae31ae4fab9c8b1c4cecf"
+            }
+          ],
+          "addons": [
+            {
+              "name": "",
+              "amount": 0,
+              "_id": "698ae31ae4fab9c8b1c4ced0"
+            }
+          ],
+          "remarks": "",
+          "boardingPoints": [
+            {
+              "stationCode": "MAA",
+              "stationName": "CHENNAI AIRPORT",
+              "_id": "698ae31ae4fab9c8b1c4ced1"
+            }
+          ],
+          "deboardingPoints": [
+            {
+              "stationCode": "MDU",
+              "stationName": "MADURAI AIRPORT",
+              "_id": "698ae31ae4fab9c8b1c4ced2"
+            }
+          ],
+          "lastBookingDate": "2027-01-14T00:00:00.000Z",
+          "_id": "6971bec176a41adc2d0882e0"
+        }
+      ]
+    },
+    {
+      "_id": "697a400433f4e44ea0642efa",
+      "trainDetails": [
+        {
+          "trainNo": "",
+          "trainName": "",
+          "fromCode": "",
+          "fromStation": "",
+          "toCode": "",
+          "toStation": "",
+          "class": "",
+          "departureTime": "",
+          "arrivalTime": "",
+          "ticketOpenDate": null,
+          "_id": "697a400433f4e44ea0642efb"
+        }
+      ],
+      "flightDetails": [
+        {
+          "airline": "",
+          "flightNo": "",
+          "fromCode": "",
+          "fromAirport": "",
+          "toCode": "",
+          "toAirport": "",
+          "class": "",
+          "departureTime": "",
+          "arrivalTime": "",
+          "_id": "697a400433f4e44ea0642efc"
+        }
+      ],
+      "variantPackage": [
+        {
+          "duration": {
+            "days": 6,
+            "nights": 5
+          },
+          "price": {
+            "doubleSharing": 40000,
+            "tripleSharing": 30000,
+            "childWithBerth": 25000,
+            "childWithoutBerth": 20000
+          },
+          "advanceAmount": {
+            "adult": 20000,
+            "child": 10000
+          },
+          "balanceDouble": 20000,
+          "balanceTriple": 10000,
+          "balanceChildWithBerth": 15000,
+          "balanceChildWithoutBerth": 10000,
+          "destination": [
+            "MADURAI"
+          ],
+          "sightseeing": [
+            "TEMPLE"
+          ],
+          "itinerary": [],
+          "includes": [
+            "WATER"
+          ],
+          "excludes": [
+            "AUTO CHARGE"
+          ],
+          "trainDetails": [],
+          "flightDetails": [],
+          "addons": [
+            {
+              "name": "",
+              "amount": 0,
+              "_id": "698de10cdc2103c254d4d8db"
+            }
+          ],
+          "remarks": "",
+          "boardingPoints": [
+            {
+              "stationCode": "MAA",
+              "stationName": "CHENNAI AIRPORT",
+              "_id": "698de10cdc2103c254d4d8dc"
+            }
+          ],
+          "deboardingPoints": [
+            {
+              "stationCode": "MDU",
+              "stationName": "MADURAI AIRPORT",
+              "_id": "698de10cdc2103c254d4d8dd"
+            }
+          ],
+          "lastBookingDate": "2027-01-14T00:00:00.000Z",
+          "_id": "6971bec176a41adc2d0882e0"
+        }
+      ]
+    },
+    {
+      "_id": "6990c01ddf498f6ac2455540",
+      "trainDetails": [
+        {
+          "trainNo": "",
+          "trainName": "",
+          "fromCode": "",
+          "fromStation": "",
+          "toCode": "",
+          "toStation": "",
+          "class": "",
+          "departureTime": "",
+          "arrivalTime": "",
+          "ticketOpenDate": null,
+          "_id": "6990c01ddf498f6ac2455541"
+        }
+      ],
+      "flightDetails": [
+        {
+          "airline": "",
+          "flightNo": "",
+          "fromCode": "",
+          "fromAirport": "",
+          "toCode": "",
+          "toAirport": "",
+          "class": "",
+          "departureTime": "",
+          "arrivalTime": "",
+          "_id": "6990c01ddf498f6ac2455542"
+        }
+      ],
+      "variantPackage": []
+    },
+    {
+      "_id": "696f0ddb1e26172a2cf18adf",
+      "trainDetails": [
+        {
+          "trainNo": "",
+          "trainName": "",
+          "fromCode": "",
+          "fromStation": "",
+          "toCode": "",
+          "toStation": "",
+          "class": "",
+          "departureTime": "",
+          "arrivalTime": "",
+          "ticketOpenDate": null,
+          "_id": "696f0ddb1e26172a2cf18ae0"
+        }
+      ],
+      "flightDetails": [
+        {
+          "airline": "",
+          "flightNo": "",
+          "fromCode": "",
+          "fromAirport": "",
+          "toCode": "",
+          "toAirport": "",
+          "class": "",
+          "departureTime": "",
+          "arrivalTime": "",
+          "_id": "696f0ddb1e26172a2cf18ae1"
+        }
+      ],
+      "variantPackage": [
+        {
+          "duration": {
+            "days": 6,
+            "nights": 5
+          },
+          "price": {
+            "doubleSharing": 40000,
+            "tripleSharing": 30000,
+            "childWithBerth": 25000,
+            "childWithoutBerth": 20000
+          },
+          "advanceAmount": {
+            "adult": 20000,
+            "child": 10000
+          },
+          "balanceDouble": 20000,
+          "balanceTriple": 10000,
+          "balanceChildWithBerth": 15000,
+          "balanceChildWithoutBerth": 10000,
+          "destination": [
+            "MADURAI"
+          ],
+          "sightseeing": [
+            "TEMPLE"
+          ],
+          "itinerary": [],
+          "includes": [
+            "WATER"
+          ],
+          "excludes": [
+            "AUTO CHARGE"
+          ],
+          "trainDetails": [],
+          "flightDetails": [],
+          "addons": [
+            {
+              "name": "",
+              "amount": 0,
+              "_id": "697752cec71118da98b2c56d"
+            }
+          ],
+          "remarks": "",
+          "boardingPoints": [
+            {
+              "stationCode": "MAA",
+              "stationName": "CHENNAI AIRPORT",
+              "_id": "697752cec71118da98b2c56e"
+            }
+          ],
+          "deboardingPoints": [
+            {
+              "stationCode": "MDU",
+              "stationName": "MADURAI AIRPORT",
+              "_id": "697752cec71118da98b2c56f"
+            }
+          ],
+          "lastBookingDate": "2027-01-14T00:00:00.000Z",
+          "_id": "6971bec176a41adc2d0882e0"
+        }
+      ]
+    },
+    {
+      "_id": "6990cef0340e95981eae500f",
+      "trainDetails": [
+        {
+          "trainNo": "",
+          "trainName": "",
+          "fromCode": "",
+          "fromStation": "",
+          "toCode": "",
+          "toStation": "",
+          "class": "",
+          "departureTime": "",
+          "arrivalTime": "",
+          "ticketOpenDate": null,
+          "_id": "6990cef0340e95981eae5010"
+        }
+      ],
+      "flightDetails": [
+        {
+          "airline": "",
+          "flightNo": "",
+          "fromCode": "",
+          "fromAirport": "",
+          "toCode": "",
+          "toAirport": "",
+          "class": "",
+          "departureTime": "",
+          "arrivalTime": "",
+          "_id": "6990cef0340e95981eae5011"
+        }
+      ],
+      "variantPackage": []
+    },
+    {
+      "_id": "69b6689c4c86654cfdc87c37",
+      "trainDetails": [],
+      "flightDetails": [],
+      "variantPackage": []
+    },
+    {
+      "_id": "696f0cd61e26172a2cf18aa6",
+      "trainDetails": [
+        {
+          "trainNo": "",
+          "trainName": "",
+          "fromCode": "",
+          "fromStation": "",
+          "toCode": "",
+          "toStation": "",
+          "class": "",
+          "departureTime": "",
+          "arrivalTime": "",
+          "ticketOpenDate": null,
+          "_id": "696f0cd61e26172a2cf18aa7"
+        }
+      ],
+      "flightDetails": [
+        {
+          "airline": "",
+          "flightNo": "",
+          "fromCode": "",
+          "fromAirport": "",
+          "toCode": "",
+          "toAirport": "",
+          "class": "",
+          "departureTime": "",
+          "arrivalTime": "",
+          "_id": "696f0cd61e26172a2cf18aa8"
+        }
+      ],
+      "variantPackage": []
+    },
+    {
+      "_id": "696f0c121e26172a2cf18a9f",
+      "trainDetails": [
+        {
+          "trainNo": "",
+          "trainName": "",
+          "fromCode": "",
+          "fromStation": "",
+          "toCode": "",
+          "toStation": "",
+          "class": "",
+          "departureTime": "",
+          "arrivalTime": "",
+          "ticketOpenDate": null,
+          "_id": "696f0c121e26172a2cf18aa0"
+        }
+      ],
+      "flightDetails": [
+        {
+          "airline": "",
+          "flightNo": "",
+          "fromCode": "",
+          "fromAirport": "",
+          "toCode": "",
+          "toAirport": "",
+          "class": "",
+          "departureTime": "",
+          "arrivalTime": "",
+          "_id": "696f0c121e26172a2cf18aa1"
+        }
+      ],
+      "variantPackage": [
+        {
+          "duration": {
+            "days": 4,
+            "nights": 2
+          },
+          "price": {
+            "doubleSharing": 50000,
+            "tripleSharing": 45000,
+            "childWithBerth": 35000,
+            "childWithoutBerth": 30000
+          },
+          "advanceAmount": {
+            "adult": 20000,
+            "child": 10000
+          },
+          "balanceDouble": 30000,
+          "balanceTriple": 25000,
+          "balanceChildWithBerth": 25000,
+          "balanceChildWithoutBerth": 20000,
+          "destination": [
+            "MADURAI"
+          ],
+          "sightseeing": [
+            "TEMPLE"
+          ],
+          "itinerary": [],
+          "includes": [
+            "WATER"
+          ],
+          "excludes": [
+            "AUTOCHARGE"
+          ],
+          "trainDetails": [],
+          "flightDetails": [],
+          "addons": [
+            {
+              "name": "",
+              "amount": 0,
+              "_id": "697752e0c71118da98b2c59b"
+            }
+          ],
+          "remarks": "",
+          "boardingPoints": [
+            {
+              "stationCode": "MAA",
+              "stationName": "CHENNAI AIRPORT",
+              "_id": "697752e0c71118da98b2c59c"
+            }
+          ],
+          "deboardingPoints": [
+            {
+              "stationCode": "MDU",
+              "stationName": "MADURAI AIRPORT",
+              "_id": "697752e0c71118da98b2c59d"
+            }
+          ],
+          "lastBookingDate": "2026-01-31T00:00:00.000Z",
+          "_id": "6971bc5e76a41adc2d0882a5"
+        }
+      ]
+    },
+    {
+      "_id": "698442fa2802e983f28ee709",
+      "trainDetails": [
+        {
+          "trainNo": "",
+          "trainName": "",
+          "fromCode": "",
+          "fromStation": "",
+          "toCode": "",
+          "toStation": "",
+          "class": "",
+          "departureTime": "",
+          "arrivalTime": "",
+          "ticketOpenDate": null,
+          "_id": "698442fa2802e983f28ee70a"
+        }
+      ],
+      "flightDetails": [
+        {
+          "airline": "",
+          "flightNo": "",
+          "fromCode": "",
+          "fromAirport": "",
+          "toCode": "",
+          "toAirport": "",
+          "class": "",
+          "departureTime": "",
+          "arrivalTime": "",
+          "_id": "698442fa2802e983f28ee70b"
+        }
+      ],
+      "variantPackage": []
+    },
+    {
+      "_id": "69774d5dc71118da98b282f8",
+      "trainDetails": [
+        {
+          "trainNo": "",
+          "trainName": "",
+          "fromCode": "",
+          "fromStation": "",
+          "toCode": "",
+          "toStation": "",
+          "class": "",
+          "departureTime": "",
+          "arrivalTime": "",
+          "ticketOpenDate": null,
+          "_id": "69774d5dc71118da98b282f9"
+        }
+      ],
+      "flightDetails": [
+        {
+          "airline": "",
+          "flightNo": "",
+          "fromCode": "",
+          "fromAirport": "",
+          "toCode": "",
+          "toAirport": "",
+          "class": "",
+          "departureTime": "",
+          "arrivalTime": "",
+          "_id": "69774d5dc71118da98b282fa"
+        }
+      ],
+      "variantPackage": [
+        {
+          "duration": {
+            "days": 4,
+            "nights": 2
+          },
+          "price": {
+            "doubleSharing": 50000,
+            "tripleSharing": 45000,
+            "childWithBerth": 35000,
+            "childWithoutBerth": 30000
+          },
+          "advanceAmount": {
+            "adult": 20000,
+            "child": 10000
+          },
+          "balanceDouble": 30000,
+          "balanceTriple": 25000,
+          "balanceChildWithBerth": 25000,
+          "balanceChildWithoutBerth": 20000,
+          "destination": [
+            "MADURAI"
+          ],
+          "sightseeing": [
+            "TEMPLE"
+          ],
+          "itinerary": [],
+          "includes": [
+            "WATER"
+          ],
+          "excludes": [
+            "AUTOCHARGE"
+          ],
+          "trainDetails": [],
+          "flightDetails": [],
+          "addons": [
+            {
+              "name": "",
+              "amount": 0,
+              "_id": "699d2da9253b15f795b6a61f"
+            }
+          ],
+          "remarks": "",
+          "boardingPoints": [
+            {
+              "stationCode": "MAA",
+              "stationName": "CHENNAI AIRPORT",
+              "_id": "699d2da9253b15f795b6a620"
+            }
+          ],
+          "deboardingPoints": [
+            {
+              "stationCode": "MDU",
+              "stationName": "MADURAI AIRPORT",
+              "_id": "699d2da9253b15f795b6a621"
+            }
+          ],
+          "lastBookingDate": "2026-04-01T00:00:00.000Z",
+          "_id": "6971bc5e76a41adc2d0882a5"
+        }
+      ]
+    },
+    {
+      "_id": "6a11654bf0fe75ae671aebc9",
+      "trainDetails": [
+        {
+          "trainNo": "uhuygf",
+          "trainName": "bjhseu",
+          "fromCode": "jhiw",
+          "fromStation": "njihwuk",
+          "toCode": "kjhuqk",
+          "toStation": "jkhiugf",
+          "class": "bciwuk",
+          "departureTime": "iwchu",
+          "arrivalTime": "wche",
+          "ticketOpenDate": "2026-07-01T00:00:00.000Z",
+          "_id": "6a11654bf0fe75ae671aebca"
+        }
+      ],
+      "flightDetails": [],
+      "variantPackage": []
+    },
+    {
+      "_id": "6a13fbac8481b93a546fd0da",
+      "trainDetails": [
+        {
+          "trainNo": "22160",
+          "trainName": "Ggkh",
+          "fromCode": "mas",
+          "fromStation": "kavkjg",
+          "toCode": "dd",
+          "toStation": "jblgL",
+          "class": "SL",
+          "departureTime": "19/8/2026",
+          "arrivalTime": "20/08/2026 06:45",
+          "ticketOpenDate": "2026-08-19T00:00:00.000Z",
+          "_id": "6a13fbac8481b93a546fd0db"
+        }
+      ],
+      "flightDetails": [],
+      "variantPackage": []
+    },
+    {
+      "_id": "6a1fa94cb6b81420b4c485dd",
+      "trainDetails": [
+        {
+          "trainNo": "",
+          "trainName": "",
+          "fromCode": "",
+          "fromStation": "",
+          "toCode": "",
+          "toStation": "",
+          "class": "",
+          "departureTime": "",
+          "arrivalTime": "",
+          "ticketOpenDate": null,
+          "_id": "6a1fa94cb6b81420b4c485de"
+        }
+      ],
+      "flightDetails": [],
+      "variantPackage": []
+    },
+    {
+      "_id": "6a313ed6346369cfff14de43",
+      "trainDetails": [
+        {
+          "trainNo": "12621",
+          "trainName": "TAMILNADU SF EXP",
+          "fromCode": "MAS",
+          "fromStation": "MGR CHENNAI CTL",
+          "toCode": "NDLS",
+          "toStation": "NEW DELHI",
+          "class": "SL",
+          "departureTime": "16/09/2026 22:00",
+          "arrivalTime": "18/09/2026 06:30",
+          "ticketOpenDate": null,
+          "_id": "6a313ed6346369cfff14de44"
+        }
+      ],
+      "flightDetails": [],
+      "variantPackage": []
+    },
+    {
+      "_id": "6a3145ef534032a44fa8c1e1",
+      "trainDetails": [
+        {
+          "trainNo": "12621",
+          "trainName": "TAMILNADU SF EXP",
+          "fromCode": "MAS",
+          "fromStation": "MGR CHENNAI CTL",
+          "toCode": "AGC",
+          "toStation": "AGRA CANTT",
+          "class": "SL",
+          "departureTime": "01/09/2026 22:00",
+          "arrivalTime": "03/09/2026 03:05",
+          "ticketOpenDate": null,
+          "_id": "6a3145ef534032a44fa8c1e2"
+        }
+      ],
+      "flightDetails": [
+        {
+          "airline": "",
+          "flightNo": "",
+          "fromCode": "",
+          "fromAirport": "",
+          "toCode": "",
+          "toAirport": "",
+          "class": "",
+          "departureTime": "",
+          "arrivalTime": "",
+          "_id": "6a6af5ef52ae532ef4e58ac7"
+        }
+      ],
+      "variantPackage": []
+    },
+    {
+      "_id": "6a322f7933361cf7113cee33",
+      "trainDetails": [
+        {
+          "trainNo": "12621",
+          "trainName": "TAMILNADU SF EXP",
+          "fromCode": "MAS",
+          "fromStation": "MGR CHENNAI CTL",
+          "toCode": "AGC",
+          "toStation": "AGRA CANTT",
+          "class": "SL",
+          "departureTime": "03/07/2026 22:00",
+          "arrivalTime": "05/07/2026 03:05",
+          "ticketOpenDate": null,
+          "_id": "6a322f7933361cf7113cee34"
+        }
+      ],
+      "flightDetails": [
+        {
+          "airline": "",
+          "flightNo": "",
+          "fromCode": "",
+          "fromAirport": "",
+          "toCode": "",
+          "toAirport": "",
+          "class": "",
+          "departureTime": "",
+          "arrivalTime": "",
+          "_id": "6a69f37a49909b554f30b8a0"
+        }
+      ],
+      "variantPackage": []
+    },
+    {
+      "_id": "6a69f33449909b554f30b88f",
+      "trainDetails": [
+        {
+          "trainNo": "",
+          "trainName": "",
+          "fromCode": "",
+          "fromStation": "",
+          "toCode": "",
+          "toStation": "",
+          "class": "",
+          "departureTime": "",
+          "arrivalTime": "",
+          "ticketOpenDate": null,
+          "_id": "6a69f37a49909b554f30b8a1"
+        }
+      ],
+      "flightDetails": [
+        {
+          "airline": "",
+          "flightNo": "",
+          "fromCode": "",
+          "fromAirport": "",
+          "toCode": "",
+          "toAirport": "",
+          "class": "",
+          "departureTime": "",
+          "arrivalTime": "",
+          "_id": "6a69f37a49909b554f30b8a0"
+        }
+      ],
+      "variantPackage": []
+    },
+    {
+      "_id": "6a6dba62c6841060fdb7e053",
+      "trainDetails": [
+        {
+          "trainNo": "22354 (OPTION - 1)",
+          "trainName": "HUMSAFAR EXP",
+          "fromCode": "PER",
+          "fromStation": "PERAMBUR",
+          "toCode": "PCOI",
+          "toStation": "PRAYAGRAJCHEOKI",
+          "class": "3AC",
+          "departureTime": "04/10/2026 19:35",
+          "arrivalTime": "06/10/2026 04:22",
+          "ticketOpenDate": null,
+          "_id": "6a6dba62c6841060fdb7e054"
+        }
+      ],
+      "flightDetails": [],
+      "variantPackage": [
+        {
+          "duration": {
+            "days": 14,
+            "nights": 13
+          },
+          "price": {
+            "doubleSharing": 54000,
+            "tripleSharing": 52000,
+            "childWithBerth": 31500,
+            "childWithoutBerth": 31500
+          },
+          "advanceAmount": {
+            "adult": 25000,
+            "child": 25000
+          },
+          "balanceDouble": 29000,
+          "balanceTriple": 27000,
+          "balanceChildWithBerth": 6500,
+          "balanceChildWithoutBerth": 6500,
+          "destination": [
+            "VARANASI, NEPAL"
+          ],
+          "sightseeing": [],
+          "itinerary": [],
+          "includes": [],
+          "excludes": [],
+          "trainDetails": [],
+          "flightDetails": [],
+          "addons": [
+            {
+              "name": "PER TO PCOI 2AC EXTRA",
+              "amount": 750,
+              "_id": "6a6dba62c6841060fdb7e060"
+            },
+            {
+              "name": "DDU TO PER 2AC EXTRA",
+              "amount": 800,
+              "_id": "6a6dba62c6841060fdb7e061"
+            },
+            {
+              "name": "UP AND DOWN 2AC",
+              "amount": 1550,
+              "_id": "6a6dba62c6841060fdb7e062"
+            },
+            {
+              "name": "KASI SHARING DIFFERENT AMOUNT",
+              "amount": 3800,
+              "_id": "6a6dba62c6841060fdb7e063"
+            },
+            {
+              "name": "PER TO PCOI WITHOUT TRAIN LESS",
+              "amount": -2430,
+              "_id": "6a6dba62c6841060fdb7e064"
+            },
+            {
+              "name": "DDU TO PER WITHOUT TRAIN LESS",
+              "amount": -2515,
+              "_id": "6a6dba62c6841060fdb7e065"
+            },
+            {
+              "name": "UP AND DOWN WITHOUT TRAIN LESS",
+              "amount": -4945,
+              "_id": "6a6dba62c6841060fdb7e066"
+            },
+            {
+              "name": "BNR TO RMM WITHOUT TRAIN LESS",
+              "amount": -2520,
+              "_id": "6a6dba62c6841060fdb7e067"
+            }
+          ],
+          "remarks": "",
+          "boardingPoints": [
+            {
+              "stationCode": "PER",
+              "stationName": "PERAMBUR",
+              "_id": "6a6dba62c6841060fdb7e068"
+            }
+          ],
+          "deboardingPoints": [
+            {
+              "stationCode": "MAA",
+              "stationName": "CHENNAI AIRPORT",
+              "_id": "6a6dba62c6841060fdb7e069"
+            }
+          ],
+          "lastBookingDate": "2026-09-05T00:00:00.000Z",
+          "_id": "6a6dba62c6841060fdb7e05f"
+        }
+      ]
+    }
+  ]
+}

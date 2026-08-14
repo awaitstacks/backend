@@ -1165,8 +1165,6 @@ const addToTrolly = async (req, res) => {
   }
 };
 
-export default addToTrolly;
-
 // Get all tour bookings for a user
 const listTrolly = async (req, res) => {
   try {

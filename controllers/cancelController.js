@@ -66,9 +66,32 @@ const getTravellerPackageBasePrice = (traveller, tourData) => {
   return 0;
 };
 
+// const getTravellerFullPackageCost = (traveller, tourData) => {
+//   const base = getTravellerPackageBasePrice(traveller, tourData);
+//   const addon = Number(traveller.selectedAddon?.price || 0);
+//   const customAddons = (traveller.customAddons || []).reduce(
+//     (sum, a) => sum + Number(a?.price || 0),
+//     0,
+//   );
+//   return Number((base + addon + customAddons).toFixed(2));
+// };
+
+const getTravellerAddonTotal = (traveller) => {
+  if (traveller.selectedAddon && typeof traveller.selectedAddon === "object") {
+    return Number(traveller.selectedAddon.price || 0);
+  }
+  if (Array.isArray(traveller.selectedAddons) && traveller.selectedAddons.length > 0) {
+    return traveller.selectedAddons.reduce(
+      (sum, a) => sum + Number(a?.amount || 0),
+      0,
+    );
+  }
+  return 0;
+};
+
 const getTravellerFullPackageCost = (traveller, tourData) => {
   const base = getTravellerPackageBasePrice(traveller, tourData);
-  const addon = Number(traveller.selectedAddon?.price || 0);
+  const addon = getTravellerAddonTotal(traveller);
   const customAddons = (traveller.customAddons || []).reduce(
     (sum, a) => sum + Number(a?.price || 0),
     0,

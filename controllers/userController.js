@@ -516,6 +516,656 @@ const updateProfile = async (req, res) => {
 //   }
 // };
 
+// const addToTrolly = async (req, res) => {
+//   try {
+//     const {
+//       tourId,
+//       travellers = [],
+//       billingAddress,
+//       bookingType,
+//       contact,
+//     } = req.body;
+
+//     const userId = req.user._id;
+
+//     // --------------------------------------------------
+//     // MOBILE VALIDATION
+//     // --------------------------------------------------
+
+//     const mobile = (contact?.mobile || "").trim();
+
+//     if (!mobile) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Mobile number is required.",
+//       });
+//     }
+
+//     if (!/^[\d+\-\s()]{7,25}$/.test(mobile)) {
+//       return res.status(400).json({
+//         success: false,
+//         message:
+//           "Invalid mobile number format. Use digits, +, -, spaces or parentheses.",
+//       });
+//     }
+
+//     // --------------------------------------------------
+//     // TOUR ID VALIDATION
+//     // --------------------------------------------------
+
+//     if (!tourId) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Tour ID is required.",
+//       });
+//     }
+
+//     // --------------------------------------------------
+//     // FETCH TOUR
+//     // --------------------------------------------------
+
+//     const tour = await tourModel.findById(tourId);
+
+//     if (!tour) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Tour not found.",
+//       });
+//     }
+
+//     // --------------------------------------------------
+//     // TOTALS
+//     // --------------------------------------------------
+
+//     let totalAdvance = 0;
+//     let totalBalance = 0;
+
+//     // This is only for calculation/debugging.
+//     // Booking payment calculation remains same.
+//     let totalAddons = 0;
+
+//     const updatedTravellers = [];
+
+//     // ==================================================
+//     // TRAVELLERS
+//     // ==================================================
+
+//     for (const trav of travellers) {
+//       const age = Number(trav.age);
+
+//       // ------------------------------------------------
+//       // AGE VALIDATION
+//       // ------------------------------------------------
+
+//       if (
+//         isNaN(age) ||
+//         age < 1 ||
+//         (age >= 1 && age <= 5)
+//       ) {
+//         return res.status(400).json({
+//           success: false,
+//           message: `Booking failed: Invalid age for traveller ${
+//             trav.firstName || "Unknown"
+//           }. Age must be a number greater than 5.`,
+//         });
+//       }
+
+//       // ------------------------------------------------
+//       // PACKAGE TYPE
+//       // ------------------------------------------------
+
+//       if (
+//         !trav.packageType ||
+//         !["main", "variant"].includes(
+//           trav.packageType
+//         )
+//       ) {
+//         return res.status(400).json({
+//           success: false,
+//           message: `Invalid package type for traveller: ${
+//             trav.firstName || "Unknown"
+//           }. Must be 'main' or 'variant'.`,
+//         });
+//       }
+
+//       // ------------------------------------------------
+//       // VARIANT PACKAGE
+//       // ------------------------------------------------
+
+//       if (
+//         trav.packageType === "variant" &&
+//         (trav.variantPackageIndex === null ||
+//           isNaN(trav.variantPackageIndex))
+//       ) {
+//         return res.status(400).json({
+//           success: false,
+//           message: `Variant package index is required for traveller: ${
+//             trav.firstName || "Unknown"
+//           }.`,
+//         });
+//       }
+
+//       // ------------------------------------------------
+//       // SELECT PACKAGE
+//       // ------------------------------------------------
+
+//       let selectedPackage = tour;
+
+//       if (trav.packageType === "variant") {
+//         if (
+//           !tour.variantPackage?.[
+//             trav.variantPackageIndex
+//           ]
+//         ) {
+//           return res.status(400).json({
+//             success: false,
+//             message: `Variant package at index ${
+//               trav.variantPackageIndex
+//             } does not exist for traveller: ${
+//               trav.firstName || "Unknown"
+//             }.`,
+//           });
+//         }
+
+//         selectedPackage =
+//           tour.variantPackage[
+//             trav.variantPackageIndex
+//           ];
+//       }
+
+//       // =================================================
+//       // BOARDING POINT
+//       // =================================================
+
+//       if (!trav.boardingPoint) {
+//         return res.status(400).json({
+//           success: false,
+//           message: `Boarding point is required for traveller: ${
+//             trav.firstName || "Unknown"
+//           }`,
+//         });
+//       }
+
+//       const validBoarding =
+//         selectedPackage.boardingPoints?.find(
+//           (bp) =>
+//             bp.stationCode ===
+//             trav.boardingPoint.stationCode
+//         );
+
+//       if (!validBoarding) {
+//         return res.status(400).json({
+//           success: false,
+//           message: `Invalid boarding point for traveller: ${
+//             trav.firstName || "Unknown"
+//           }`,
+//         });
+//       }
+
+//       const selectedBoarding = {
+//         stationCode: validBoarding.stationCode,
+//         stationName: validBoarding.stationName,
+//       };
+
+//       // =================================================
+//       // DEBOARDING POINT
+//       // =================================================
+
+//       if (!trav.deboardingPoint) {
+//         return res.status(400).json({
+//           success: false,
+//           message: `Deboarding point is required for traveller: ${
+//             trav.firstName || "Unknown"
+//           }`,
+//         });
+//       }
+
+//       const validDeboarding =
+//         selectedPackage.deboardingPoints?.find(
+//           (dp) =>
+//             dp.stationCode ===
+//             trav.deboardingPoint.stationCode
+//         );
+
+//       if (!validDeboarding) {
+//         return res.status(400).json({
+//           success: false,
+//           message: `Invalid deboarding point for traveller: ${
+//             trav.firstName || "Unknown"
+//           }`,
+//         });
+//       }
+
+//       const selectedDeboarding = {
+//         stationCode:
+//           validDeboarding.stationCode,
+//         stationName:
+//           validDeboarding.stationName,
+//       };
+
+//       // =================================================
+//       // NEW TRAIN ADDONS VALIDATION
+//       // =================================================
+
+//       let addonPrice = 0;
+
+//       const selectedAddons = Array.isArray(
+//         trav.selectedAddons
+//       )
+//         ? trav.selectedAddons
+//         : [];
+
+//       const validatedAddons = [];
+
+//       for (const selectedAddon of selectedAddons) {
+//         const trainIndex = Number(
+//           selectedAddon.trainIndex
+//         );
+
+//         // ----------------------------------------------
+//         // TRAIN EXISTS?
+//         // ----------------------------------------------
+
+//         const train =
+//           selectedPackage.trainDetails?.[
+//             trainIndex
+//           ];
+
+//         if (!train) {
+//           return res.status(400).json({
+//             success: false,
+//             message: `Invalid train selection for traveller: ${
+//               trav.firstName || "Unknown"
+//             }.`,
+//           });
+//         }
+
+//         // ----------------------------------------------
+//         // ADDON ID
+//         // ----------------------------------------------
+
+//         const selectedAddonId =
+//           selectedAddon.addonId;
+
+//         // ----------------------------------------------
+//         // FIND VALID ADDON FROM TRAIN
+//         // ----------------------------------------------
+
+//         const validAddon =
+//           train.addons?.find(
+//             (addon) =>
+//               String(
+//                 addon._id ||
+//                   addon.id
+//               ) ===
+//               String(selectedAddonId)
+//           );
+
+//         if (!validAddon) {
+//           return res.status(400).json({
+//             success: false,
+//             message: `Invalid add-on "${selectedAddon.name || ""}" for traveller: ${
+//               trav.firstName || "Unknown"
+//             }.`,
+//           });
+//         }
+
+//         const currentAddonPrice =
+//           Number(validAddon.amount) || 0;
+
+//         addonPrice += currentAddonPrice;
+
+//         totalAddons += currentAddonPrice;
+
+//         // ----------------------------------------------
+//         // STORE ONLY VALID TRAIN/ADDON DATA
+//         // ----------------------------------------------
+
+//         validatedAddons.push({
+//           trainIndex,
+
+//           trainNo: train.trainNo,
+
+//           trainName: train.trainName,
+
+//           tripType: train.tripType,
+
+//           addonId:
+//             validAddon._id ||
+//             validAddon.id,
+
+//           name: validAddon.name,
+
+//           amount: currentAddonPrice,
+//         });
+//       }
+
+//       // =================================================
+//       // EXISTING PRICE CALCULATION
+//       // =================================================
+
+//       let travellerAdvance = 0;
+//       let travellerBalance = 0;
+
+//       // -------------------------------------------------
+//       // ADULT
+//       // -------------------------------------------------
+
+//       if (age >= 11) {
+//         travellerAdvance =
+//           Number(
+//             selectedPackage.advanceAmount
+//               ?.adult
+//           ) || 0;
+
+//         switch (
+//           trav.sharingType?.toLowerCase()
+//         ) {
+//           case "double":
+//             travellerBalance =
+//               Number(
+//                 selectedPackage.balanceDouble
+//               ) || 0;
+//             break;
+
+//           case "triple":
+//             travellerBalance =
+//               Number(
+//                 selectedPackage.balanceTriple
+//               ) || 0;
+//             break;
+
+//           default:
+//             return res.status(400).json({
+//               success: false,
+//               message: `Invalid sharing type for adult traveller: ${
+//                 trav.firstName || "Unknown"
+//               }.`,
+//             });
+//         }
+//       }
+
+//       // -------------------------------------------------
+//       // CHILD
+//       // -------------------------------------------------
+
+//       else if (age >= 6 && age <= 10) {
+//         travellerAdvance =
+//           Number(
+//             selectedPackage.advanceAmount
+//               ?.child
+//           ) || 0;
+
+//         switch (
+//           trav.sharingType?.toLowerCase()
+//         ) {
+//           case "withberth":
+//             travellerBalance =
+//               Number(
+//                 selectedPackage.balanceChildWithBerth
+//               ) || 0;
+//             break;
+
+//           case "withoutberth":
+//             travellerBalance =
+//               Number(
+//                 selectedPackage.balanceChildWithoutBerth
+//               ) || 0;
+//             break;
+
+//           default:
+//             return res.status(400).json({
+//               success: false,
+//               message: `Invalid sharing type for child traveller: ${
+//                 trav.firstName || "Unknown"
+//               }.`,
+//             });
+//         }
+//       }
+
+//       // =================================================
+//       // ADDONS ONLY ADDED TO ADVANCE
+//       // =================================================
+
+//       travellerAdvance += addonPrice;
+
+//       // ------------------------------------------------
+//       // NAN CHECK
+//       // ------------------------------------------------
+
+//       if (
+//         isNaN(travellerAdvance) ||
+//         isNaN(travellerBalance)
+//       ) {
+//         return res.status(400).json({
+//           success: false,
+//           message: `Booking failed: Could not calculate prices for traveller ${
+//             trav.firstName || "Unknown"
+//           }. Please check tour prices.`,
+//         });
+//       }
+
+//       // ------------------------------------------------
+//       // TOTALS
+//       // ------------------------------------------------
+
+//       totalAdvance += travellerAdvance;
+
+//       totalBalance += travellerBalance;
+
+//       // =================================================
+//       // SAVE TRAVELLER
+//       // =================================================
+
+//       updatedTravellers.push({
+//         ...trav,
+
+//         boardingPoint:
+//           selectedBoarding,
+
+//         deboardingPoint:
+//           selectedDeboarding,
+
+//         // NEW
+//         selectedAddons:
+//           validatedAddons,
+
+//         remarks:
+//           trav.remarks || null,
+
+//         packageType:
+//           trav.packageType,
+
+//         variantPackageIndex:
+//           trav.packageType === "variant"
+//             ? trav.variantPackageIndex
+//             : null,
+//       });
+//     }
+
+//     // ==================================================
+//     // TNR GENERATION
+//     // ==================================================
+
+//     let tnr;
+
+//     let attempts = 0;
+
+//     const maxAttempts = 10;
+
+//     const letters =
+//       "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+//     const digits =
+//       "0123456789";
+
+//     while (attempts < maxAttempts) {
+//       tnr =
+//         letters.charAt(
+//           Math.floor(
+//             Math.random() *
+//               letters.length
+//           )
+//         ) +
+//         letters.charAt(
+//           Math.floor(
+//             Math.random() *
+//               letters.length
+//           )
+//         ) +
+//         digits.charAt(
+//           Math.floor(
+//             Math.random() *
+//               digits.length
+//           )
+//         ) +
+//         digits.charAt(
+//           Math.floor(
+//             Math.random() *
+//               digits.length
+//           )
+//         ) +
+//         letters.charAt(
+//           Math.floor(
+//             Math.random() *
+//               letters.length
+//           )
+//         ) +
+//         letters.charAt(
+//           Math.floor(
+//             Math.random() *
+//               letters.length
+//           )
+//         );
+
+//       const conflict =
+//         await tourBookingModel.exists({
+//           tnr,
+//         });
+
+//       if (!conflict) {
+//         break;
+//       }
+
+//       attempts++;
+//     }
+
+//     if (attempts >= maxAttempts) {
+//       return res.status(503).json({
+//         success: false,
+//         message:
+//           "Unable to generate unique booking reference right now. Please try again in a moment.",
+//       });
+//     }
+
+//     // ==================================================
+//     // BOOKING DATA
+//     // ==================================================
+
+//     const bookingData = {
+//       userId,
+
+//       tourId,
+
+//       tnr,
+
+//       userData: {
+//         id: userId,
+//       },
+
+//       tourData: {
+//         id: tour._id,
+
+//         title: tour.title,
+
+//         titleImage: tour.titleImage,
+
+//         duration: tour.duration,
+
+//         price: tour.price,
+//       },
+
+//       travellers:
+//         updatedTravellers,
+
+//       billingAddress:
+//         billingAddress || {},
+
+//       contact: {
+//         email: contact?.email,
+
+//         mobile: contact?.mobile,
+//       },
+
+//       bookingType:
+//         bookingType || "online",
+
+//       payment: {
+//         advance: {
+//           amount: totalAdvance,
+//         },
+
+//         balance: {
+//           amount: totalBalance,
+//         },
+//       },
+
+//       status: "pending",
+
+//       bookingDate: new Date(),
+
+//       emergencyContact: null,
+
+//       termsAgreed: false,
+
+//       termsAgreedAt: null,
+//     };
+
+//     // ==================================================
+//     // SAVE
+//     // ==================================================
+
+//     const newBooking =
+//       new tourBookingModel(
+//         bookingData
+//       );
+
+//     await newBooking.save();
+
+//     // ==================================================
+//     // RESPONSE
+//     // ==================================================
+
+//     return res.status(201).json({
+//       success: true,
+
+//       message:
+//         "Booking added to trolley successfully.",
+
+//       booking: newBooking,
+
+//       // Optional response data
+//       addonsTotal: totalAddons,
+
+//       advanceAmount: totalAdvance,
+
+//       balanceAmount: totalBalance,
+//     });
+//   } catch (error) {
+//     console.error(
+//       "ADD TO TROLLY ERROR:",
+//       error
+//     );
+
+//     return res.status(500).json({
+//       success: false,
+//       message:
+//         "Internal server error.",
+//     });
+//   }
+// };
+
+
 const addToTrolly = async (req, res) => {
   try {
     const {
@@ -758,6 +1408,24 @@ const addToTrolly = async (req, res) => {
       const validatedAddons = [];
 
       for (const selectedAddon of selectedAddons) {
+        const selectedAddonId =
+          selectedAddon.addonId;
+
+        // ----------------------------------------------
+        // ADDON IS OPTIONAL PER TRAIN/TRIP LEG
+        // ----------------------------------------------
+        // Customer may leave a leg as "No Add-on" — that entry arrives
+        // with no addonId (null/undefined/empty string). This is NOT
+        // an error, just skip it and move to the next leg. Only entries
+        // where the customer actually picked an addon get validated.
+        if (
+          selectedAddonId === null ||
+          selectedAddonId === undefined ||
+          selectedAddonId === ""
+        ) {
+          continue;
+        }
+
         const trainIndex = Number(
           selectedAddon.trainIndex
         );
@@ -779,13 +1447,6 @@ const addToTrolly = async (req, res) => {
             }.`,
           });
         }
-
-        // ----------------------------------------------
-        // ADDON ID
-        // ----------------------------------------------
-
-        const selectedAddonId =
-          selectedAddon.addonId;
 
         // ----------------------------------------------
         // FIND VALID ADDON FROM TRAIN
@@ -1164,6 +1825,7 @@ const addToTrolly = async (req, res) => {
     });
   }
 };
+
 
 // Get all tour bookings for a user
 const listTrolly = async (req, res) => {

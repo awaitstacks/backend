@@ -19,6 +19,316 @@ import invoiceModel from "../models/invoiceModel.js"; // ← the new separate mo
 // invoice snapshot is now stale. Delete it so the next GET /invoice/:tnr
 // rebuilds fresh via buildInvoiceView — same as manual "revert" flow.
 
+// const freezeEditedEntries = (incoming, freshAuto) => {
+//   const freshItemMap = new Map((freshAuto.items || []).map((i) => [i.sourceRef, i]));
+//   const freshPaymentMap = new Map((freshAuto.payments || []).map((p) => [p.sourceRef, p]));
+
+//   const items = (incoming.items || []).map((item) => {
+//     if (!item.sourceRef) return item; // already manual
+//     const fresh = freshItemMap.get(item.sourceRef);
+//     const changed =
+//       !fresh ||
+//       fresh.description !== item.description ||
+//       fresh.subDescription !== item.subDescription ||
+//       Number(fresh.gstRate) !== Number(item.gstRate) ||
+//       Number(fresh.quantity) !== Number(item.quantity) ||
+//       Number(fresh.rate) !== Number(item.rate);
+//     return changed ? { ...item, sourceRef: null } : item;
+//   });
+
+//   const payments = (incoming.payments || []).map((p) => {
+//     if (!p.sourceRef) return p; // already manual
+//     const fresh = freshPaymentMap.get(p.sourceRef);
+//     const changed =
+//       !fresh ||
+//       Number(fresh.amountReceived) !== Number(p.amountReceived) ||
+//       new Date(fresh.date || 0).getTime() !== new Date(p.date || 0).getTime();
+//     return changed ? { ...p, sourceRef: null } : p;
+//   });
+
+//   return { ...incoming, items, payments };
+// };
+// // Merges a fresh (auto) list into a saved list while PRESERVING the saved
+// // list's row order. Existing rows (manual or still-synced) keep their
+// // position; only brand-new auto entries get appended at the end.
+// const mergeInOrder = (savedList, freshList, deletedRefs) => {
+//   const freshMap = new Map((freshList || []).map((i) => [i.sourceRef, i]));
+//   const savedRefsPresent = new Set(
+//     (savedList || []).map((i) => i.sourceRef).filter(Boolean),
+//   );
+
+//   const merged = (savedList || [])
+//     .map((i) => {
+//       if (!i.sourceRef) return i; // manual (edited) — as-is, same position
+//       if (deletedRefs.has(i.sourceRef)) return null;
+//       const fresh = freshMap.get(i.sourceRef);
+//       return fresh || null; // still auto-synced — refresh value, SAME position
+//     })
+//     .filter(Boolean);
+
+//   const newEntries = (freshList || []).filter(
+//     (i) => !savedRefsPresent.has(i.sourceRef) && !deletedRefs.has(i.sourceRef),
+//   );
+
+//   return [...merged, ...newEntries]; // brand-new auto rows → append at end only
+// };
+// const syncInvoiceWithBooking = (savedInvoice, booking, tour, cancellations = []) => {
+//   const freshAuto = buildInvoiceView(booking, tour, cancellations);
+//   if (!freshAuto) return savedInvoice;
+
+//   const deletedRefs = new Set(savedInvoice.deletedSourceRefs || []);
+
+//   const mergedItems = mergeInOrder(savedInvoice.items, freshAuto.items, deletedRefs);
+//   const mergedPayments = mergeInOrder(savedInvoice.payments, freshAuto.payments, deletedRefs);
+
+//   // ...rest stays exactly the same
+
+//   const amountSum = currencyRound(mergedItems.reduce((s, i) => s + (i.amount || 0), 0));
+//   const cgstSum = currencyRound(mergedItems.reduce((s, i) => s + (i.cgst || 0), 0));
+//   const sgstSum = currencyRound(mergedItems.reduce((s, i) => s + (i.sgst || 0), 0));
+//   const roundOff = Number(savedInvoice.totals?.roundOff || 0);
+//   const grandTotal = currencyRound(amountSum + cgstSum + sgstSum + roundOff);
+
+//   const amountPaid = currencyRound(mergedPayments.reduce((s, p) => s + (p.amountReceived || 0), 0));
+//   const dueAmount = Math.max(0, currencyRound(grandTotal - amountPaid));
+//   const status = dueAmount <= 0 ? "Paid" : "Part Paid";
+
+//   return {
+//     ...savedInvoice,
+//     items: mergedItems,
+//     payments: mergedPayments,
+//     deletedSourceRefs: savedInvoice.deletedSourceRefs || [],
+//     totals: { amount: amountSum, cgst: cgstSum, sgst: sgstSum, roundOff, grandTotal },
+//     amountPaid,
+//     dueAmount,
+//     status,
+//   };
+// };
+
+// // ── Route handler — GET /api/tour/invoice/:tnr ───────────────────────────
+// const getBookingInvoice = async (req, res) => {
+//   try {
+//     const { tnr } = req.params;
+
+//     if (!tnr || typeof tnr !== "string" || tnr.trim().length !== 6) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Valid 6-character TNR is required",
+//       });
+//     }
+
+//     const normalizedTnr = tnr.trim().toUpperCase();
+
+//     const booking = await tourBookingModel
+//       .findOne({ tnr: normalizedTnr })
+//       .lean();
+
+//     if (!booking) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Booking not found with this TNR",
+//       });
+//     }
+
+//     // Fetch the LIVE tour doc (not the stale tourData snapshot on the
+//     // booking), so gst / price always reflect current tour settings.
+//     const tour = await tourModel.findById(booking.tourId).lean();
+
+//     if (!tour) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Tour not found for this booking",
+//       });
+//     }
+
+//     // Fetch all cancellation records tied to this booking — these hold
+//     // the travellerIds needed to work out GV/IRCTC cancellation pool
+//     // quantity on the invoice (see buildCancellationPoolItems).
+//     // Fetch all cancellation records tied to this booking — matched by TNR,
+//     // same pattern as getCancellationsByBooking, since bookingId may not be
+//     // reliably populated on every cancellation record.
+//     const cancellations = await cancellationModel
+//       .find({ tnr: normalizedTnr })
+//       .lean();
+
+//     const savedInvoice = await invoiceModel.findOne({ tnr: normalizedTnr }).lean();
+
+//     let invoice;
+//     if (!savedInvoice) {
+//       invoice = buildInvoiceView(booking, tour, cancellations);
+//     } else {
+//       invoice = syncInvoiceWithBooking(savedInvoice, booking, tour, cancellations);
+//       if (invoice) {
+//         // Keep the saved doc's synced values up to date too, so any other
+//         // code path reading straight from invoiceModel sees the same data.
+//         await invoiceModel.findOneAndUpdate(
+//           { tnr: normalizedTnr },
+//           { $set: invoice },
+//           { new: false },
+//         );
+//       }
+//     }
+
+//     return res.status(200).json({
+//       success: true,
+//       invoice, // null if advance not yet paid
+//     });
+//   } catch (error) {
+//     console.error("getBookingInvoice error:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Server error while building invoice",
+//       error: error.message,
+//     });
+//   }
+// };
+// // PUT /api/tour/invoice/:tnr
+// // Saves the admin's edited invoice into the SEPARATE invoice collection —
+// // tourBookingModel is never touched by this.
+// const updateBookingInvoice = async (req, res) => {
+//   try {
+//     const { tnr } = req.params;
+//     const { invoice } = req.body;
+
+//     if (!tnr || typeof tnr !== "string" || tnr.trim().length !== 6) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Valid 6-character TNR is required",
+//       });
+//     }
+
+//     if (!invoice || typeof invoice !== "object") {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invoice data is required",
+//       });
+//     }
+
+//     const normalizedTnr = tnr.trim().toUpperCase();
+
+//     const booking = await tourBookingModel.findOne({ tnr: normalizedTnr });
+
+//     if (!booking) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Booking not found with this TNR",
+//       });
+//     }
+
+//     if (!booking.invoiceNumber) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Cannot edit invoice before advance is paid",
+//       });
+//     }
+
+//     const tour = await tourModel.findById(booking.tourId).lean();
+
+//     // ← ADDED: fetch cancellations, same as getBookingInvoice does
+//     const cancellations = await cancellationModel
+//       .find({ tnr: normalizedTnr })
+//       .lean();
+
+//     const freshAuto =
+//       buildInvoiceView(booking.toObject ? booking.toObject() : booking, tour, cancellations) || {
+//         items: [],
+//         payments: [],
+//       };
+
+//     // ...rest stays exactly the same
+
+//     // Any auto item/payment whose value the admin actually changed gets
+//     // frozen (sourceRef cleared) so it stops auto-syncing from now on.
+//     const frozenInvoice = freezeEditedEntries(invoice, freshAuto);
+
+//     // Any auto sourceRef that existed in freshAuto but is MISSING from the
+//     // admin's saved item/payment list was deliberately removed — track it
+//     // so future syncs never regenerate it again.
+//     const incomingItemRefs = new Set(
+//       (frozenInvoice.items || []).map((i) => i.sourceRef).filter(Boolean),
+//     );
+//     const incomingPaymentRefs = new Set(
+//       (frozenInvoice.payments || []).map((p) => p.sourceRef).filter(Boolean),
+//     );
+
+//     const newlyDeletedRefs = [
+//       ...freshAuto.items.filter((i) => !incomingItemRefs.has(i.sourceRef)).map((i) => i.sourceRef),
+//       ...freshAuto.payments.filter((p) => !incomingPaymentRefs.has(p.sourceRef)).map((p) => p.sourceRef),
+//     ];
+
+//     const existing = await invoiceModel.findOne({ tnr: normalizedTnr }).lean();
+//     const deletedSourceRefs = Array.from(
+//       new Set([...(existing?.deletedSourceRefs || []), ...newlyDeletedRefs]),
+//     );
+
+//     const saved = await invoiceModel.findOneAndUpdate(
+//       { tnr: normalizedTnr },
+//       {
+//         ...frozenInvoice,
+//         tnr: normalizedTnr,
+//         bookingId: booking._id,
+//         invoiceNumber: booking.invoiceNumber,
+//         deletedSourceRefs,
+//       },
+//       { upsert: true, new: true, runValidators: true },
+//     );
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Invoice saved successfully",
+//       invoice: saved,
+//     });
+//   } catch (error) {
+//     console.error("updateBookingInvoice error:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Server error while saving invoice",
+//       error: error.message,
+//     });
+//   }
+// };
+
+// // DELETE /api/tour/invoice/:tnr
+// // Removes the saved (edited) invoice document. Does NOT touch
+// // tourBookingModel at all — invoiceNumber stays exactly as it is.
+// // After this, GET /api/tour/invoice/:tnr goes back to auto-calculating
+// // the invoice fresh from travellers/tourData, same as before any edit.
+// const deleteBookingInvoice = async (req, res) => {
+//   try {
+//     const { tnr } = req.params;
+
+//     if (!tnr || typeof tnr !== "string" || tnr.trim().length !== 6) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Valid 6-character TNR is required",
+//       });
+//     }
+
+//     const normalizedTnr = tnr.trim().toUpperCase();
+
+//     const deleted = await invoiceModel.findOneAndDelete({ tnr: normalizedTnr });
+
+//     if (!deleted) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "No saved edit found for this invoice",
+//       });
+//     }
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Saved invoice edit removed — reverted to auto-calculated",
+//     });
+//   } catch (error) {
+//     console.error("deleteBookingInvoice error:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Server error while deleting invoice",
+//       error: error.message,
+//     });
+//   }
+// };
+
 const freezeEditedEntries = (incoming, freshAuto) => {
   const freshItemMap = new Map((freshAuto.items || []).map((i) => [i.sourceRef, i]));
   const freshPaymentMap = new Map((freshAuto.payments || []).map((p) => [p.sourceRef, p]));
@@ -90,7 +400,12 @@ const syncInvoiceWithBooking = (savedInvoice, booking, tour, cancellations = [])
   const grandTotal = currencyRound(amountSum + cgstSum + sgstSum + roundOff);
 
   const amountPaid = currencyRound(mergedPayments.reduce((s, p) => s + (p.amountReceived || 0), 0));
-  const dueAmount = Math.max(0, currencyRound(grandTotal - amountPaid));
+  const rawDue = currencyRound(grandTotal - amountPaid);
+  const dueAmount = Math.max(0, rawDue);
+  // Overpayment (e.g. total dropped after a cancellation/adjustment but
+  // the customer had already paid the old, higher total) → surface as a
+  // refund owed, same rule as buildInvoiceView.
+  const refundAmount = rawDue < 0 ? currencyRound(Math.abs(rawDue)) : 0;
   const status = dueAmount <= 0 ? "Paid" : "Part Paid";
 
   return {
@@ -101,6 +416,7 @@ const syncInvoiceWithBooking = (savedInvoice, booking, tour, cancellations = [])
     totals: { amount: amountSum, cgst: cgstSum, sgst: sgstSum, roundOff, grandTotal },
     amountPaid,
     dueAmount,
+    refundAmount,
     status,
   };
 };

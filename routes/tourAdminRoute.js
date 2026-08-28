@@ -41,6 +41,9 @@ import {
   getAnalyticsCancellation,
   getAnalyticsTourList,
   searchAnalyticsTours,
+  closeTourBookings,
+  reopenTourBookings,
+  cancelEntireTrip,
 
 } from "../controllers/tourAdminController.js";
 import authAdmin from "../middlewares/authAdmin.js";
@@ -62,6 +65,9 @@ touradminRouter.post(
   authAdmin,
   changeTourAvailability,
 );
+touradminRouter.post("/tour/:tourId/close-bookings", authAdmin, closeTourBookings);
+touradminRouter.post("/tour/:tourId/reopen-bookings", authAdmin, reopenTourBookings);
+touradminRouter.post("/tour/:tourId/cancel-trip", authAdmin, cancelEntireTrip);
 
 touradminRouter.get("/bookings", authAdmin, bookingsAdmin);
 touradminRouter.get("/get-bookings", authAdmin, getBookings);
@@ -158,5 +164,6 @@ touradminRouter.get(
   authAdmin,
   adminFetchTourVehicleSeatOverview,
 );
+
 
 export default touradminRouter;

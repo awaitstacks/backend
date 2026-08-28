@@ -1052,6 +1052,8 @@ const tourBookingSchema = new mongoose.Schema({
   bookingDate: { type: Date, default: Date.now },
   gvCancellationPool: { type: Number },
   irctcCancellationPool: { type: Number },
+  tripCancelledTravellerCount: { type: Number, default: 0 },
+
   manageBooking: { type: Boolean, default: false },
 
   // New independent field - specifically for advance payment related admin remarks

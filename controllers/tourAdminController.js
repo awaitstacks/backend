@@ -13671,6 +13671,7 @@ import tourRoomAllocationModel from "../models/roomModel.js";
 import manageBookingModel from "../models/manageBookingModel.js";
 import TourVehicle from "../models/tourVehicleModel.js";
 import PaymentMethod from "../models/paymentModel.js";
+import { resyncInvoiceForTnr } from "./tourController.js"; // ADDED: eager invoice resync on trip-cancel
 
 // controllers/adminController.js   (or wherever your admin controllers live)
 
@@ -17003,12 +17004,35 @@ async function getBookingStatsByTourIds(tourIds) {
                 // cancelled: byAdmin=true AND byTraveller=true
                 // rejected:  byAdmin=true AND byTraveller≠true
                 // combined condition: byAdmin=true (covers both cases)
+                // EXCLUDES travellers cancelled in bulk via cancelEntireTrip
+                // (cancelled.viaTripCancel=true) — those are a separate category,
+                // counted below as tripCancelledTravellers.
                 cancelledTravellers: {
                     $sum: {
                         $size: {
                             $filter: {
                                 input: "$travellers", as: "t",
-                                cond: { $eq: ["$$t.cancelled.byAdmin", true] }
+                                cond: {
+                                    $and: [
+                                        { $eq: ["$$t.cancelled.byAdmin", true] },
+                                        { $ne: ["$$t.cancelled.viaTripCancel", true] },
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                },
+
+                // ── Trip-cancelled travellers (NEW) ──
+                // Travellers bulk-cancelled by cancelEntireTrip (whole tour
+                // cancelled) — no individual cancellation process, no charge.
+                // Kept fully separate from cancelledTravellers above.
+                tripCancelledTravellers: {
+                    $sum: {
+                        $size: {
+                            $filter: {
+                                input: "$travellers", as: "t",
+                                cond: { $eq: ["$$t.cancelled.viaTripCancel", true] }
                             }
                         }
                     }
@@ -17039,6 +17063,30 @@ async function getBookingStatsByTourIds(tourIds) {
                                 cond: {
                                     $and: [
                                         { $eq: ["$$t.gender", "Male"] },
+                                        { $gt: ["$$t.age", 10] },
+                                        { $ne: ["$$t.cancelled.byAdmin", true] }
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                },
+                // ── Others (NEW) ──────────────────────────────────────────
+                // Any adult traveller (age > 10) whose gender is NOT Female
+                // and NOT Male — e.g. gender: "Other", or blank/missing.
+                // Previously these travellers were silently dropped from
+                // every gender bucket (not Female, not Male, not Child —
+                // Child requires sharingType withBerth/withoutBerth), which
+                // is exactly why totalFemale + totalMale + totalChild never
+                // added up to the true traveller count.
+                totalOther: {
+                    $sum: {
+                        $size: {
+                            $filter: {
+                                input: "$travellers", as: "t",
+                                cond: {
+                                    $and: [
+                                        { $not: [{ $in: ["$$t.gender", ["Female", "Male"]] }] },
                                         { $gt: ["$$t.age", 10] },
                                         { $ne: ["$$t.cancelled.byAdmin", true] }
                                     ]
@@ -17143,6 +17191,7 @@ async function getBookingStatsByTourIds(tourIds) {
                                     $and: [
                                         { $eq: ["$$t.cancelled.byAdmin", true] },
                                         { $eq: ["$$t.cancelled.byTraveller", true] },
+                                        { $ne: ["$$t.cancelled.viaTripCancel", true] },
                                     ]
                                 }
                             }
@@ -17190,11 +17239,15 @@ function mergeTourBooking(allTours, bookingData) {
             tourType: t.batch || "—",
             available: t.available ?? null,
             departureDate: t.lastBookingDate || null,
+            tripCancelled: t.tripCancelled === true,
+            bookingClosed: t.bookingClosed === true,
             totalTNR: b.totalTNR || 0,
             totalTravellers: b.totalTravellers || 0,
             cancelledTravellers: b.cancelledTravellers || 0,        // NEW column
+            tripCancelledTravellers: b.tripCancelledTravellers || 0, // separate category — bulk trip-cancel, no charge
             totalFemale: b.totalFemale || 0,
             totalMale: b.totalMale || 0,
+            totalOther: b.totalOther || 0,
             totalChild: b.totalChild || 0,
             // breakdown — used by mobile card expand view
             unverifiedTravellers: b.unverifiedTravellers || 0,
@@ -17224,7 +17277,7 @@ function emptyStats() {
         completedBookings: 0, fullyCancelledBookings: 0, rejectedBookings: 0,
         totalTravellers: 0, activeTravellers: 0, cancelledTravellers: 0,
         cancellationRequestTravellers: 0, rejectedTravellers: 0,
-        totalFemale: 0, totalMale: 0, totalChild: 0,
+        totalFemale: 0, totalMale: 0, totalOther: 0, totalChild: 0,
         totalGVPool: 0, totalIRCTCPool: 0, totalCancelAmount: 0,
     };
 }
@@ -17408,7 +17461,8 @@ const getAnalyticsSummary = async (req, res) => {
                         }
                     },
 
-                    // Cancelled traveller: byAdmin=true AND byTraveller=true
+                    // Cancelled traveller (proper, individual process): byAdmin=true
+                    // AND byTraveller=true, EXCLUDING bulk trip-cancel (viaTripCancel).
                     cancelledTravellers: {
                         $sum: {
                             $size: {
@@ -17418,8 +17472,23 @@ const getAnalyticsSummary = async (req, res) => {
                                         $and: [
                                             { $eq: ["$$t.cancelled.byAdmin", true] },
                                             { $eq: ["$$t.cancelled.byTraveller", true] },
+                                            { $ne: ["$$t.cancelled.viaTripCancel", true] },
                                         ]
                                     }
+                                }
+                            }
+                        }
+                    },
+
+                    // Trip-cancelled traveller (NEW): bulk-cancelled via
+                    // cancelEntireTrip — separate category, no individual
+                    // cancellation process, no charge.
+                    tripCancelledTravellers: {
+                        $sum: {
+                            $size: {
+                                $filter: {
+                                    input: "$travellers", as: "t",
+                                    cond: { $eq: ["$$t.cancelled.viaTripCancel", true] }
                                 }
                             }
                         }
@@ -17516,6 +17585,34 @@ const getAnalyticsSummary = async (req, res) => {
                         }
                     },
 
+                    // ── Others (NEW) — see getBookingStatsByTourIds for full
+                    // explanation. Adult (age > 10) travellers whose gender
+                    // is neither Female nor Male were previously dropped
+                    // from every gender bucket entirely.
+                    totalOther: {
+                        $sum: {
+                            $cond: [
+                                { $eq: ["$payment.advance.paid", true] },
+                                {
+                                    $size: {
+                                        $filter: {
+                                            input: "$travellers", as: "t",
+                                            cond: {
+                                                $and: [
+                                                    { $not: [{ $in: ["$$t.gender", ["Female", "Male"]] }] },
+                                                    { $gt: ["$$t.age", 10] },
+                                                    { $ne: ["$$t.cancelled.byAdmin", true] },
+                                                    { $ne: ["$$t.cancelled.byTraveller", true] },
+                                                ]
+                                            }
+                                        }
+                                    }
+                                },
+                                0
+                            ]
+                        }
+                    },
+
                     totalChild: {
                         $sum: {
                             $cond: [
@@ -17558,10 +17655,12 @@ const getAnalyticsSummary = async (req, res) => {
                     unverifiedTravellers: 1,
                     activeTravellers: 1,
                     cancelledTravellers: 1,
+                    tripCancelledTravellers: 1,
                     cancellationRequestTravellers: 1,
                     rejectedTravellers: 1,
                     totalFemale: 1,
                     totalMale: 1,
+                    totalOther: 1,
                     totalChild: 1,
                     totalGVPool: 1,
                     totalIRCTCPool: 1,
@@ -17584,10 +17683,12 @@ const getAnalyticsSummary = async (req, res) => {
                 unverifiedTravellers: stats?.unverifiedTravellers || 0,
                 activeTravellers: stats?.activeTravellers || 0,
                 cancelledTravellers: stats?.cancelledTravellers || 0,
+                tripCancelledTravellers: stats?.tripCancelledTravellers || 0,
                 cancellationRequestTravellers: stats?.cancellationRequestTravellers || 0,
                 rejectedTravellers: stats?.rejectedTravellers || 0,
                 totalFemale: stats?.totalFemale || 0,
                 totalMale: stats?.totalMale || 0,
+                totalOther: stats?.totalOther || 0,
                 totalChild: stats?.totalChild || 0,
                 totalGVPool: stats?.totalGVPool || 0,
                 totalIRCTCPool: stats?.totalIRCTCPool || 0,
@@ -17664,8 +17765,19 @@ const getAnalyticsYearWise = async (req, res) => {
                                             $and: [
                                                 { $eq: ["$$t.cancelled.byAdmin", true] },
                                                 { $eq: ["$$t.cancelled.byTraveller", true] },
+                                                { $ne: ["$$t.cancelled.viaTripCancel", true] },
                                             ]
                                         }
+                                    }
+                                }
+                            }
+                        },
+                        tripCancelledTravellers: {
+                            $sum: {
+                                $size: {
+                                    $filter: {
+                                        input: "$travellers", as: "t",
+                                        cond: { $eq: ["$$t.cancelled.viaTripCancel", true] }
                                     }
                                 }
                             }
@@ -17757,20 +17869,23 @@ const getAnalyticsYearWise = async (req, res) => {
 
             const toursThisYear = await tourModel.find(
                 { _id: { $in: yr.tourIds } },
-                { available: 1, _id: 0 }
+                { available: 1, tripCancelled: 1, _id: 0 }
             ).lean();
-            const availableTours = toursThisYear.filter(t => t.available !== false).length;
-            const soldoutTours = toursThisYear.filter(t => t.available === false).length;
+            const cancelledTours = toursThisYear.filter(t => t.tripCancelled === true).length;
+            const availableTours = toursThisYear.filter(t => !t.tripCancelled && t.available !== false).length;
+            const soldoutTours = toursThisYear.filter(t => !t.tripCancelled && t.available === false).length;
 
             return {
                 _id: yr._id,
                 tourCount: yr.tourCount,
                 availableTours,
                 soldoutTours,
+                cancelledTours,
                 travellers: stats?.travellers || 0,
                 bookings: stats?.bookings || 0,
                 activeTravellers: stats?.activeTravellers || 0,
                 cancelledTravellers: stats?.cancelledTravellers || 0,
+                tripCancelledTravellers: stats?.tripCancelledTravellers || 0,
                 rejectedTravellers: stats?.rejectedTravellers || 0,
                 unverifiedTravellers: stats?.unverifiedTravellers || 0,
                 cancellationRequestTravellers: stats?.cancellationRequestTravellers || 0,
@@ -17889,8 +18004,19 @@ const getAnalyticsMonthWise = async (req, res) => {
                                             $and: [
                                                 { $eq: ["$$t.cancelled.byAdmin", true] },
                                                 { $eq: ["$$t.cancelled.byTraveller", true] },
+                                                { $ne: ["$$t.cancelled.viaTripCancel", true] },
                                             ]
                                         }
+                                    }
+                                }
+                            }
+                        },
+                        tripCancelledTravellers: {
+                            $sum: {
+                                $size: {
+                                    $filter: {
+                                        input: "$travellers", as: "t",
+                                        cond: { $eq: ["$$t.cancelled.viaTripCancel", true] }
                                     }
                                 }
                             }
@@ -17985,10 +18111,11 @@ const getAnalyticsMonthWise = async (req, res) => {
 
             const toursThisMonth = await tourModel.find(
                 { _id: { $in: grp.tourIds } },
-                { available: 1, _id: 0 }
+                { available: 1, tripCancelled: 1, _id: 0 }
             ).lean();
-            const availableTours = toursThisMonth.filter(t => t.available !== false).length;
-            const soldoutTours = toursThisMonth.filter(t => t.available === false).length;
+            const cancelledTours = toursThisMonth.filter(t => t.tripCancelled === true).length;
+            const availableTours = toursThisMonth.filter(t => !t.tripCancelled && t.available !== false).length;
+            const soldoutTours = toursThisMonth.filter(t => !t.tripCancelled && t.available === false).length;
 
             return {
                 year: grp._id.year,
@@ -17996,10 +18123,12 @@ const getAnalyticsMonthWise = async (req, res) => {
                 tourCount: grp.tourCount,
                 availableTours,
                 soldoutTours,
+                cancelledTours,
                 travellers: stats?.travellers || 0,
                 bookings: stats?.bookings || 0,
                 activeTravellers: stats?.activeTravellers || 0,
                 cancelledTravellers: stats?.cancelledTravellers || 0,
+                tripCancelledTravellers: stats?.tripCancelledTravellers || 0,
                 rejectedTravellers: stats?.rejectedTravellers || 0,
                 unverifiedTravellers: stats?.unverifiedTravellers || 0,
                 cancellationRequestTravellers: stats?.cancellationRequestTravellers || 0,
@@ -18154,7 +18283,7 @@ const getAnalyticsTourList = async (req, res) => {
 
         const allTours = await tourModel.find(
             tourQuery,
-            { title: 1, batch: 1, available: 1, lastBookingDate: 1 }
+            { title: 1, batch: 1, available: 1, lastBookingDate: 1, tripCancelled: 1, bookingClosed: 1 }
         ).sort({ lastBookingDate: -1 }).lean();
 
         if (!allTours.length) return res.status(200).json({ success: true, data: [] });
@@ -18165,9 +18294,9 @@ const getAnalyticsTourList = async (req, res) => {
 
         if (status) {
             result = result.filter(t => {
-                if (status === "Completed") return t.isCompleted === 1;
-                if (status === "Soldout") return t.isCompleted === 0 && t.available === false;
-                if (status === "Available") return t.isCompleted === 0 && t.available !== false;
+                if (status === "Cancelled") return t.tripCancelled === true;
+                if (status === "Soldout") return !t.tripCancelled && t.available === false;
+                if (status === "Available") return !t.tripCancelled && t.available !== false;
                 return true;
             });
         }
@@ -18195,7 +18324,7 @@ const searchAnalyticsTours = async (req, res) => {
 
         const tourDocs = await tourModel.find(
             tourQuery,
-            { title: 1, batch: 1, available: 1, lastBookingDate: 1 }
+            { title: 1, batch: 1, available: 1, lastBookingDate: 1, tripCancelled: 1, bookingClosed: 1 }
         ).limit(30).lean();
 
         if (!tourDocs.length) return res.status(200).json({ success: true, data: [] });
@@ -18206,8 +18335,9 @@ const searchAnalyticsTours = async (req, res) => {
 
         if (status) {
             result = result.filter(t => {
-                if (status === "Completed") return t.isCompleted === 1;
-                if (status === "Active") return t.isCompleted === 0;
+                if (status === "Cancelled") return t.tripCancelled === true;
+                if (status === "Soldout") return !t.tripCancelled && t.available === false;
+                if (status === "Available") return !t.tripCancelled && t.available !== false;
                 return true;
             });
         }
@@ -18344,6 +18474,13 @@ const cancelEntireTrip = async (req, res) => {
                 await booking.save();
                 totalBookingsModified += 1;
                 totalTravellersCancelled += newlyCancelledCount;
+
+                // Refresh + save this booking's invoice (if one exists) RIGHT
+                // NOW, so it reflects the fare removal / refund immediately —
+                // not only whenever someone next opens the Invoice page.
+                // Never let a resync failure block the cancellation itself
+                // (resyncInvoiceForTnr already swallows its own errors).
+                await resyncInvoiceForTnr(booking.tnr);
             }
         }
 

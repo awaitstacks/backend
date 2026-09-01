@@ -7832,6 +7832,95 @@ const syncInvoiceWithBooking = (savedInvoice, booking, tour, cancellations = [])
   };
 };
 
+// ── Unfreeze on cancellation (NEW) ──────────────────────────────────────
+// A manually-edited base fare / GV pool / IRCTC pool row freezes
+// (sourceRef → null) via freezeEditedEntries — that's fine and expected
+// during NORMAL invoice editing. But if a cancellation (trip-cancel or
+// otherwise) happens AFTER that freeze, the frozen row would silently
+// stop reflecting reality forever (see the AO35GP bug). So specifically
+// at the moment a cancellation is being resynced (resyncInvoiceForTnr,
+// called from cancelEntireTrip), force these 3 categories back to live:
+//   1. Strip base:/gvpool:/irctcpool: entries out of deletedSourceRefs.
+//   2. Drop any frozen (sourceRef: null) item that LOOKS like a base
+//      fare line or a cancellation pool line (matched by description,
+//      since the sourceRef that would normally identify it is gone).
+// Genuine one-off manual items (e.g. "EXCESS AMOUNT PAID FOR AIRPLANE")
+// never match these patterns and are left completely untouched.
+const looksLikeBaseFareLine = (desc = "") =>
+  /\[.*SHARING\]/i.test(desc) || /CHILD FARE/i.test(desc);
+const looksLikePoolLine = (desc = "") =>
+  /GV CANCELLATION POOL/i.test(desc) || /IRCTC CANCELLATION POOL/i.test(desc);
+
+const unfreezeCancellationSensitiveItems = (savedInvoice) => {
+  const deletedSourceRefs = (savedInvoice.deletedSourceRefs || []).filter(
+    (ref) => !/^(base:|gvpool:|irctcpool:)/i.test(ref),
+  );
+
+  const items = (savedInvoice.items || []).filter((item) => {
+    if (item.sourceRef) return true; // still live-tracked, always keep
+    const desc = item.description || "";
+    return !(looksLikeBaseFareLine(desc) || looksLikePoolLine(desc));
+  });
+
+  return { ...savedInvoice, items, deletedSourceRefs };
+};
+
+// ── Eager invoice resync (NEW) ────────────────────────────────────────
+// Recomputes and SAVES the invoice for a single booking (by TNR) right
+// now, instead of waiting for someone to open the Invoice page (which is
+// the only thing that triggered a resync before — see getBookingInvoice
+// below). Needed because bulk actions like cancelEntireTrip
+// (tourAdminController.js) change traveller cancellation state on
+// MANY bookings at once, and nobody may open those invoices for days —
+// until then the saved invoiceModel doc stays stale (still billing the
+// now-cancelled traveller's fare, no refund reflected). Call this right
+// after any code path that changes a booking's traveller cancellation
+// state, payment state, or tour price/gst, if that booking already has
+// a saved invoice.
+//
+// Also unfreezes base fare / GV pool / IRCTC pool rows first (see
+// unfreezeCancellationSensitiveItems above) — this is the ONLY place
+// that happens, so it only ever fires at a genuine cancellation event,
+// never during normal invoice viewing/editing.
+//
+// Safe to call even if no invoice exists yet for this TNR (no-op) or if
+// the booking/tour lookup fails (returns null, caller should not treat
+// this as fatal — the invoice will still self-correct next time someone
+// views it, via getBookingInvoice's own sync).
+const resyncInvoiceForTnr = async (tnr) => {
+  try {
+    if (!tnr) return null;
+    const normalizedTnr = tnr.trim().toUpperCase();
+
+    const savedInvoiceRaw = await invoiceModel.findOne({ tnr: normalizedTnr }).lean();
+    if (!savedInvoiceRaw) return null; // nothing to resync — invoice not created yet
+
+    const savedInvoice = unfreezeCancellationSensitiveItems(savedInvoiceRaw);
+
+    const booking = await tourBookingModel.findOne({ tnr: normalizedTnr }).lean();
+    if (!booking) return null;
+
+    const tour = await tourModel.findById(booking.tourId).lean();
+    if (!tour) return null;
+
+    const cancellations = await cancellationModel.find({ tnr: normalizedTnr }).lean();
+
+    const invoice = syncInvoiceWithBooking(savedInvoice, booking, tour, cancellations);
+    if (!invoice) return null;
+
+    await invoiceModel.findOneAndUpdate(
+      { tnr: normalizedTnr },
+      { $set: invoice },
+      { new: false },
+    );
+
+    return invoice;
+  } catch (err) {
+    console.error(`resyncInvoiceForTnr(${tnr}) failed:`, err.message);
+    return null; // never let an invoice-resync failure break the caller's main action
+  }
+};
+
 // ── Route handler — GET /api/tour/invoice/:tnr ───────────────────────────
 const getBookingInvoice = async (req, res) => {
   try {
@@ -14797,6 +14886,7 @@ export {
   updateModifyReceipt,
   viewBooking,
   getBookingInvoice,
+  resyncInvoiceForTnr,      // ← ADDED: eager invoice resync, for use by other controllers
   updateBookingInvoice,
   deleteBookingInvoice,      // ← ADD THIS LINE
   getCancellationsByBooking,

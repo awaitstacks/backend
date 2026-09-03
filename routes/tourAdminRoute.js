@@ -44,6 +44,7 @@ import {
   closeTourBookings,
   reopenTourBookings,
   cancelEntireTrip,
+  reopenEntireTrip,
 
 } from "../controllers/tourAdminController.js";
 import authAdmin from "../middlewares/authAdmin.js";
@@ -68,6 +69,7 @@ touradminRouter.post(
 touradminRouter.post("/tour/:tourId/close-bookings", authAdmin, closeTourBookings);
 touradminRouter.post("/tour/:tourId/reopen-bookings", authAdmin, reopenTourBookings);
 touradminRouter.post("/tour/:tourId/cancel-trip", authAdmin, cancelEntireTrip);
+touradminRouter.post("/tour/:tourId/reopen-trip", authAdmin, reopenEntireTrip);
 
 touradminRouter.get("/bookings", authAdmin, bookingsAdmin);
 touradminRouter.get("/get-bookings", authAdmin, getBookings);

@@ -1,3 +1,4 @@
+
 // // import mongoose from "mongoose";
 
 // // import { v2 as cloudinary } from "cloudinary";
@@ -16920,6 +16921,15 @@ const adminFetchTourVehicleSeatOverview = async (req, res) => {
 //    - byAdmin ≠ true, advance.paid = true, byTraveller = true  -> Cancellation request
 //    - byAdmin ≠ true, advance.paid = true, byTraveller ≠ true  -> Active
 //    - byAdmin ≠ true, advance.paid ≠ true                      -> Unverified
+//
+//  Trip-cancelled     = byTraveller ≠ true AND byAdmin ≠ true AND viaTripCancel = true
+//                       (a PURE bulk-trip-cancel sweep traveller — never
+//                       went through any individual cancellation/rejection
+//                       flow. A traveller who was genuinely individually
+//                       approved-cancelled BEFORE the trip was cancelled
+//                       keeps byTraveller=true/byAdmin=true and therefore
+//                       counts under "Cancelled" above, NOT here, even
+//                       though they may also carry viaTripCancel=true.)
 // ════════════════════════════════════════════════════════════════
 
 // ─── Helper: tour departure date filter (single OR range) ──────────────
@@ -17004,20 +17014,20 @@ async function getBookingStatsByTourIds(tourIds) {
                 // cancelled: byAdmin=true AND byTraveller=true
                 // rejected:  byAdmin=true AND byTraveller≠true
                 // combined condition: byAdmin=true (covers both cases)
-                // EXCLUDES travellers cancelled in bulk via cancelEntireTrip
-                // (cancelled.viaTripCancel=true) — those are a separate category,
-                // counted below as tripCancelledTravellers.
+                // Includes travellers whose trip was later bulk-cancelled
+                // too (viaTripCancel=true on top of their real, genuine
+                // byAdmin/byTraveller=true cancellation) — a genuinely
+                // approved cancellation stays counted here regardless of
+                // whether the whole trip also got cancelled afterwards.
+                // Only PURE bulk-sweep travellers (byAdmin/byTraveller
+                // both false, viaTripCancel=true) are excluded — those
+                // are counted separately below as tripCancelledTravellers.
                 cancelledTravellers: {
                     $sum: {
                         $size: {
                             $filter: {
                                 input: "$travellers", as: "t",
-                                cond: {
-                                    $and: [
-                                        { $eq: ["$$t.cancelled.byAdmin", true] },
-                                        { $ne: ["$$t.cancelled.viaTripCancel", true] },
-                                    ]
-                                }
+                                cond: { $eq: ["$$t.cancelled.byAdmin", true] }
                             }
                         }
                     }
@@ -17032,7 +17042,7 @@ async function getBookingStatsByTourIds(tourIds) {
                         $size: {
                             $filter: {
                                 input: "$travellers", as: "t",
-                                cond: { $eq: ["$$t.cancelled.viaTripCancel", true] }
+                                cond: { $and: [ { $eq: ["$$t.cancelled.viaTripCancel", true] }, { $ne: ["$$t.cancelled.byTraveller", true] }, { $ne: ["$$t.cancelled.byAdmin", true] } ] }
                             }
                         }
                     }
@@ -17462,7 +17472,10 @@ const getAnalyticsSummary = async (req, res) => {
                     },
 
                     // Cancelled traveller (proper, individual process): byAdmin=true
-                    // AND byTraveller=true, EXCLUDING bulk trip-cancel (viaTripCancel).
+                    // AND byTraveller=true. Counted here regardless of a
+                    // later viaTripCancel tag — a genuine approved
+                    // cancellation stays "Cancelled" even if the whole
+                    // trip is subsequently cancelled too.
                     cancelledTravellers: {
                         $sum: {
                             $size: {
@@ -17472,7 +17485,6 @@ const getAnalyticsSummary = async (req, res) => {
                                         $and: [
                                             { $eq: ["$$t.cancelled.byAdmin", true] },
                                             { $eq: ["$$t.cancelled.byTraveller", true] },
-                                            { $ne: ["$$t.cancelled.viaTripCancel", true] },
                                         ]
                                     }
                                 }
@@ -17488,7 +17500,7 @@ const getAnalyticsSummary = async (req, res) => {
                             $size: {
                                 $filter: {
                                     input: "$travellers", as: "t",
-                                    cond: { $eq: ["$$t.cancelled.viaTripCancel", true] }
+                                    cond: { $and: [ { $eq: ["$$t.cancelled.viaTripCancel", true] }, { $ne: ["$$t.cancelled.byTraveller", true] }, { $ne: ["$$t.cancelled.byAdmin", true] } ] }
                                 }
                             }
                         }
@@ -17765,7 +17777,6 @@ const getAnalyticsYearWise = async (req, res) => {
                                             $and: [
                                                 { $eq: ["$$t.cancelled.byAdmin", true] },
                                                 { $eq: ["$$t.cancelled.byTraveller", true] },
-                                                { $ne: ["$$t.cancelled.viaTripCancel", true] },
                                             ]
                                         }
                                     }
@@ -17777,7 +17788,7 @@ const getAnalyticsYearWise = async (req, res) => {
                                 $size: {
                                     $filter: {
                                         input: "$travellers", as: "t",
-                                        cond: { $eq: ["$$t.cancelled.viaTripCancel", true] }
+                                        cond: { $and: [ { $eq: ["$$t.cancelled.viaTripCancel", true] }, { $ne: ["$$t.cancelled.byTraveller", true] }, { $ne: ["$$t.cancelled.byAdmin", true] } ] }
                                     }
                                 }
                             }
@@ -18004,7 +18015,6 @@ const getAnalyticsMonthWise = async (req, res) => {
                                             $and: [
                                                 { $eq: ["$$t.cancelled.byAdmin", true] },
                                                 { $eq: ["$$t.cancelled.byTraveller", true] },
-                                                { $ne: ["$$t.cancelled.viaTripCancel", true] },
                                             ]
                                         }
                                     }
@@ -18016,7 +18026,7 @@ const getAnalyticsMonthWise = async (req, res) => {
                                 $size: {
                                     $filter: {
                                         input: "$travellers", as: "t",
-                                        cond: { $eq: ["$$t.cancelled.viaTripCancel", true] }
+                                        cond: { $and: [ { $eq: ["$$t.cancelled.viaTripCancel", true] }, { $ne: ["$$t.cancelled.byTraveller", true] }, { $ne: ["$$t.cancelled.byAdmin", true] } ] }
                                     }
                                 }
                             }
@@ -18446,25 +18456,49 @@ const cancelEntireTrip = async (req, res) => {
 
         let totalBookingsModified = 0;
         let totalTravellersCancelled = 0;
+        let totalNoChargeCount = 0;
+        let totalAlreadyChargedCount = 0;
 
         for (const booking of bookings) {
             let newlyCancelledCount = 0;
+            let noChargeCount = 0;
+            let alreadyChargedCount = 0;
 
             booking.travellers.forEach((t) => {
-                const alreadyFullyCancelled =
+                const alreadyApprovedCancellation =
                     t.cancelled?.byTraveller === true && t.cancelled?.byAdmin === true;
 
-                if (!alreadyFullyCancelled) {
-                    // No GV/IRCTC charge applied here — this is a bulk admin trip
-                    // cancellation, not a real per-traveller cancellation request.
-                    t.cancelled = t.cancelled || {};
-                    t.cancelled.byTraveller = true;
-                    t.cancelled.byAdmin = true;
+                t.cancelled = t.cancelled || {};
+
+                if (alreadyApprovedCancellation) {
+                    // This traveller already went through the normal,
+                    // individually-approved (charged) cancellation flow —
+                    // byTraveller/byAdmin are correctly true from THAT and
+                    // must stay true, untouched. We only ADD viaTripCancel
+                    // so they're also recognised as part of this trip-wide
+                    // cancellation. Previously this branch was skipped
+                    // entirely, so these travellers never got tagged with
+                    // viaTripCancel at all.
+                    if (t.cancelled.viaTripCancel !== true) {
+                        t.cancelled.viaTripCancel = true;
+                        newlyCancelledCount += 1;
+                        alreadyChargedCount += 1;
+                    }
+                } else {
+                    // Traveller was NOT already individually cancelled —
+                    // this is a pure bulk trip-cancellation sweep, not a
+                    // real per-traveller cancellation request. byTraveller
+                    // and byAdmin must stay FALSE (no charge, no
+                    // individual "rejected"/"cancelled" semantics) — only
+                    // viaTripCancel marks them as cancelled via the trip
+                    // cancel. Previously this branch incorrectly flipped
+                    // byTraveller/byAdmin to true as well.
+                    t.cancelled.byTraveller = false;
+                    t.cancelled.byAdmin = false;
                     t.cancelled.viaTripCancel = true;
                     newlyCancelledCount += 1;
+                    noChargeCount += 1;
                 }
-                // else: leave completely as-is — this traveller already has a
-                // real (charged) cancellation from the normal flow.
             });
 
             if (newlyCancelledCount > 0) {
@@ -18474,6 +18508,8 @@ const cancelEntireTrip = async (req, res) => {
                 await booking.save();
                 totalBookingsModified += 1;
                 totalTravellersCancelled += newlyCancelledCount;
+                totalNoChargeCount += noChargeCount;
+                totalAlreadyChargedCount += alreadyChargedCount;
 
                 // Refresh + save this booking's invoice (if one exists) RIGHT
                 // NOW, so it reflects the fare removal / refund immediately —
@@ -18488,15 +18524,139 @@ const cancelEntireTrip = async (req, res) => {
         tour.available = false;
         await tour.save();
 
+        // Message wording: only call out "(no charge)" for the fresh-sweep
+        // travellers. Travellers who already had a genuine, individually-
+        // approved (charged) cancellation keep their real GV/IRCTC pool
+        // amounts completely untouched — this action does NOT add, remove,
+        // or change any charge for them, it only tags them as part of the
+        // trip cancellation.
+        const messageParts = [
+            `Trip "${tour.title}" cancelled — ${totalBookingsModified} booking(s) updated.`,
+        ];
+        if (totalNoChargeCount > 0) {
+            messageParts.push(
+                `${totalNoChargeCount} traveller(s) newly cancelled (no charge).`,
+            );
+        }
+        if (totalAlreadyChargedCount > 0) {
+            messageParts.push(
+                `${totalAlreadyChargedCount} traveller(s) already had a real cancellation charge — untouched, just tagged as part of this trip cancellation.`,
+            );
+        }
+
         return res.status(200).json({
             success: true,
-            message: `Trip "${tour.title}" cancelled — ${totalBookingsModified} booking(s) updated, ${totalTravellersCancelled} traveller(s) cancelled (no charge).`,
+            message: messageParts.join(" "),
             tour,
             bookingsModified: totalBookingsModified,
             travellersCancelled: totalTravellersCancelled,
+            travellersNoCharge: totalNoChargeCount,
+            travellersAlreadyCharged: totalAlreadyChargedCount,
         });
     } catch (err) {
         console.error("cancelEntireTrip error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+/**
+ * POST /api/tour/:tourId/reopen-trip
+ *
+ * Reverses cancelEntireTrip. For every traveller currently tagged
+ * viaTripCancel:true on this tour:
+ *
+ *   - If byTraveller:false AND byAdmin:false (a fresh bulk-sweep
+ *     traveller who was never actually individually cancelled) —
+ *     FULLY restore them: clear byTraveller, byAdmin, viaTripCancel,
+ *     and any cancelledAt timestamp. They go back to being an
+ *     ordinary active traveller.
+ *
+ *   - If byTraveller:true AND byAdmin:true (a genuine, individually-
+ *     approved cancellation from the normal flow that also happened
+ *     to be tagged as part of the trip cancellation) — their real
+ *     cancellation is untouched (byTraveller/byAdmin stay true); only
+ *     viaTripCancel is cleared, since the trip itself is no longer
+ *     cancelled.
+ *
+ * Resets tour.tripCancelled = false and tour.available = true, and
+ * resyncs each affected booking's invoice immediately (same pattern as
+ * cancelEntireTrip) so it reflects the restored fare right away.
+ */
+const reopenEntireTrip = async (req, res) => {
+    try {
+        const { tourId } = req.params;
+
+        const tour = await tourModel.findById(tourId);
+        if (!tour) {
+            return res
+                .status(404)
+                .json({ success: false, message: "Tour not found" });
+        }
+
+        const bookings = await tourBookingModel.find({ tourId });
+
+        let totalBookingsModified = 0;
+        let totalTravellersRestored = 0;
+        let totalTravellersKeptCancelled = 0;
+
+        for (const booking of bookings) {
+            let restoredCount = 0;
+            let keptCount = 0;
+
+            booking.travellers.forEach((t) => {
+                if (!t.cancelled || t.cancelled.viaTripCancel !== true) return;
+
+                const wasGenuineApproval =
+                    t.cancelled.byTraveller === true && t.cancelled.byAdmin === true;
+
+                if (wasGenuineApproval) {
+                    // Real, individually-approved cancellation — leave it
+                    // as-is, just drop the trip-cancel tag.
+                    t.cancelled.viaTripCancel = false;
+                    keptCount += 1;
+                } else {
+                    // Fresh bulk-sweep traveller, never really cancelled —
+                    // fully restore to an ordinary active traveller.
+                    t.cancelled.byTraveller = false;
+                    t.cancelled.byAdmin = false;
+                    t.cancelled.viaTripCancel = false;
+                    if (t.cancelled.cancelledAt) t.cancelled.cancelledAt = null;
+                    restoredCount += 1;
+                }
+            });
+
+            if (restoredCount > 0 || keptCount > 0) {
+                booking.tripCancelledTravellerCount = Math.max(
+                    0,
+                    (booking.tripCancelledTravellerCount || 0) -
+                    restoredCount -
+                    keptCount,
+                );
+
+                await booking.save();
+                totalBookingsModified += 1;
+                totalTravellersRestored += restoredCount;
+                totalTravellersKeptCancelled += keptCount;
+
+                // Refresh the invoice immediately, same as cancelEntireTrip.
+                await resyncInvoiceForTnr(booking.tnr);
+            }
+        }
+
+        tour.tripCancelled = false;
+        tour.available = true;
+        await tour.save();
+
+        return res.status(200).json({
+            success: true,
+            message: `Trip "${tour.title}" reopened — ${totalBookingsModified} booking(s) updated, ${totalTravellersRestored} traveller(s) fully restored, ${totalTravellersKeptCancelled} traveller(s) kept their real (individually-approved) cancellation.`,
+            tour,
+            bookingsModified: totalBookingsModified,
+            travellersRestored: totalTravellersRestored,
+            travellersKeptCancelled: totalTravellersKeptCancelled,
+        });
+    } catch (err) {
+        console.error("reopenEntireTrip error:", err);
         return res.status(500).json({ success: false, message: err.message });
     }
 };
@@ -18549,5 +18709,6 @@ export {
     closeTourBookings,
     reopenTourBookings,
     cancelEntireTrip,
+    reopenEntireTrip,
 
 };

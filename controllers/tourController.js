@@ -7772,26 +7772,64 @@ const freezeEditedEntries = (incoming, freshAuto) => {
 // Merges a fresh (auto) list into a saved list while PRESERVING the saved
 // list's row order. Existing rows (manual or still-synced) keep their
 // position; only brand-new auto entries get appended at the end.
+// const mergeInOrder = (savedList, freshList, deletedRefs) => {
+//   const freshMap = new Map((freshList || []).map((i) => [i.sourceRef, i]));
+//   const savedRefsPresent = new Set(
+//     (savedList || []).map((i) => i.sourceRef).filter(Boolean),
+//   );
+
+//   const merged = (savedList || [])
+//     .map((i) => {
+//       if (!i.sourceRef) return i; // manual (edited) — as-is, same position
+//       if (deletedRefs.has(i.sourceRef)) return null;
+//       const fresh = freshMap.get(i.sourceRef);
+//       return fresh || null; // still auto-synced — refresh value, SAME position
+//     })
+//     .filter(Boolean);
+
+//   const newEntries = (freshList || []).filter(
+//     (i) => !savedRefsPresent.has(i.sourceRef) && !deletedRefs.has(i.sourceRef),
+//   );
+
+//   return [...merged, ...newEntries]; // brand-new auto rows → append at end only
+// };
+
 const mergeInOrder = (savedList, freshList, deletedRefs) => {
   const freshMap = new Map((freshList || []).map((i) => [i.sourceRef, i]));
-  const savedRefsPresent = new Set(
-    (savedList || []).map((i) => i.sourceRef).filter(Boolean),
+
+  // Record: for each manual item, which auto sourceRef (if any)
+  // immediately preceded it in the OLD saved order.
+  const manualAfter = [];
+  let lastAutoRef = null;
+  (savedList || []).forEach((i) => {
+    if (!i.sourceRef) {
+      manualAfter.push({ afterRef: lastAutoRef, item: i });
+    } else if (!deletedRefs.has(i.sourceRef)) {
+      lastAutoRef = i.sourceRef;
+    }
+  });
+
+  // Auto items: always freshList's own order, refreshed values, minus
+  // anything explicitly deleted.
+  const autoOrdered = (freshList || []).filter(
+    (i) => i.sourceRef && !deletedRefs.has(i.sourceRef),
   );
 
-  const merged = (savedList || [])
-    .map((i) => {
-      if (!i.sourceRef) return i; // manual (edited) — as-is, same position
-      if (deletedRefs.has(i.sourceRef)) return null;
-      const fresh = freshMap.get(i.sourceRef);
-      return fresh || null; // still auto-synced — refresh value, SAME position
-    })
-    .filter(Boolean);
+  const result = [];
+  // Manual items with no preceding auto neighbour go first, in their
+  // original relative order.
+  manualAfter
+    .filter((m) => m.afterRef === null)
+    .forEach((m) => result.push(m.item));
 
-  const newEntries = (freshList || []).filter(
-    (i) => !savedRefsPresent.has(i.sourceRef) && !deletedRefs.has(i.sourceRef),
-  );
+  autoOrdered.forEach((autoItem) => {
+    result.push(freshMap.get(autoItem.sourceRef));
+    manualAfter
+      .filter((m) => m.afterRef === autoItem.sourceRef)
+      .forEach((m) => result.push(m.item));
+  });
 
-  return [...merged, ...newEntries]; // brand-new auto rows → append at end only
+  return result;
 };
 const syncInvoiceWithBooking = (savedInvoice, booking, tour, cancellations = []) => {
   const freshAuto = buildInvoiceView(booking, tour, cancellations);

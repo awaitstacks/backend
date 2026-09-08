@@ -8260,12 +8260,67 @@ const bookingsTour = async (req, res) => {
       .populate({
         path: "tourId",
         model: "tour",
-      });
+      })
+      .lean();
+
+    // Pull every APPROVED cancellation record for these bookings in one
+    // query and group by tnr, then sum GV / IRCTC / remarks / refund per
+    // booking. Only approvedBy:true records represent a real, finalised
+    // cancellation charge — a raisedBy:true/approvedBy:false record is
+    // just a pending request (its numbers can even get superseded/
+    // recalculated once approved, as seen with gvCancellationPool on the
+    // booking matching only the approved record, not the raised one) and
+    // must not be counted. Used by the dashboard to compute advance/
+    // balance earnings correctly for cancelled (partial or full)
+    // bookings — see cancelBookingController CASE 1-5 for how these
+    // fields are produced.
+    const tnrs = bookings.map((b) => b.tnr).filter(Boolean);
+    const cancellations = tnrs.length
+      ? await cancellationModel
+          .find({ tnr: { $in: tnrs }, approvedBy: true })
+          .lean()
+      : [];
+
+    const cancellationsByTnr = cancellations.reduce((acc, c) => {
+      if (!acc[c.tnr]) acc[c.tnr] = [];
+      acc[c.tnr].push(c);
+      return acc;
+    }, {});
+
+    const bookingsWithCancellation = bookings.map((b) => {
+      const records = cancellationsByTnr[b.tnr] || [];
+      const gvCancellationAmount = records.reduce(
+        (s, r) => s + Number(r.gvCancellationAmount || 0),
+        0,
+      );
+      const irctcCancellationAmount = records.reduce(
+        (s, r) => s + Number(r.irctcCancellationAmount || 0),
+        0,
+      );
+      const remarksAmount = records.reduce(
+        (s, r) => s + Number(r.remarksAmount || 0),
+        0,
+      );
+      const refundAmount = records.reduce(
+        (s, r) => s + Number(r.refundAmount || 0),
+        0,
+      );
+
+      return {
+        ...b,
+        cancellationSummary: {
+          gvCancellationAmount: Number(gvCancellationAmount.toFixed(2)),
+          irctcCancellationAmount: Number(irctcCancellationAmount.toFixed(2)),
+          remarksAmount: Number(remarksAmount.toFixed(2)),
+          refundAmount: Number(refundAmount.toFixed(2)),
+        },
+      };
+    });
 
     res.json({
       success: true,
-      total: bookings.length,
-      bookings,
+      total: bookingsWithCancellation.length,
+      bookings: bookingsWithCancellation,
     });
   } catch (error) {
     console.error("Error fetching bookings:", error);

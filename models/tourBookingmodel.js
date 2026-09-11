@@ -1,3 +1,2288 @@
+// // // import mongoose from "mongoose";
+
+// // // const tourBookingSchema = new mongoose.Schema({
+// // //   userId: { type: mongoose.Schema.Types.ObjectId, ref: "user", required: true },
+// // //   tourId: { type: mongoose.Schema.Types.ObjectId, ref: "tour", required: true },
+// // //   tnr: {
+// // //     type: String,
+// // //     unique: true, // ← very important for production safety
+// // //     sparse: true, // allows existing docs without tnr to stay valid
+// // //     trim: true,
+// // //     uppercase: true,
+// // //     minlength: 6,
+// // //     maxlength: 6,
+// // //   },
+
+// // //   userData: { type: Object, required: true },
+// // //   tourData: { type: Object, required: true },
+
+// // //   travellers: [
+// // //     {
+// // //       title: { type: String, required: true },
+// // //       firstName: { type: String, required: true },
+// // //       lastName: { type: String, required: true },
+// // //       age: { type: Number, required: true },
+// // //       gender: {
+// // //         type: String,
+// // //         enum: ["Male", "Female", "Other"],
+// // //         required: true,
+// // //       },
+// // //       sharingType: {
+// // //         type: String,
+// // //         enum: ["double", "triple", "withBerth", "withoutBerth"],
+// // //         required: true,
+// // //       },
+// // //       packageType: {
+// // //         type: String,
+// // //         enum: ["main", "variant"],
+// // //         default: "main",
+// // //         required: true,
+// // //       },
+// // //       variantPackageIndex: {
+// // //         type: Number,
+// // //         default: null,
+// // //       },
+// // //       selectedAddon: {
+// // //         name: { type: String },
+// // //         price: { type: Number },
+// // //       },
+// // //       boardingPoint: {
+// // //         stationCode: { type: String },
+// // //         stationName: { type: String },
+// // //       },
+// // //       deboardingPoint: {
+// // //         stationCode: { type: String },
+// // //         stationName: { type: String },
+// // //       },
+// // //       trainSeats: [
+// // //         {
+// // //           trainName: { type: String },
+// // //           seatNo: { type: String },
+// // //         },
+// // //       ],
+// // //       flightSeats: [
+// // //         {
+// // //           flightName: { type: String },
+// // //           seatNo: { type: String },
+// // //         },
+// // //       ],
+
+// // //       seatNumber: {
+// // //         type: String,
+// // //         default: null,
+// // //         trim: true,
+// // //       },
+// // //       seatLocked: {
+// // //         type: Boolean,
+// // //         default: false,
+// // //       },
+// // //       seatLockedAt: { type: Date },
+// // //       vehicleId: {
+// // //         type: mongoose.Schema.Types.ObjectId,
+// // //         ref: "tourVehicle",
+// // //         default: null,
+// // //       },
+// // //       vehicleName: {
+// // //         type: String,
+// // //         default: null,
+// // //         trim: true,
+// // //       },
+
+// // //       staffRemarks: { type: String },
+// // //       remarks: { type: String },
+// // //       cancelled: {
+// // //         byAdmin: { type: Boolean, default: false },
+// // //         byTraveller: { type: Boolean, default: false },
+// // //         cancelledAt: { type: Date },
+// // //         releaseddAt: { type: Date },
+// // //         reason: { type: String },
+// // //       },
+// // //     },
+// // //   ],
+
+// // //   billingAddress: {
+// // //     addressLine1: { type: String },
+// // //     addressLine2: { type: String },
+// // //     city: { type: String },
+// // //     state: { type: String },
+// // //     pincode: { type: String },
+// // //     country: { type: String, default: "India" },
+// // //   },
+
+// // //   contact: {
+// // //     email: {
+// // //       type: String,
+// // //       required: true,
+// // //       match: [/.+@.+\..+/, "Please enter a valid email address"],
+// // //     },
+// // //     mobile: {
+// // //       type: String,
+// // //       required: true,
+// // //       trim: true,
+// // //       match: [/^[\d+\-\s()]{7,25}$/, "Invalid phone number format"],
+// // //     },
+// // //   },
+
+// // //   bookingType: {
+// // //     type: String,
+// // //     enum: ["online", "offline"],
+// // //     required: true,
+// // //   },
+
+// // //   payment: {
+// // //     advance: {
+// // //       amount: { type: Number, required: true },
+// // //       paid: { type: Boolean, default: false },
+// // //       paymentVerified: { type: Boolean, default: false },
+// // //       paidAt: { type: Date },
+// // //     },
+// // //     balance: {
+// // //       amount: { type: Number, required: true },
+// // //       paid: { type: Boolean, default: false },
+// // //       paymentVerified: { type: Boolean, default: false },
+// // //       paidAt: { type: Date },
+// // //     },
+// // //   },
+// // //   receipts: {
+// // //     advanceReceiptSent: { type: Boolean, default: false },
+// // //     advanceReceiptSentAt: { type: Date },
+// // //     balanceReceiptSent: { type: Boolean, default: false },
+// // //     balanceReceiptSentAt: { type: Date },
+// // //   },
+// // //   isTripCompleted: { type: Boolean, default: false },
+// // //   isBookingCompleted: { type: Boolean, default: false },
+
+// // //   cancelled: {
+// // //     byAdmin: { type: Boolean, default: false },
+// // //     byTraveller: { type: Boolean, default: false },
+// // //     cancelledAt: { type: Date },
+// // //     releaseddAt: { type: Date },
+// // //     reason: { type: String },
+// // //   },
+
+// // //   bookingDate: { type: Date, default: Date.now },
+// // //   gvCancellationPool: { type: Number },
+// // //   irctcCancellationPool: { type: Number },
+// // //   manageBooking: { type: Boolean, default: false },
+
+// // //   // New independent field - specifically for advance payment related admin remarks
+// // //   advanceAdminRemarks: [
+// // //     {
+// // //       remark: { type: String },
+// // //       amount: { type: Number, default: 0 },
+// // //       addedAt: { type: Date, default: Date.now },
+// // //     },
+// // //   ],
+
+// // //   cancellationReceipt: { type: Boolean, default: false },
+// // //   manageBookingReceipt: { type: Boolean, default: false },
+
+// // //   // General admin remarks (kept separate)
+// // //   adminRemarks: [
+// // //     {
+// // //       remark: { type: String },
+// // //       amount: { type: Number, default: 0 },
+// // //       addedAt: { type: Date, default: Date.now },
+// // //     },
+// // //   ],
+// // //   cancellationRequest: { type: Boolean, default: false },
+// // //   emergencyContact: {
+// // //     type: String,
+// // //     match: [/^[\d+\-\s()]{7,25}$/, "Invalid phone number format"],
+// // //     default: null, // or "" if you prefer empty string
+// // //   },
+
+// // //   termsAgreed: {
+// // //     type: Boolean,
+// // //     default: false,
+// // //   },
+
+// // //   termsAgreedAt: {
+// // //     type: Date,
+// // //     default: null, // null = never agreed / confirmed
+// // //   },
+// // // });
+
+// // // const tourBookingModel =
+// // //   mongoose.models.tourBooking ||
+// // //   mongoose.model("tourBooking", tourBookingSchema);
+
+// // // export default tourBookingModel;
+
+// // // import mongoose from "mongoose";
+
+// // // const tourBookingSchema = new mongoose.Schema({
+// // //   userId: { type: mongoose.Schema.Types.ObjectId, ref: "user", required: true },
+// // //   tourId: { type: mongoose.Schema.Types.ObjectId, ref: "tour", required: true },
+// // //   tnr: {
+// // //     type: String,
+// // //     unique: true, // ← very important for production safety
+// // //     sparse: true, // allows existing docs without tnr to stay valid
+// // //     trim: true,
+// // //     uppercase: true,
+// // //     minlength: 6,
+// // //     maxlength: 6,
+// // //   },
+
+// // //   // ── NEW FIELD ──────────────────────────────────────────────────────────
+// // //   // Generated once, the first time advance is marked paid (see
+// // //   // markOfflineAdvancePaid in tourController.js). Its presence is what
+// // //   // tells the frontend to show the Receipt/Invoice button.
+// // //   invoiceNumber: {
+// // //     type: String,
+// // //     unique: true,
+// // //     sparse: true,
+// // //     trim: true,
+// // //     uppercase: true,
+// // //   },
+// // //   // ─────────────────────────────────────────────────────────────────────
+
+// // //   userData: { type: Object, required: true },
+// // //   tourData: { type: Object, required: true },
+
+// // //   travellers: [
+// // //     {
+// // //       title: { type: String, required: true },
+// // //       firstName: { type: String, required: true },
+// // //       lastName: { type: String, required: true },
+// // //       age: { type: Number, required: true },
+// // //       gender: {
+// // //         type: String,
+// // //         enum: ["Male", "Female", "Other"],
+// // //         required: true,
+// // //       },
+// // //       sharingType: {
+// // //         type: String,
+// // //         enum: ["double", "triple", "withBerth", "withoutBerth"],
+// // //         required: true,
+// // //       },
+// // //       packageType: {
+// // //         type: String,
+// // //         enum: ["main", "variant"],
+// // //         default: "main",
+// // //         required: true,
+// // //       },
+// // //       variantPackageIndex: {
+// // //         type: Number,
+// // //         default: null,
+// // //       },
+// // //       selectedAddon: {
+// // //         name: { type: String },
+// // //         price: { type: Number },
+// // //       },
+// // //       boardingPoint: {
+// // //         stationCode: { type: String },
+// // //         stationName: { type: String },
+// // //       },
+// // //       deboardingPoint: {
+// // //         stationCode: { type: String },
+// // //         stationName: { type: String },
+// // //       },
+// // //       trainSeats: [
+// // //         {
+// // //           trainName: { type: String },
+// // //           seatNo: { type: String },
+// // //         },
+// // //       ],
+// // //       flightSeats: [
+// // //         {
+// // //           flightName: { type: String },
+// // //           seatNo: { type: String },
+// // //         },
+// // //       ],
+
+// // //       seatNumber: {
+// // //         type: String,
+// // //         default: null,
+// // //         trim: true,
+// // //       },
+// // //       seatLocked: {
+// // //         type: Boolean,
+// // //         default: false,
+// // //       },
+// // //       seatLockedAt: { type: Date },
+// // //       vehicleId: {
+// // //         type: mongoose.Schema.Types.ObjectId,
+// // //         ref: "tourVehicle",
+// // //         default: null,
+// // //       },
+// // //       vehicleName: {
+// // //         type: String,
+// // //         default: null,
+// // //         trim: true,
+// // //       },
+
+// // //       staffRemarks: { type: String },
+// // //       remarks: { type: String },
+// // //       cancelled: {
+// // //         byAdmin: { type: Boolean, default: false },
+// // //         byTraveller: { type: Boolean, default: false },
+// // //         cancelledAt: { type: Date },
+// // //         releaseddAt: { type: Date },
+// // //         reason: { type: String },
+// // //       },
+// // //     },
+// // //   ],
+
+// // //   billingAddress: {
+// // //     addressLine1: { type: String },
+// // //     addressLine2: { type: String },
+// // //     city: { type: String },
+// // //     state: { type: String },
+// // //     pincode: { type: String },
+// // //     country: { type: String, default: "India" },
+// // //   },
+
+// // //   contact: {
+// // //     email: {
+// // //       type: String,
+// // //       required: true,
+// // //       match: [/.+@.+\..+/, "Please enter a valid email address"],
+// // //     },
+// // //     mobile: {
+// // //       type: String,
+// // //       required: true,
+// // //       trim: true,
+// // //       match: [/^[\d+\-\s()]{7,25}$/, "Invalid phone number format"],
+// // //     },
+// // //   },
+
+// // //   bookingType: {
+// // //     type: String,
+// // //     enum: ["online", "offline"],
+// // //     required: true,
+// // //   },
+
+// // //   payment: {
+// // //     advance: {
+// // //       amount: { type: Number, required: true },
+// // //       paid: { type: Boolean, default: false },
+// // //       paymentVerified: { type: Boolean, default: false },
+// // //       paidAt: { type: Date },
+// // //     },
+// // //     balance: {
+// // //       amount: { type: Number, required: true },
+// // //       paid: { type: Boolean, default: false },
+// // //       paymentVerified: { type: Boolean, default: false },
+// // //       paidAt: { type: Date },
+// // //     },
+// // //   },
+// // //   receipts: {
+// // //     advanceReceiptSent: { type: Boolean, default: false },
+// // //     advanceReceiptSentAt: { type: Date },
+// // //     balanceReceiptSent: { type: Boolean, default: false },
+// // //     balanceReceiptSentAt: { type: Date },
+// // //   },
+// // //   isTripCompleted: { type: Boolean, default: false },
+// // //   isBookingCompleted: { type: Boolean, default: false },
+
+// // //   cancelled: {
+// // //     byAdmin: { type: Boolean, default: false },
+// // //     byTraveller: { type: Boolean, default: false },
+// // //     cancelledAt: { type: Date },
+// // //     releaseddAt: { type: Date },
+// // //     reason: { type: String },
+// // //   },
+
+// // //   bookingDate: { type: Date, default: Date.now },
+// // //   gvCancellationPool: { type: Number },
+// // //   irctcCancellationPool: { type: Number },
+// // //   manageBooking: { type: Boolean, default: false },
+
+// // //   // New independent field - specifically for advance payment related admin remarks
+// // //   advanceAdminRemarks: [
+// // //     {
+// // //       remark: { type: String },
+// // //       amount: { type: Number, default: 0 },
+// // //       addedAt: { type: Date, default: Date.now },
+// // //     },
+// // //   ],
+
+// // //   cancellationReceipt: { type: Boolean, default: false },
+// // //   manageBookingReceipt: { type: Boolean, default: false },
+
+// // //   // General admin remarks (kept separate)
+// // //   adminRemarks: [
+// // //     {
+// // //       remark: { type: String },
+// // //       amount: { type: Number, default: 0 },
+// // //       addedAt: { type: Date, default: Date.now },
+// // //     },
+// // //   ],
+// // //   cancellationRequest: { type: Boolean, default: false },
+// // //   emergencyContact: {
+// // //     type: String,
+// // //     match: [/^[\d+\-\s()]{7,25}$/, "Invalid phone number format"],
+// // //     default: null, // or "" if you prefer empty string
+// // //   },
+
+// // //   termsAgreed: {
+// // //     type: Boolean,
+// // //     default: false,
+// // //   },
+
+// // //   termsAgreedAt: {
+// // //     type: Date,
+// // //     default: null, // null = never agreed / confirmed
+// // //   },
+// // // });
+
+// // // // ── AUTO-GENERATE INVOICE NUMBER ─────────────────────────────────────────
+// // // // Runs on EVERY save, no matter which controller/flow set
+// // // // payment.advance.paid = true — offline "Mark Advance" button, an online
+// // // // payment gateway success handler, admin manually editing it, etc.
+// // // // This way invoiceNumber logic lives in ONE place instead of being
+// // // // duplicated inside every controller function that can mark advance paid.
+// // // //
+// // // // NOTE: this only runs when the document goes through .save(). If any
+// // // // route updates payment.advance.paid via findOneAndUpdate() directly
+// // // // (skipping .save()), this hook won't fire for that call — make sure
+// // // // every "mark advance paid" flow fetches the doc and calls .save().
+// // // //
+// // // // Invoice numbers are SEQUENTIAL — GVBILL0001, GVBILL0002, ... — same
+// // // // pattern as your enquirySchema's fitCode generator.
+// // // tourBookingSchema.pre("save", async function (next) {
+// // //   if (
+// // //     this.isModified("payment.advance.paid") &&
+// // //     this.payment?.advance?.paid === true &&
+// // //     !this.invoiceNumber
+// // //   ) {
+// // //     const last = await mongoose
+// // //       .model("tourBooking")
+// // //       .findOne({ invoiceNumber: { $exists: true, $ne: null } })
+// // //       .sort({ _id: -1 }) // newest first — _id is time-ordered, no createdAt field needed
+// // //       .select("invoiceNumber");
+
+// // //     let nextNum = 1;
+// // //     if (last?.invoiceNumber) {
+// // //       const num = parseInt(last.invoiceNumber.replace("GVBILL", ""), 10);
+// // //       if (!isNaN(num)) nextNum = num + 1;
+// // //     }
+// // //     this.invoiceNumber = `GVBILL${String(nextNum).padStart(4, "0")}`;
+// // //   }
+// // //   next();
+// // // });
+
+// // // const tourBookingModel =
+// // //   mongoose.models.tourBooking ||
+// // //   mongoose.model("tourBooking", tourBookingSchema);
+
+// // // export default tourBookingModel;
+
+// // // import mongoose from "mongoose";
+
+// // // const tourBookingSchema = new mongoose.Schema({
+// // //   userId: { type: mongoose.Schema.Types.ObjectId, ref: "user", required: true },
+// // //   tourId: { type: mongoose.Schema.Types.ObjectId, ref: "tour", required: true },
+// // //   tnr: {
+// // //     type: String,
+// // //     unique: true, // ← very important for production safety
+// // //     sparse: true, // allows existing docs without tnr to stay valid
+// // //     trim: true,
+// // //     uppercase: true,
+// // //     minlength: 6,
+// // //     maxlength: 6,
+// // //   },
+
+// // //   // ── NEW FIELD ──────────────────────────────────────────────────────────
+// // //   // Generated once, the first time advance is marked paid (see
+// // //   // markOfflineAdvancePaid in tourController.js). Its presence is what
+// // //   // tells the frontend to show the Receipt/Invoice button.
+// // //   invoiceNumber: {
+// // //     type: String,
+// // //     unique: true,
+// // //     sparse: true,
+// // //     trim: true,
+// // //     uppercase: true,
+// // //   },
+// // //   // ─────────────────────────────────────────────────────────────────────
+
+// // //   userData: { type: Object, required: true },
+// // //   tourData: { type: Object, required: true },
+
+// // //   travellers: [
+// // //     {
+// // //       title: { type: String, required: true },
+// // //       firstName: { type: String, required: true },
+// // //       lastName: { type: String, required: true },
+// // //       age: { type: Number, required: true },
+// // //       gender: {
+// // //         type: String,
+// // //         enum: ["Male", "Female", "Other"],
+// // //         required: true,
+// // //       },
+// // //       sharingType: {
+// // //         type: String,
+// // //         enum: ["double", "triple", "withBerth", "withoutBerth"],
+// // //         required: true,
+// // //       },
+// // //       packageType: {
+// // //         type: String,
+// // //         enum: ["main", "variant"],
+// // //         default: "main",
+// // //         required: true,
+// // //       },
+// // //       variantPackageIndex: {
+// // //         type: Number,
+// // //         default: null,
+// // //       },
+
+// // //       // OLD flat addon — RESTORED. Old bookings save/read a single flat
+// // //       // addon here (name + price). This is what makes ManageBooking.jsx's
+// // //       // "already has selectedAddon saved → treat as old booking" check
+// // //       // actually work — without this field Mongoose was silently
+// // //       // dropping the flat addon on save, so old bookings looked "new".
+// // //       selectedAddon: {
+// // //         name: { type: String },
+// // //         price: { type: Number },
+// // //       },
+
+// // //       // NEW train/flight-wise addons — used for new bookings whose tour
+// // //       // package has per-train/per-flight addons.
+// // //       selectedAddons: [
+// // //         {
+// // //           trainId: {
+// // //             type: mongoose.Schema.Types.ObjectId,
+// // //             default: null,
+// // //           },
+
+// // //           trainNo: {
+// // //             type: String,
+// // //             default: null,
+// // //           },
+
+// // //           trainName: {
+// // //             type: String,
+// // //             default: null,
+// // //           },
+
+// // //           tripType: {
+// // //             type: String,
+// // //             default: null,
+// // //           },
+
+// // //           addonId: {
+// // //             type: mongoose.Schema.Types.ObjectId,
+// // //             default: null,
+// // //           },
+
+// // //           name: {
+// // //             type: String,
+// // //             default: null,
+// // //           },
+
+// // //           amount: {
+// // //             type: Number,
+// // //             default: 0,
+// // //           },
+// // //         },
+// // //       ],
+// // //       boardingPoint: {
+// // //         stationCode: { type: String },
+// // //         stationName: { type: String },
+// // //       },
+// // //       deboardingPoint: {
+// // //         stationCode: { type: String },
+// // //         stationName: { type: String },
+// // //       },
+// // //       trainSeats: [
+// // //         {
+// // //           trainName: { type: String },
+// // //           seatNo: { type: String },
+// // //         },
+// // //       ],
+// // //       flightSeats: [
+// // //         {
+// // //           flightName: { type: String },
+// // //           seatNo: { type: String },
+// // //         },
+// // //       ],
+
+// // //       seatNumber: {
+// // //         type: String,
+// // //         default: null,
+// // //         trim: true,
+// // //       },
+// // //       seatLocked: {
+// // //         type: Boolean,
+// // //         default: false,
+// // //       },
+// // //       seatLockedAt: { type: Date },
+// // //       vehicleId: {
+// // //         type: mongoose.Schema.Types.ObjectId,
+// // //         ref: "tourVehicle",
+// // //         default: null,
+// // //       },
+// // //       vehicleName: {
+// // //         type: String,
+// // //         default: null,
+// // //         trim: true,
+// // //       },
+
+// // //       staffRemarks: { type: String },
+// // //       remarks: { type: String },
+// // //       cancelled: {
+// // //         byAdmin: { type: Boolean, default: false },
+// // //         byTraveller: { type: Boolean, default: false },
+// // //         cancelledAt: { type: Date },
+// // //         releaseddAt: { type: Date },
+// // //         reason: { type: String },
+// // //       },
+// // //     },
+// // //   ],
+
+// // //   billingAddress: {
+// // //     addressLine1: { type: String },
+// // //     addressLine2: { type: String },
+// // //     city: { type: String },
+// // //     state: { type: String },
+// // //     pincode: { type: String },
+// // //     country: { type: String, default: "India" },
+// // //   },
+
+// // //   contact: {
+// // //     email: {
+// // //       type: String,
+// // //       required: true,
+// // //       match: [/.+@.+\..+/, "Please enter a valid email address"],
+// // //     },
+// // //     mobile: {
+// // //       type: String,
+// // //       required: true,
+// // //       trim: true,
+// // //       match: [/^[\d+\-\s()]{7,25}$/, "Invalid phone number format"],
+// // //     },
+// // //   },
+
+// // //   bookingType: {
+// // //     type: String,
+// // //     enum: ["online", "offline"],
+// // //     required: true,
+// // //   },
+
+// // //   payment: {
+// // //     advance: {
+// // //       amount: { type: Number, required: true },
+// // //       paid: { type: Boolean, default: false },
+// // //       paymentVerified: { type: Boolean, default: false },
+// // //       paidAt: { type: Date },
+// // //     },
+// // //     balance: {
+// // //       amount: { type: Number, required: true },
+// // //       paid: { type: Boolean, default: false },
+// // //       paymentVerified: { type: Boolean, default: false },
+// // //       paidAt: { type: Date },
+// // //     },
+// // //   },
+// // //   receipts: {
+// // //     advanceReceiptSent: { type: Boolean, default: false },
+// // //     advanceReceiptSentAt: { type: Date },
+// // //     balanceReceiptSent: { type: Boolean, default: false },
+// // //     balanceReceiptSentAt: { type: Date },
+// // //   },
+// // //   isTripCompleted: { type: Boolean, default: false },
+// // //   isBookingCompleted: { type: Boolean, default: false },
+
+// // //   cancelled: {
+// // //     byAdmin: { type: Boolean, default: false },
+// // //     byTraveller: { type: Boolean, default: false },
+// // //     cancelledAt: { type: Date },
+// // //     releaseddAt: { type: Date },
+// // //     reason: { type: String },
+// // //   },
+
+// // //   bookingDate: { type: Date, default: Date.now },
+// // //   gvCancellationPool: { type: Number },
+// // //   irctcCancellationPool: { type: Number },
+// // //   manageBooking: { type: Boolean, default: false },
+
+// // //   // New independent field - specifically for advance payment related admin remarks
+// // //   advanceAdminRemarks: [
+// // //     {
+// // //       remark: { type: String },
+// // //       amount: { type: Number, default: 0 },
+// // //       addedAt: { type: Date, default: Date.now },
+// // //     },
+// // //   ],
+
+// // //   cancellationReceipt: { type: Boolean, default: false },
+// // //   manageBookingReceipt: { type: Boolean, default: false },
+
+// // //   // General admin remarks (kept separate)
+// // //   adminRemarks: [
+// // //     {
+// // //       remark: { type: String },
+// // //       amount: { type: Number, default: 0 },
+// // //       addedAt: { type: Date, default: Date.now },
+// // //     },
+// // //   ],
+// // //   cancellationRequest: { type: Boolean, default: false },
+// // //   emergencyContact: {
+// // //     type: String,
+// // //     match: [/^[\d+\-\s()]{7,25}$/, "Invalid phone number format"],
+// // //     default: null, // or "" if you prefer empty string
+// // //   },
+
+// // //   termsAgreed: {
+// // //     type: Boolean,
+// // //     default: false,
+// // //   },
+
+// // //   termsAgreedAt: {
+// // //     type: Date,
+// // //     default: null, // null = never agreed / confirmed
+// // //   },
+// // // });
+
+// // // // ── AUTO-GENERATE INVOICE NUMBER ─────────────────────────────────────────
+// // // // Runs on EVERY save, no matter which controller/flow set
+// // // // payment.advance.paid = true — offline "Mark Advance" button, an online
+// // // // payment gateway success handler, admin manually editing it, etc.
+// // // // This way invoiceNumber logic lives in ONE place instead of being
+// // // // duplicated inside every controller function that can mark advance paid.
+// // // //
+// // // // NOTE: this only runs when the document goes through .save(). If any
+// // // // route updates payment.advance.paid via findOneAndUpdate() directly
+// // // // (skipping .save()), this hook won't fire for that call — make sure
+// // // // every "mark advance paid" flow fetches the doc and calls .save().
+// // // //
+// // // // Invoice numbers are SEQUENTIAL — GVBILL0001, GVBILL0002, ... — same
+// // // // pattern as your enquirySchema's fitCode generator.
+// // // tourBookingSchema.pre("save", async function (next) {
+// // //   if (
+// // //     this.isModified("payment.advance.paid") &&
+// // //     this.payment?.advance?.paid === true &&
+// // //     !this.invoiceNumber
+// // //   ) {
+// // //     const last = await mongoose
+// // //       .model("tourBooking")
+// // //       .findOne({ invoiceNumber: { $exists: true, $ne: null } })
+// // //       .sort({ _id: -1 }) // newest first — _id is time-ordered, no createdAt field needed
+// // //       .select("invoiceNumber");
+
+// // //     let nextNum = 1;
+// // //     if (last?.invoiceNumber) {
+// // //       const num = parseInt(last.invoiceNumber.replace("GVBILL", ""), 10);
+// // //       if (!isNaN(num)) nextNum = num + 1;
+// // //     }
+// // //     this.invoiceNumber = `GVBILL${String(nextNum).padStart(4, "0")}`;
+// // //   }
+// // //   next();
+// // // });
+
+// // // const tourBookingModel =
+// // //   mongoose.models.tourBooking ||
+// // //   mongoose.model("tourBooking", tourBookingSchema);
+
+// // // export default tourBookingModel;
+
+
+// // import mongoose from "mongoose";
+
+// // const tourBookingSchema = new mongoose.Schema({
+// //   userId: { type: mongoose.Schema.Types.ObjectId, ref: "user", required: true },
+// //   tourId: { type: mongoose.Schema.Types.ObjectId, ref: "tour", required: true },
+// //   tnr: {
+// //     type: String,
+// //     unique: true, // ← very important for production safety
+// //     sparse: true, // allows existing docs without tnr to stay valid
+// //     trim: true,
+// //     uppercase: true,
+// //     minlength: 6,
+// //     maxlength: 6,
+// //   },
+
+// //   // ── NEW FIELD ──────────────────────────────────────────────────────────
+// //   // Generated once, the first time advance is marked paid (see
+// //   // markOfflineAdvancePaid in tourController.js). Its presence is what
+// //   // tells the frontend to show the Receipt/Invoice button.
+// //   invoiceNumber: {
+// //     type: String,
+// //     unique: true,
+// //     sparse: true,
+// //     trim: true,
+// //     uppercase: true,
+// //   },
+// //   // ─────────────────────────────────────────────────────────────────────
+
+// //   userData: { type: Object, required: true },
+// //   tourData: { type: Object, required: true },
+
+// //   travellers: [
+// //     {
+// //       title: { type: String, required: true },
+// //       firstName: { type: String, required: true },
+// //       lastName: { type: String, required: true },
+// //       age: { type: Number, required: true },
+// //       gender: {
+// //         type: String,
+// //         enum: ["Male", "Female", "Other"],
+// //         required: true,
+// //       },
+// //       sharingType: {
+// //         type: String,
+// //         enum: ["double", "triple", "withBerth", "withoutBerth"],
+// //         required: true,
+// //       },
+// //       packageType: {
+// //         type: String,
+// //         enum: ["main", "variant"],
+// //         default: "main",
+// //         required: true,
+// //       },
+// //       variantPackageIndex: {
+// //         type: Number,
+// //         default: null,
+// //       },
+
+// //       // OLD flat addon — RESTORED. Old bookings save/read a single flat
+// //       // addon here (name + price). This is what makes ManageBooking.jsx's
+// //       // "already has selectedAddon saved → treat as old booking" check
+// //       // actually work — without this field Mongoose was silently
+// //       // dropping the flat addon on save, so old bookings looked "new".
+// //       selectedAddon: {
+// //         name: { type: String },
+// //         price: { type: Number },
+// //       },
+
+// //       // NEW train/flight-wise addons — used for new bookings whose tour
+// //       // package has per-train/per-flight addons. A single entry is
+// //       // EITHER a train addon (trainId/trainNo/trainName populated) OR a
+// //       // flight addon (flightIndex/flightNo/airline populated) — never
+// //       // both. Without the flightIndex/flightNo/airline fields below,
+// //       // Mongoose (strict mode) silently strips them from any flight
+// //       // addon on save, so flight addons looked identical to a blank
+// //       // train addon once persisted — that was the root cause of flight
+// //       // addons showing no train/flight name on the admin bookings page.
+// //       //
+// //       // ALSO: ManageBooking.jsx (admin edit flow) writes addons using a
+// //       // DIFFERENT pair of fields — `tripKind` ("train"|"flight") and
+// //       // `tripIndex` — instead of trainIndex/flightIndex. Without these
+// //       // two fields also declared here, an addon approved via Manage
+// //       // Booking (Booking Approvals → Approve) has its tripKind silently
+// //       // stripped on save into this model, so the frontend's train-vs-
+// //       // flight detection (which falls back to tripKind when flightIndex
+// //       // is absent) can no longer tell it was a flight addon.
+// //       selectedAddons: [
+// //         {
+// //           // ── shape A: written by TourBooking.jsx (customer flow) ──
+// //           trainId: {
+// //             type: mongoose.Schema.Types.ObjectId,
+// //             default: null,
+// //           },
+
+// //           trainIndex: {
+// //             type: Number,
+// //             default: null,
+// //           },
+
+// //           trainNo: {
+// //             type: String,
+// //             default: null,
+// //           },
+
+// //           trainName: {
+// //             type: String,
+// //             default: null,
+// //           },
+
+// //           flightIndex: {
+// //             type: Number,
+// //             default: null,
+// //           },
+
+// //           flightNo: {
+// //             type: String,
+// //             default: null,
+// //           },
+
+// //           airline: {
+// //             type: String,
+// //             default: null,
+// //           },
+
+// //           // ── shape B: written by ManageBooking.jsx (admin edit flow) ──
+// //           tripKind: {
+// //             type: String,
+// //             enum: ["train", "flight"],
+// //             default: null,
+// //           },
+
+// //           tripIndex: {
+// //             type: Number,
+// //             default: null,
+// //           },
+
+// //           // ── shared fields ──
+// //           tripType: {
+// //             type: String,
+// //             default: null,
+// //           },
+
+// //           addonId: {
+// //             type: mongoose.Schema.Types.ObjectId,
+// //             default: null,
+// //           },
+
+// //           name: {
+// //             type: String,
+// //             default: null,
+// //           },
+
+// //           amount: {
+// //             type: Number,
+// //             default: 0,
+// //           },
+// //         },
+// //       ],
+// //       boardingPoint: {
+// //         stationCode: { type: String },
+// //         stationName: { type: String },
+// //       },
+// //       deboardingPoint: {
+// //         stationCode: { type: String },
+// //         stationName: { type: String },
+// //       },
+// //       trainSeats: [
+// //         {
+// //           trainName: { type: String },
+// //           seatNo: { type: String },
+// //         },
+// //       ],
+// //       flightSeats: [
+// //         {
+// //           flightName: { type: String },
+// //           seatNo: { type: String },
+// //         },
+// //       ],
+
+// //       seatNumber: {
+// //         type: String,
+// //         default: null,
+// //         trim: true,
+// //       },
+// //       seatLocked: {
+// //         type: Boolean,
+// //         default: false,
+// //       },
+// //       seatLockedAt: { type: Date },
+// //       vehicleId: {
+// //         type: mongoose.Schema.Types.ObjectId,
+// //         ref: "tourVehicle",
+// //         default: null,
+// //       },
+// //       vehicleName: {
+// //         type: String,
+// //         default: null,
+// //         trim: true,
+// //       },
+
+// //       staffRemarks: { type: String },
+// //       remarks: { type: String },
+// //       cancelled: {
+// //         byAdmin: { type: Boolean, default: false },
+// //         byTraveller: { type: Boolean, default: false },
+// //         cancelledAt: { type: Date },
+// //         releaseddAt: { type: Date },
+// //         reason: { type: String },
+// //       },
+// //     },
+// //   ],
+
+// //   billingAddress: {
+// //     addressLine1: { type: String },
+// //     addressLine2: { type: String },
+// //     city: { type: String },
+// //     state: { type: String },
+// //     pincode: { type: String },
+// //     country: { type: String, default: "India" },
+// //   },
+
+// //   contact: {
+// //     email: {
+// //       type: String,
+// //       required: true,
+// //       match: [/.+@.+\..+/, "Please enter a valid email address"],
+// //     },
+// //     mobile: {
+// //       type: String,
+// //       required: true,
+// //       trim: true,
+// //       match: [/^[\d+\-\s()]{7,25}$/, "Invalid phone number format"],
+// //     },
+// //   },
+
+// //   bookingType: {
+// //     type: String,
+// //     enum: ["online", "offline"],
+// //     required: true,
+// //   },
+
+// //   payment: {
+// //     advance: {
+// //       amount: { type: Number, required: true },
+// //       paid: { type: Boolean, default: false },
+// //       paymentVerified: { type: Boolean, default: false },
+// //       paidAt: { type: Date },
+// //     },
+// //     balance: {
+// //       amount: { type: Number, required: true },
+// //       paid: { type: Boolean, default: false },
+// //       paymentVerified: { type: Boolean, default: false },
+// //       paidAt: { type: Date },
+// //     },
+// //   },
+// //   receipts: {
+// //     advanceReceiptSent: { type: Boolean, default: false },
+// //     advanceReceiptSentAt: { type: Date },
+// //     balanceReceiptSent: { type: Boolean, default: false },
+// //     balanceReceiptSentAt: { type: Date },
+// //   },
+// //   isTripCompleted: { type: Boolean, default: false },
+// //   isBookingCompleted: { type: Boolean, default: false },
+
+// //   cancelled: {
+// //     byAdmin: { type: Boolean, default: false },
+// //     byTraveller: { type: Boolean, default: false },
+// //     cancelledAt: { type: Date },
+// //     releaseddAt: { type: Date },
+// //     reason: { type: String },
+// //   },
+
+// //   bookingDate: { type: Date, default: Date.now },
+// //   gvCancellationPool: { type: Number },
+// //   irctcCancellationPool: { type: Number },
+// //   tripCancelledTravellerCount: { type: Number, default: 0 },
+
+// //   manageBooking: { type: Boolean, default: false },
+
+// //   // New independent field - specifically for advance payment related admin remarks
+// //   advanceAdminRemarks: [
+// //     {
+// //       remark: { type: String },
+// //       amount: { type: Number, default: 0 },
+// //       addedAt: { type: Date, default: Date.now },
+// //     },
+// //   ],
+
+// //   cancellationReceipt: { type: Boolean, default: false },
+// //   manageBookingReceipt: { type: Boolean, default: false },
+
+// //   // General admin remarks (kept separate)
+// //   adminRemarks: [
+// //     {
+// //       remark: { type: String },
+// //       amount: { type: Number, default: 0 },
+// //       addedAt: { type: Date, default: Date.now },
+// //     },
+// //   ],
+// //   cancellationRequest: { type: Boolean, default: false },
+// //   emergencyContact: {
+// //     type: String,
+// //     match: [/^[\d+\-\s()]{7,25}$/, "Invalid phone number format"],
+// //     default: null, // or "" if you prefer empty string
+// //   },
+
+// //   termsAgreed: {
+// //     type: Boolean,
+// //     default: false,
+// //   },
+
+// //   termsAgreedAt: {
+// //     type: Date,
+// //     default: null, // null = never agreed / confirmed
+// //   },
+// // });
+
+// // // ── AUTO-GENERATE INVOICE NUMBER ─────────────────────────────────────────
+// // // Runs on EVERY save, no matter which controller/flow set
+// // // payment.advance.paid = true — offline "Mark Advance" button, an online
+// // // payment gateway success handler, admin manually editing it, etc.
+// // // This way invoiceNumber logic lives in ONE place instead of being
+// // // duplicated inside every controller function that can mark advance paid.
+// // //
+// // // NOTE: this only runs when the document goes through .save(). If any
+// // // route updates payment.advance.paid via findOneAndUpdate() directly
+// // // (skipping .save()), this hook won't fire for that call — make sure
+// // // every "mark advance paid" flow fetches the doc and calls .save().
+// // //
+// // // Invoice numbers are SEQUENTIAL — GVBILL0001, GVBILL0002, ... — same
+// // // pattern as your enquirySchema's fitCode generator.
+// // tourBookingSchema.pre("save", async function (next) {
+// //   if (
+// //     this.isModified("payment.advance.paid") &&
+// //     this.payment?.advance?.paid === true &&
+// //     !this.invoiceNumber
+// //   ) {
+// //     const last = await mongoose
+// //       .model("tourBooking")
+// //       .findOne({ invoiceNumber: { $exists: true, $ne: null } })
+// //       .sort({ _id: -1 }) // newest first — _id is time-ordered, no createdAt field needed
+// //       .select("invoiceNumber");
+
+// //     let nextNum = 1;
+// //     if (last?.invoiceNumber) {
+// //       const num = parseInt(last.invoiceNumber.replace("GVBILL", ""), 10);
+// //       if (!isNaN(num)) nextNum = num + 1;
+// //     }
+// //     this.invoiceNumber = `GVBILL${String(nextNum).padStart(4, "0")}`;
+// //   }
+// //   next();
+// // });
+
+// // const tourBookingModel =
+// //   mongoose.models.tourBooking ||
+// //   mongoose.model("tourBooking", tourBookingSchema);
+
+// // export default tourBookingModel;
+
+
+// // import mongoose from "mongoose";
+
+// // const tourBookingSchema = new mongoose.Schema({
+// //   userId: { type: mongoose.Schema.Types.ObjectId, ref: "user", required: true },
+// //   tourId: { type: mongoose.Schema.Types.ObjectId, ref: "tour", required: true },
+// //   tnr: {
+// //     type: String,
+// //     unique: true, // ← very important for production safety
+// //     sparse: true, // allows existing docs without tnr to stay valid
+// //     trim: true,
+// //     uppercase: true,
+// //     minlength: 6,
+// //     maxlength: 6,
+// //   },
+
+// //   userData: { type: Object, required: true },
+// //   tourData: { type: Object, required: true },
+
+// //   travellers: [
+// //     {
+// //       title: { type: String, required: true },
+// //       firstName: { type: String, required: true },
+// //       lastName: { type: String, required: true },
+// //       age: { type: Number, required: true },
+// //       gender: {
+// //         type: String,
+// //         enum: ["Male", "Female", "Other"],
+// //         required: true,
+// //       },
+// //       sharingType: {
+// //         type: String,
+// //         enum: ["double", "triple", "withBerth", "withoutBerth"],
+// //         required: true,
+// //       },
+// //       packageType: {
+// //         type: String,
+// //         enum: ["main", "variant"],
+// //         default: "main",
+// //         required: true,
+// //       },
+// //       variantPackageIndex: {
+// //         type: Number,
+// //         default: null,
+// //       },
+// //       selectedAddon: {
+// //         name: { type: String },
+// //         price: { type: Number },
+// //       },
+// //       boardingPoint: {
+// //         stationCode: { type: String },
+// //         stationName: { type: String },
+// //       },
+// //       deboardingPoint: {
+// //         stationCode: { type: String },
+// //         stationName: { type: String },
+// //       },
+// //       trainSeats: [
+// //         {
+// //           trainName: { type: String },
+// //           seatNo: { type: String },
+// //         },
+// //       ],
+// //       flightSeats: [
+// //         {
+// //           flightName: { type: String },
+// //           seatNo: { type: String },
+// //         },
+// //       ],
+
+// //       seatNumber: {
+// //         type: String,
+// //         default: null,
+// //         trim: true,
+// //       },
+// //       seatLocked: {
+// //         type: Boolean,
+// //         default: false,
+// //       },
+// //       seatLockedAt: { type: Date },
+// //       vehicleId: {
+// //         type: mongoose.Schema.Types.ObjectId,
+// //         ref: "tourVehicle",
+// //         default: null,
+// //       },
+// //       vehicleName: {
+// //         type: String,
+// //         default: null,
+// //         trim: true,
+// //       },
+
+// //       staffRemarks: { type: String },
+// //       remarks: { type: String },
+// //       cancelled: {
+// //         byAdmin: { type: Boolean, default: false },
+// //         byTraveller: { type: Boolean, default: false },
+// //         cancelledAt: { type: Date },
+// //         releaseddAt: { type: Date },
+// //         reason: { type: String },
+// //       },
+// //     },
+// //   ],
+
+// //   billingAddress: {
+// //     addressLine1: { type: String },
+// //     addressLine2: { type: String },
+// //     city: { type: String },
+// //     state: { type: String },
+// //     pincode: { type: String },
+// //     country: { type: String, default: "India" },
+// //   },
+
+// //   contact: {
+// //     email: {
+// //       type: String,
+// //       required: true,
+// //       match: [/.+@.+\..+/, "Please enter a valid email address"],
+// //     },
+// //     mobile: {
+// //       type: String,
+// //       required: true,
+// //       trim: true,
+// //       match: [/^[\d+\-\s()]{7,25}$/, "Invalid phone number format"],
+// //     },
+// //   },
+
+// //   bookingType: {
+// //     type: String,
+// //     enum: ["online", "offline"],
+// //     required: true,
+// //   },
+
+// //   payment: {
+// //     advance: {
+// //       amount: { type: Number, required: true },
+// //       paid: { type: Boolean, default: false },
+// //       paymentVerified: { type: Boolean, default: false },
+// //       paidAt: { type: Date },
+// //     },
+// //     balance: {
+// //       amount: { type: Number, required: true },
+// //       paid: { type: Boolean, default: false },
+// //       paymentVerified: { type: Boolean, default: false },
+// //       paidAt: { type: Date },
+// //     },
+// //   },
+// //   receipts: {
+// //     advanceReceiptSent: { type: Boolean, default: false },
+// //     advanceReceiptSentAt: { type: Date },
+// //     balanceReceiptSent: { type: Boolean, default: false },
+// //     balanceReceiptSentAt: { type: Date },
+// //   },
+// //   isTripCompleted: { type: Boolean, default: false },
+// //   isBookingCompleted: { type: Boolean, default: false },
+
+// //   cancelled: {
+// //     byAdmin: { type: Boolean, default: false },
+// //     byTraveller: { type: Boolean, default: false },
+// //     cancelledAt: { type: Date },
+// //     releaseddAt: { type: Date },
+// //     reason: { type: String },
+// //   },
+
+// //   bookingDate: { type: Date, default: Date.now },
+// //   gvCancellationPool: { type: Number },
+// //   irctcCancellationPool: { type: Number },
+// //   manageBooking: { type: Boolean, default: false },
+
+// //   // New independent field - specifically for advance payment related admin remarks
+// //   advanceAdminRemarks: [
+// //     {
+// //       remark: { type: String },
+// //       amount: { type: Number, default: 0 },
+// //       addedAt: { type: Date, default: Date.now },
+// //     },
+// //   ],
+
+// //   cancellationReceipt: { type: Boolean, default: false },
+// //   manageBookingReceipt: { type: Boolean, default: false },
+
+// //   // General admin remarks (kept separate)
+// //   adminRemarks: [
+// //     {
+// //       remark: { type: String },
+// //       amount: { type: Number, default: 0 },
+// //       addedAt: { type: Date, default: Date.now },
+// //     },
+// //   ],
+// //   cancellationRequest: { type: Boolean, default: false },
+// //   emergencyContact: {
+// //     type: String,
+// //     match: [/^[\d+\-\s()]{7,25}$/, "Invalid phone number format"],
+// //     default: null, // or "" if you prefer empty string
+// //   },
+
+// //   termsAgreed: {
+// //     type: Boolean,
+// //     default: false,
+// //   },
+
+// //   termsAgreedAt: {
+// //     type: Date,
+// //     default: null, // null = never agreed / confirmed
+// //   },
+// // });
+
+// // const tourBookingModel =
+// //   mongoose.models.tourBooking ||
+// //   mongoose.model("tourBooking", tourBookingSchema);
+
+// // export default tourBookingModel;
+
+// // import mongoose from "mongoose";
+
+// // const tourBookingSchema = new mongoose.Schema({
+// //   userId: { type: mongoose.Schema.Types.ObjectId, ref: "user", required: true },
+// //   tourId: { type: mongoose.Schema.Types.ObjectId, ref: "tour", required: true },
+// //   tnr: {
+// //     type: String,
+// //     unique: true, // ← very important for production safety
+// //     sparse: true, // allows existing docs without tnr to stay valid
+// //     trim: true,
+// //     uppercase: true,
+// //     minlength: 6,
+// //     maxlength: 6,
+// //   },
+
+// //   // ── NEW FIELD ──────────────────────────────────────────────────────────
+// //   // Generated once, the first time advance is marked paid (see
+// //   // markOfflineAdvancePaid in tourController.js). Its presence is what
+// //   // tells the frontend to show the Receipt/Invoice button.
+// //   invoiceNumber: {
+// //     type: String,
+// //     unique: true,
+// //     sparse: true,
+// //     trim: true,
+// //     uppercase: true,
+// //   },
+// //   // ─────────────────────────────────────────────────────────────────────
+
+// //   userData: { type: Object, required: true },
+// //   tourData: { type: Object, required: true },
+
+// //   travellers: [
+// //     {
+// //       title: { type: String, required: true },
+// //       firstName: { type: String, required: true },
+// //       lastName: { type: String, required: true },
+// //       age: { type: Number, required: true },
+// //       gender: {
+// //         type: String,
+// //         enum: ["Male", "Female", "Other"],
+// //         required: true,
+// //       },
+// //       sharingType: {
+// //         type: String,
+// //         enum: ["double", "triple", "withBerth", "withoutBerth"],
+// //         required: true,
+// //       },
+// //       packageType: {
+// //         type: String,
+// //         enum: ["main", "variant"],
+// //         default: "main",
+// //         required: true,
+// //       },
+// //       variantPackageIndex: {
+// //         type: Number,
+// //         default: null,
+// //       },
+// //       selectedAddon: {
+// //         name: { type: String },
+// //         price: { type: Number },
+// //       },
+// //       boardingPoint: {
+// //         stationCode: { type: String },
+// //         stationName: { type: String },
+// //       },
+// //       deboardingPoint: {
+// //         stationCode: { type: String },
+// //         stationName: { type: String },
+// //       },
+// //       trainSeats: [
+// //         {
+// //           trainName: { type: String },
+// //           seatNo: { type: String },
+// //         },
+// //       ],
+// //       flightSeats: [
+// //         {
+// //           flightName: { type: String },
+// //           seatNo: { type: String },
+// //         },
+// //       ],
+
+// //       seatNumber: {
+// //         type: String,
+// //         default: null,
+// //         trim: true,
+// //       },
+// //       seatLocked: {
+// //         type: Boolean,
+// //         default: false,
+// //       },
+// //       seatLockedAt: { type: Date },
+// //       vehicleId: {
+// //         type: mongoose.Schema.Types.ObjectId,
+// //         ref: "tourVehicle",
+// //         default: null,
+// //       },
+// //       vehicleName: {
+// //         type: String,
+// //         default: null,
+// //         trim: true,
+// //       },
+
+// //       staffRemarks: { type: String },
+// //       remarks: { type: String },
+// //       cancelled: {
+// //         byAdmin: { type: Boolean, default: false },
+// //         byTraveller: { type: Boolean, default: false },
+// //         cancelledAt: { type: Date },
+// //         releaseddAt: { type: Date },
+// //         reason: { type: String },
+// //       },
+// //     },
+// //   ],
+
+// //   billingAddress: {
+// //     addressLine1: { type: String },
+// //     addressLine2: { type: String },
+// //     city: { type: String },
+// //     state: { type: String },
+// //     pincode: { type: String },
+// //     country: { type: String, default: "India" },
+// //   },
+
+// //   contact: {
+// //     email: {
+// //       type: String,
+// //       required: true,
+// //       match: [/.+@.+\..+/, "Please enter a valid email address"],
+// //     },
+// //     mobile: {
+// //       type: String,
+// //       required: true,
+// //       trim: true,
+// //       match: [/^[\d+\-\s()]{7,25}$/, "Invalid phone number format"],
+// //     },
+// //   },
+
+// //   bookingType: {
+// //     type: String,
+// //     enum: ["online", "offline"],
+// //     required: true,
+// //   },
+
+// //   payment: {
+// //     advance: {
+// //       amount: { type: Number, required: true },
+// //       paid: { type: Boolean, default: false },
+// //       paymentVerified: { type: Boolean, default: false },
+// //       paidAt: { type: Date },
+// //     },
+// //     balance: {
+// //       amount: { type: Number, required: true },
+// //       paid: { type: Boolean, default: false },
+// //       paymentVerified: { type: Boolean, default: false },
+// //       paidAt: { type: Date },
+// //     },
+// //   },
+// //   receipts: {
+// //     advanceReceiptSent: { type: Boolean, default: false },
+// //     advanceReceiptSentAt: { type: Date },
+// //     balanceReceiptSent: { type: Boolean, default: false },
+// //     balanceReceiptSentAt: { type: Date },
+// //   },
+// //   isTripCompleted: { type: Boolean, default: false },
+// //   isBookingCompleted: { type: Boolean, default: false },
+
+// //   cancelled: {
+// //     byAdmin: { type: Boolean, default: false },
+// //     byTraveller: { type: Boolean, default: false },
+// //     cancelledAt: { type: Date },
+// //     releaseddAt: { type: Date },
+// //     reason: { type: String },
+// //   },
+
+// //   bookingDate: { type: Date, default: Date.now },
+// //   gvCancellationPool: { type: Number },
+// //   irctcCancellationPool: { type: Number },
+// //   manageBooking: { type: Boolean, default: false },
+
+// //   // New independent field - specifically for advance payment related admin remarks
+// //   advanceAdminRemarks: [
+// //     {
+// //       remark: { type: String },
+// //       amount: { type: Number, default: 0 },
+// //       addedAt: { type: Date, default: Date.now },
+// //     },
+// //   ],
+
+// //   cancellationReceipt: { type: Boolean, default: false },
+// //   manageBookingReceipt: { type: Boolean, default: false },
+
+// //   // General admin remarks (kept separate)
+// //   adminRemarks: [
+// //     {
+// //       remark: { type: String },
+// //       amount: { type: Number, default: 0 },
+// //       addedAt: { type: Date, default: Date.now },
+// //     },
+// //   ],
+// //   cancellationRequest: { type: Boolean, default: false },
+// //   emergencyContact: {
+// //     type: String,
+// //     match: [/^[\d+\-\s()]{7,25}$/, "Invalid phone number format"],
+// //     default: null, // or "" if you prefer empty string
+// //   },
+
+// //   termsAgreed: {
+// //     type: Boolean,
+// //     default: false,
+// //   },
+
+// //   termsAgreedAt: {
+// //     type: Date,
+// //     default: null, // null = never agreed / confirmed
+// //   },
+// // });
+
+// // // ── AUTO-GENERATE INVOICE NUMBER ─────────────────────────────────────────
+// // // Runs on EVERY save, no matter which controller/flow set
+// // // payment.advance.paid = true — offline "Mark Advance" button, an online
+// // // payment gateway success handler, admin manually editing it, etc.
+// // // This way invoiceNumber logic lives in ONE place instead of being
+// // // duplicated inside every controller function that can mark advance paid.
+// // //
+// // // NOTE: this only runs when the document goes through .save(). If any
+// // // route updates payment.advance.paid via findOneAndUpdate() directly
+// // // (skipping .save()), this hook won't fire for that call — make sure
+// // // every "mark advance paid" flow fetches the doc and calls .save().
+// // //
+// // // Invoice numbers are SEQUENTIAL — GVBILL0001, GVBILL0002, ... — same
+// // // pattern as your enquirySchema's fitCode generator.
+// // tourBookingSchema.pre("save", async function (next) {
+// //   if (
+// //     this.isModified("payment.advance.paid") &&
+// //     this.payment?.advance?.paid === true &&
+// //     !this.invoiceNumber
+// //   ) {
+// //     const last = await mongoose
+// //       .model("tourBooking")
+// //       .findOne({ invoiceNumber: { $exists: true, $ne: null } })
+// //       .sort({ _id: -1 }) // newest first — _id is time-ordered, no createdAt field needed
+// //       .select("invoiceNumber");
+
+// //     let nextNum = 1;
+// //     if (last?.invoiceNumber) {
+// //       const num = parseInt(last.invoiceNumber.replace("GVBILL", ""), 10);
+// //       if (!isNaN(num)) nextNum = num + 1;
+// //     }
+// //     this.invoiceNumber = `GVBILL${String(nextNum).padStart(4, "0")}`;
+// //   }
+// //   next();
+// // });
+
+// // const tourBookingModel =
+// //   mongoose.models.tourBooking ||
+// //   mongoose.model("tourBooking", tourBookingSchema);
+
+// // export default tourBookingModel;
+
+// // import mongoose from "mongoose";
+
+// // const tourBookingSchema = new mongoose.Schema({
+// //   userId: { type: mongoose.Schema.Types.ObjectId, ref: "user", required: true },
+// //   tourId: { type: mongoose.Schema.Types.ObjectId, ref: "tour", required: true },
+// //   tnr: {
+// //     type: String,
+// //     unique: true, // ← very important for production safety
+// //     sparse: true, // allows existing docs without tnr to stay valid
+// //     trim: true,
+// //     uppercase: true,
+// //     minlength: 6,
+// //     maxlength: 6,
+// //   },
+
+// //   // ── NEW FIELD ──────────────────────────────────────────────────────────
+// //   // Generated once, the first time advance is marked paid (see
+// //   // markOfflineAdvancePaid in tourController.js). Its presence is what
+// //   // tells the frontend to show the Receipt/Invoice button.
+// //   invoiceNumber: {
+// //     type: String,
+// //     unique: true,
+// //     sparse: true,
+// //     trim: true,
+// //     uppercase: true,
+// //   },
+// //   // ─────────────────────────────────────────────────────────────────────
+
+// //   userData: { type: Object, required: true },
+// //   tourData: { type: Object, required: true },
+
+// //   travellers: [
+// //     {
+// //       title: { type: String, required: true },
+// //       firstName: { type: String, required: true },
+// //       lastName: { type: String, required: true },
+// //       age: { type: Number, required: true },
+// //       gender: {
+// //         type: String,
+// //         enum: ["Male", "Female", "Other"],
+// //         required: true,
+// //       },
+// //       sharingType: {
+// //         type: String,
+// //         enum: ["double", "triple", "withBerth", "withoutBerth"],
+// //         required: true,
+// //       },
+// //       packageType: {
+// //         type: String,
+// //         enum: ["main", "variant"],
+// //         default: "main",
+// //         required: true,
+// //       },
+// //       variantPackageIndex: {
+// //         type: Number,
+// //         default: null,
+// //       },
+
+// //       // OLD flat addon — RESTORED. Old bookings save/read a single flat
+// //       // addon here (name + price). This is what makes ManageBooking.jsx's
+// //       // "already has selectedAddon saved → treat as old booking" check
+// //       // actually work — without this field Mongoose was silently
+// //       // dropping the flat addon on save, so old bookings looked "new".
+// //       selectedAddon: {
+// //         name: { type: String },
+// //         price: { type: Number },
+// //       },
+
+// //       // NEW train/flight-wise addons — used for new bookings whose tour
+// //       // package has per-train/per-flight addons.
+// //       selectedAddons: [
+// //         {
+// //           trainId: {
+// //             type: mongoose.Schema.Types.ObjectId,
+// //             default: null,
+// //           },
+
+// //           trainNo: {
+// //             type: String,
+// //             default: null,
+// //           },
+
+// //           trainName: {
+// //             type: String,
+// //             default: null,
+// //           },
+
+// //           tripType: {
+// //             type: String,
+// //             default: null,
+// //           },
+
+// //           addonId: {
+// //             type: mongoose.Schema.Types.ObjectId,
+// //             default: null,
+// //           },
+
+// //           name: {
+// //             type: String,
+// //             default: null,
+// //           },
+
+// //           amount: {
+// //             type: Number,
+// //             default: 0,
+// //           },
+// //         },
+// //       ],
+// //       boardingPoint: {
+// //         stationCode: { type: String },
+// //         stationName: { type: String },
+// //       },
+// //       deboardingPoint: {
+// //         stationCode: { type: String },
+// //         stationName: { type: String },
+// //       },
+// //       trainSeats: [
+// //         {
+// //           trainName: { type: String },
+// //           seatNo: { type: String },
+// //         },
+// //       ],
+// //       flightSeats: [
+// //         {
+// //           flightName: { type: String },
+// //           seatNo: { type: String },
+// //         },
+// //       ],
+
+// //       seatNumber: {
+// //         type: String,
+// //         default: null,
+// //         trim: true,
+// //       },
+// //       seatLocked: {
+// //         type: Boolean,
+// //         default: false,
+// //       },
+// //       seatLockedAt: { type: Date },
+// //       vehicleId: {
+// //         type: mongoose.Schema.Types.ObjectId,
+// //         ref: "tourVehicle",
+// //         default: null,
+// //       },
+// //       vehicleName: {
+// //         type: String,
+// //         default: null,
+// //         trim: true,
+// //       },
+
+// //       staffRemarks: { type: String },
+// //       remarks: { type: String },
+// //       cancelled: {
+// //         byAdmin: { type: Boolean, default: false },
+// //         byTraveller: { type: Boolean, default: false },
+// //         cancelledAt: { type: Date },
+// //         releaseddAt: { type: Date },
+// //         reason: { type: String },
+// //       },
+// //     },
+// //   ],
+
+// //   billingAddress: {
+// //     addressLine1: { type: String },
+// //     addressLine2: { type: String },
+// //     city: { type: String },
+// //     state: { type: String },
+// //     pincode: { type: String },
+// //     country: { type: String, default: "India" },
+// //   },
+
+// //   contact: {
+// //     email: {
+// //       type: String,
+// //       required: true,
+// //       match: [/.+@.+\..+/, "Please enter a valid email address"],
+// //     },
+// //     mobile: {
+// //       type: String,
+// //       required: true,
+// //       trim: true,
+// //       match: [/^[\d+\-\s()]{7,25}$/, "Invalid phone number format"],
+// //     },
+// //   },
+
+// //   bookingType: {
+// //     type: String,
+// //     enum: ["online", "offline"],
+// //     required: true,
+// //   },
+
+// //   payment: {
+// //     advance: {
+// //       amount: { type: Number, required: true },
+// //       paid: { type: Boolean, default: false },
+// //       paymentVerified: { type: Boolean, default: false },
+// //       paidAt: { type: Date },
+// //     },
+// //     balance: {
+// //       amount: { type: Number, required: true },
+// //       paid: { type: Boolean, default: false },
+// //       paymentVerified: { type: Boolean, default: false },
+// //       paidAt: { type: Date },
+// //     },
+// //   },
+// //   receipts: {
+// //     advanceReceiptSent: { type: Boolean, default: false },
+// //     advanceReceiptSentAt: { type: Date },
+// //     balanceReceiptSent: { type: Boolean, default: false },
+// //     balanceReceiptSentAt: { type: Date },
+// //   },
+// //   isTripCompleted: { type: Boolean, default: false },
+// //   isBookingCompleted: { type: Boolean, default: false },
+
+// //   cancelled: {
+// //     byAdmin: { type: Boolean, default: false },
+// //     byTraveller: { type: Boolean, default: false },
+// //     cancelledAt: { type: Date },
+// //     releaseddAt: { type: Date },
+// //     reason: { type: String },
+// //   },
+
+// //   bookingDate: { type: Date, default: Date.now },
+// //   gvCancellationPool: { type: Number },
+// //   irctcCancellationPool: { type: Number },
+// //   manageBooking: { type: Boolean, default: false },
+
+// //   // New independent field - specifically for advance payment related admin remarks
+// //   advanceAdminRemarks: [
+// //     {
+// //       remark: { type: String },
+// //       amount: { type: Number, default: 0 },
+// //       addedAt: { type: Date, default: Date.now },
+// //     },
+// //   ],
+
+// //   cancellationReceipt: { type: Boolean, default: false },
+// //   manageBookingReceipt: { type: Boolean, default: false },
+
+// //   // General admin remarks (kept separate)
+// //   adminRemarks: [
+// //     {
+// //       remark: { type: String },
+// //       amount: { type: Number, default: 0 },
+// //       addedAt: { type: Date, default: Date.now },
+// //     },
+// //   ],
+// //   cancellationRequest: { type: Boolean, default: false },
+// //   emergencyContact: {
+// //     type: String,
+// //     match: [/^[\d+\-\s()]{7,25}$/, "Invalid phone number format"],
+// //     default: null, // or "" if you prefer empty string
+// //   },
+
+// //   termsAgreed: {
+// //     type: Boolean,
+// //     default: false,
+// //   },
+
+// //   termsAgreedAt: {
+// //     type: Date,
+// //     default: null, // null = never agreed / confirmed
+// //   },
+// // });
+
+// // // ── AUTO-GENERATE INVOICE NUMBER ─────────────────────────────────────────
+// // // Runs on EVERY save, no matter which controller/flow set
+// // // payment.advance.paid = true — offline "Mark Advance" button, an online
+// // // payment gateway success handler, admin manually editing it, etc.
+// // // This way invoiceNumber logic lives in ONE place instead of being
+// // // duplicated inside every controller function that can mark advance paid.
+// // //
+// // // NOTE: this only runs when the document goes through .save(). If any
+// // // route updates payment.advance.paid via findOneAndUpdate() directly
+// // // (skipping .save()), this hook won't fire for that call — make sure
+// // // every "mark advance paid" flow fetches the doc and calls .save().
+// // //
+// // // Invoice numbers are SEQUENTIAL — GVBILL0001, GVBILL0002, ... — same
+// // // pattern as your enquirySchema's fitCode generator.
+// // tourBookingSchema.pre("save", async function (next) {
+// //   if (
+// //     this.isModified("payment.advance.paid") &&
+// //     this.payment?.advance?.paid === true &&
+// //     !this.invoiceNumber
+// //   ) {
+// //     const last = await mongoose
+// //       .model("tourBooking")
+// //       .findOne({ invoiceNumber: { $exists: true, $ne: null } })
+// //       .sort({ _id: -1 }) // newest first — _id is time-ordered, no createdAt field needed
+// //       .select("invoiceNumber");
+
+// //     let nextNum = 1;
+// //     if (last?.invoiceNumber) {
+// //       const num = parseInt(last.invoiceNumber.replace("GVBILL", ""), 10);
+// //       if (!isNaN(num)) nextNum = num + 1;
+// //     }
+// //     this.invoiceNumber = `GVBILL${String(nextNum).padStart(4, "0")}`;
+// //   }
+// //   next();
+// // });
+
+// // const tourBookingModel =
+// //   mongoose.models.tourBooking ||
+// //   mongoose.model("tourBooking", tourBookingSchema);
+
+// // export default tourBookingModel;
+
+
+// import mongoose from "mongoose";
+
+// const tourBookingSchema = new mongoose.Schema({
+//   userId: { type: mongoose.Schema.Types.ObjectId, ref: "user", required: true },
+//   tourId: { type: mongoose.Schema.Types.ObjectId, ref: "tour", required: true },
+//   tnr: {
+//     type: String,
+//     unique: true, // ← very important for production safety
+//     sparse: true, // allows existing docs without tnr to stay valid
+//     trim: true,
+//     uppercase: true,
+//     minlength: 6,
+//     maxlength: 6,
+//   },
+
+//   // ── NEW FIELD ──────────────────────────────────────────────────────────
+//   // Generated once, the first time advance is marked paid (see
+//   // markOfflineAdvancePaid in tourController.js). Its presence is what
+//   // tells the frontend to show the Receipt/Invoice button.
+//   invoiceNumber: {
+//     type: String,
+//     unique: true,
+//     sparse: true,
+//     trim: true,
+//     uppercase: true,
+//   },
+//   // ─────────────────────────────────────────────────────────────────────
+
+//   userData: { type: Object, required: true },
+//   tourData: { type: Object, required: true },
+
+//   travellers: [
+//     {
+//       title: { type: String, required: true },
+//       firstName: { type: String, required: true },
+//       lastName: { type: String, required: true },
+//       age: { type: Number, required: true },
+//       gender: {
+//         type: String,
+//         enum: ["Male", "Female", "Other"],
+//         required: true,
+//       },
+//       sharingType: {
+//         type: String,
+//         enum: ["double", "triple", "withBerth", "withoutBerth"],
+//         required: true,
+//       },
+//       packageType: {
+//         type: String,
+//         enum: ["main", "variant"],
+//         default: "main",
+//         required: true,
+//       },
+//       variantPackageIndex: {
+//         type: Number,
+//         default: null,
+//       },
+
+//       // OLD flat addon — RESTORED. Old bookings save/read a single flat
+//       // addon here (name + price). This is what makes ManageBooking.jsx's
+//       // "already has selectedAddon saved → treat as old booking" check
+//       // actually work — without this field Mongoose was silently
+//       // dropping the flat addon on save, so old bookings looked "new".
+//       selectedAddon: {
+//         name: { type: String },
+//         price: { type: Number },
+//       },
+
+//       // NEW train/flight-wise addons — used for new bookings whose tour
+//       // package has per-train/per-flight addons. A single entry is
+//       // EITHER a train addon (trainId/trainNo/trainName populated) OR a
+//       // flight addon (flightIndex/flightNo/airline populated) — never
+//       // both. Without the flightIndex/flightNo/airline fields below,
+//       // Mongoose (strict mode) silently strips them from any flight
+//       // addon on save, so flight addons looked identical to a blank
+//       // train addon once persisted — that was the root cause of flight
+//       // addons showing no train/flight name on the admin bookings page.
+//       //
+//       // ALSO: ManageBooking.jsx (admin edit flow) writes addons using a
+//       // DIFFERENT pair of fields — `tripKind` ("train"|"flight") and
+//       // `tripIndex` — instead of trainIndex/flightIndex. Without these
+//       // two fields also declared here, an addon approved via Manage
+//       // Booking (Booking Approvals → Approve) has its tripKind silently
+//       // stripped on save into this model, so the frontend's train-vs-
+//       // flight detection (which falls back to tripKind when flightIndex
+//       // is absent) can no longer tell it was a flight addon.
+//       selectedAddons: [
+//         {
+//           // ── shape A: written by TourBooking.jsx (customer flow) ──
+//           trainId: {
+//             type: mongoose.Schema.Types.ObjectId,
+//             default: null,
+//           },
+
+//           trainIndex: {
+//             type: Number,
+//             default: null,
+//           },
+
+//           trainNo: {
+//             type: String,
+//             default: null,
+//           },
+
+//           trainName: {
+//             type: String,
+//             default: null,
+//           },
+
+//           flightIndex: {
+//             type: Number,
+//             default: null,
+//           },
+
+//           flightNo: {
+//             type: String,
+//             default: null,
+//           },
+
+//           airline: {
+//             type: String,
+//             default: null,
+//           },
+
+//           // ── shape B: written by ManageBooking.jsx (admin edit flow) ──
+//           tripKind: {
+//             type: String,
+//             enum: ["train", "flight"],
+//             default: null,
+//           },
+
+//           tripIndex: {
+//             type: Number,
+//             default: null,
+//           },
+
+//           // ── shared fields ──
+//           tripType: {
+//             type: String,
+//             default: null,
+//           },
+
+//           addonId: {
+//             type: mongoose.Schema.Types.ObjectId,
+//             default: null,
+//           },
+
+//           name: {
+//             type: String,
+//             default: null,
+//           },
+
+//           amount: {
+//             type: Number,
+//             default: 0,
+//           },
+//         },
+//       ],
+//       boardingPoint: {
+//         stationCode: { type: String },
+//         stationName: { type: String },
+//       },
+//       deboardingPoint: {
+//         stationCode: { type: String },
+//         stationName: { type: String },
+//       },
+//       trainSeats: [
+//         {
+//           trainName: { type: String },
+//           seatNo: { type: String },
+//         },
+//       ],
+//       flightSeats: [
+//         {
+//           flightName: { type: String },
+//           seatNo: { type: String },
+//         },
+//       ],
+
+//       seatNumber: {
+//         type: String,
+//         default: null,
+//         trim: true,
+//       },
+//       seatLocked: {
+//         type: Boolean,
+//         default: false,
+//       },
+//       seatLockedAt: { type: Date },
+//       vehicleId: {
+//         type: mongoose.Schema.Types.ObjectId,
+//         ref: "tourVehicle",
+//         default: null,
+//       },
+//       vehicleName: {
+//         type: String,
+//         default: null,
+//         trim: true,
+//       },
+
+//       staffRemarks: { type: String },
+//       remarks: { type: String },
+//       cancelled: {
+//         byAdmin: { type: Boolean, default: false },
+//         byTraveller: { type: Boolean, default: false },
+//         cancelledAt: { type: Date },
+//         releaseddAt: { type: Date },
+//         reason: { type: String },
+//         // Set true when this traveller was bulk-cancelled by cancelEntireTrip
+//         // (whole tour cancelled) rather than the normal individual
+//         // cancellation-request flow. Without this in the schema, Mongoose's
+//         // default strict mode silently drops the field on save, so it
+//         // never persists — this is required for the trip-cancelled vs
+//         // proper-cancellation split in the analytics aggregations to work.
+//         viaTripCancel: { type: Boolean, default: false },
+//       },
+//     },
+//   ],
+
+//   billingAddress: {
+//     addressLine1: { type: String },
+//     addressLine2: { type: String },
+//     city: { type: String },
+//     state: { type: String },
+//     pincode: { type: String },
+//     country: { type: String, default: "India" },
+//   },
+
+//   contact: {
+//     email: {
+//       type: String,
+//       required: true,
+//       match: [/.+@.+\..+/, "Please enter a valid email address"],
+//     },
+//     mobile: {
+//       type: String,
+//       required: true,
+//       trim: true,
+//       match: [/^[\d+\-\s()]{7,25}$/, "Invalid phone number format"],
+//     },
+//   },
+
+//   bookingType: {
+//     type: String,
+//     enum: ["online", "offline"],
+//     required: true,
+//   },
+
+//   payment: {
+//     advance: {
+//       amount: { type: Number, required: true },
+//       paid: { type: Boolean, default: false },
+//       paymentVerified: { type: Boolean, default: false },
+//       paidAt: { type: Date },
+//     },
+//     balance: {
+//       amount: { type: Number, required: true },
+//       paid: { type: Boolean, default: false },
+//       paymentVerified: { type: Boolean, default: false },
+//       paidAt: { type: Date },
+//     },
+//   },
+//   receipts: {
+//     advanceReceiptSent: { type: Boolean, default: false },
+//     advanceReceiptSentAt: { type: Date },
+//     balanceReceiptSent: { type: Boolean, default: false },
+//     balanceReceiptSentAt: { type: Date },
+//   },
+//   isTripCompleted: { type: Boolean, default: false },
+//   isBookingCompleted: { type: Boolean, default: false },
+
+//   cancelled: {
+//     byAdmin: { type: Boolean, default: false },
+//     byTraveller: { type: Boolean, default: false },
+//     cancelledAt: { type: Date },
+//     releaseddAt: { type: Date },
+//     reason: { type: String },
+//   },
+
+//   bookingDate: { type: Date, default: Date.now },
+//   gvCancellationPool: { type: Number },
+//   irctcCancellationPool: { type: Number },
+//   tripCancelledTravellerCount: { type: Number, default: 0 },
+
+//   manageBooking: { type: Boolean, default: false },
+
+//   // New independent field - specifically for advance payment related admin remarks
+//   advanceAdminRemarks: [
+//     {
+//       remark: { type: String },
+//       amount: { type: Number, default: 0 },
+//       addedAt: { type: Date, default: Date.now },
+//     },
+//   ],
+
+//   cancellationReceipt: { type: Boolean, default: false },
+//   manageBookingReceipt: { type: Boolean, default: false },
+
+//   // General admin remarks (kept separate)
+//   adminRemarks: [
+//     {
+//       remark: { type: String },
+//       amount: { type: Number, default: 0 },
+//       addedAt: { type: Date, default: Date.now },
+//     },
+//   ],
+//   cancellationRequest: { type: Boolean, default: false },
+//   emergencyContact: {
+//     type: String,
+//     match: [/^[\d+\-\s()]{7,25}$/, "Invalid phone number format"],
+//     default: null, // or "" if you prefer empty string
+//   },
+
+//   termsAgreed: {
+//     type: Boolean,
+//     default: false,
+//   },
+
+//   termsAgreedAt: {
+//     type: Date,
+//     default: null, // null = never agreed / confirmed
+//   },
+// });
+
+// // ── AUTO-GENERATE INVOICE NUMBER ─────────────────────────────────────────
+// // Runs on EVERY save, no matter which controller/flow set
+// // payment.advance.paid = true — offline "Mark Advance" button, an online
+// // payment gateway success handler, admin manually editing it, etc.
+// // This way invoiceNumber logic lives in ONE place instead of being
+// // duplicated inside every controller function that can mark advance paid.
+// //
+// // NOTE: this only runs when the document goes through .save(). If any
+// // route updates payment.advance.paid via findOneAndUpdate() directly
+// // (skipping .save()), this hook won't fire for that call — make sure
+// // every "mark advance paid" flow fetches the doc and calls .save().
+// //
+// // Invoice numbers are SEQUENTIAL — GVBILL0001, GVBILL0002, ... — same
+// // pattern as your enquirySchema's fitCode generator.
+// tourBookingSchema.pre("save", async function (next) {
+//   if (
+//     this.isModified("payment.advance.paid") &&
+//     this.payment?.advance?.paid === true &&
+//     !this.invoiceNumber
+//   ) {
+//     const last = await mongoose
+//       .model("tourBooking")
+//       .findOne({ invoiceNumber: { $exists: true, $ne: null } })
+//       .sort({ _id: -1 }) // newest first — _id is time-ordered, no createdAt field needed
+//       .select("invoiceNumber");
+
+//     let nextNum = 1;
+//     if (last?.invoiceNumber) {
+//       const num = parseInt(last.invoiceNumber.replace("GVBILL", ""), 10);
+//       if (!isNaN(num)) nextNum = num + 1;
+//     }
+//     this.invoiceNumber = `GVBILL${String(nextNum).padStart(4, "0")}`;
+//   }
+//   next();
+// });
+
+// const tourBookingModel =
+//   mongoose.models.tourBooking ||
+//   mongoose.model("tourBooking", tourBookingSchema);
+
+// export default tourBookingModel;
+
+
 // // import mongoose from "mongoose";
 
 // // const tourBookingSchema = new mongoose.Schema({
@@ -2254,26 +4539,46 @@ const tourBookingSchema = new mongoose.Schema({
 //
 // Invoice numbers are SEQUENTIAL — GVBILL0001, GVBILL0002, ... — same
 // pattern as your enquirySchema's fitCode generator.
-tourBookingSchema.pre("save", async function (next) {
-  if (
-    this.isModified("payment.advance.paid") &&
-    this.payment?.advance?.paid === true &&
-    !this.invoiceNumber
-  ) {
-    const last = await mongoose
-      .model("tourBooking")
-      .findOne({ invoiceNumber: { $exists: true, $ne: null } })
-      .sort({ _id: -1 }) // newest first — _id is time-ordered, no createdAt field needed
-      .select("invoiceNumber");
+//
+// ── Atomic counter (fixes E11000 duplicate key on invoiceNumber) ──────
+// The PREVIOUS approach queried for the highest existing invoiceNumber
+// and computed next = last + 1. That is NOT atomic: if two bookings
+// have their advance marked paid at nearly the same moment, BOTH saves
+// can read the same "last" number before either has actually written
+// its new one, so both compute the SAME next number — causing the
+// E11000 duplicate key error on the unique invoiceNumber index (seen
+// live as "dup key: { invoiceNumber: 'GVBILL0738' }").
+//
+// findOneAndUpdate with $inc is a single atomic operation in MongoDB —
+// concurrent calls are serialized by the database itself, so every
+// caller is guaranteed a unique, strictly-increasing sequence number,
+// no matter how many saves race at once.
+const invoiceCounterSchema = new mongoose.Schema({
+  _id: { type: String, required: true },
+  seq: { type: Number, default: 0 },
+});
+const InvoiceCounterModel =
+  mongoose.models.InvoiceCounter ||
+  mongoose.model("InvoiceCounter", invoiceCounterSchema);
 
-    let nextNum = 1;
-    if (last?.invoiceNumber) {
-      const num = parseInt(last.invoiceNumber.replace("GVBILL", ""), 10);
-      if (!isNaN(num)) nextNum = num + 1;
+tourBookingSchema.pre("save", async function (next) {
+  try {
+    if (
+      this.isModified("payment.advance.paid") &&
+      this.payment?.advance?.paid === true &&
+      !this.invoiceNumber
+    ) {
+      const counter = await InvoiceCounterModel.findOneAndUpdate(
+        { _id: "invoiceNumber" },
+        { $inc: { seq: 1 } },
+        { new: true, upsert: true },
+      );
+      this.invoiceNumber = `GVBILL${String(counter.seq).padStart(4, "0")}`;
     }
-    this.invoiceNumber = `GVBILL${String(nextNum).padStart(4, "0")}`;
+    next();
+  } catch (err) {
+    next(err);
   }
-  next();
 });
 
 const tourBookingModel =

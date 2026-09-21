@@ -69,8 +69,11 @@ import {
 } from "../controllers/tourController.js";
 import authTour from "../middlewares/authTour.js";
 import { tourUpload } from "../middlewares/multer.js";
-import { paymentQrUpload } from "../middlewares/multer.js"; // New import for payment QR uploads
+import { paymentQrUpload, staffPhotoUpload } from "../middlewares/multer.js";
 import cancelBookingController from "../controllers/cancelController.js";
+import {
+  createStaff, getAllStaff, getStaffById, updateStaff, deleteStaff,
+} from "../controllers/staffController.js";
 import { get } from "mongoose";
 
 const tourRouter = express.Router();
@@ -219,6 +222,11 @@ tourRouter.put('/enquiry/:id/update', authTour, updateEnquiry);
 tourRouter.put('/enquiry/:id/rate-passed', authTour, toggleRatePassed);
 tourRouter.put('/enquiry/:id/accept', authTour, acceptEnquiry);
 tourRouter.put('/enquiry/:id/reject', authTour, rejectEnquiry);
+tourRouter.post('/staff/create', authTour, staffPhotoUpload, createStaff);
+tourRouter.get('/staff/all', authTour, getAllStaff); // '/staff/:id'-kku munnadi
+tourRouter.get('/staff/:id', authTour, getStaffById);
+tourRouter.put('/staff/:id/update', authTour, staffPhotoUpload, updateStaff);
+tourRouter.delete('/staff/:id/delete', authTour, deleteStaff);
 
 
 

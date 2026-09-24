@@ -45,10 +45,15 @@ import {
   reopenTourBookings,
   cancelEntireTrip,
   reopenEntireTrip,
+  getQueryTypes,
+  raiseQuery,
+  updateQuery,
+
 
 } from "../controllers/tourAdminController.js";
 import authAdmin from "../middlewares/authAdmin.js";
 import { tourUpload } from "../middlewares/multer.js"; // ✅ Correct import (pre-configured fields)
+import { getAllEnquiries } from "../controllers/tourController.js";
 
 const touradminRouter = express.Router();
 
@@ -166,6 +171,21 @@ touradminRouter.get(
   authAdmin,
   adminFetchTourVehicleSeatOverview,
 );
+touradminRouter.get("/query-types", authAdmin, getQueryTypes);
+touradminRouter.get("/queries", authAdmin, getAllEnquiries);
+touradminRouter.post(
+  "/queries",
+  authAdmin,
+  upload.fields([{ name: "attachments", maxCount: 5 }]),
+  raiseQuery,
+);
+touradminRouter.patch(
+  "/queries/:queryId",
+  authAdmin,
+  upload.fields([{ name: "attachments", maxCount: 5 }]),
+  updateQuery,
+);
+
 
 
 export default touradminRouter;

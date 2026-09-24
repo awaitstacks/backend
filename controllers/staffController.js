@@ -2,16 +2,16 @@ import { v2 as cloudinary } from "cloudinary";
 import fs from "fs";
 import staffModel from "../models/staffProfileModel.js";
 // ══════════════════════════════════════════════════════════════════════════════
-// STAFF PROFILES (admin only) — basic, contact & job details
+// STAFF PROFILES (admin only) — basic, contact & study details
 // ══════════════════════════════════════════════════════════════════════════════
 
 // Plain text fields copied from req.body (trimmed)
 const STAFF_TEXT_FIELDS = [
   "fullName", "employeeId", "designation", "department", "reportingManager",
-  "employmentType", "workLocation", "shiftStart", "shiftEnd",
-  "mobileNumber", "email", "currentAddress", "permanentAddress",
+  "status", "gender", "maritalStatus", "staffType",
+  "mobileNumber", "alternateNumber", "whatsappNumber", "email", "currentAddress", "permanentAddress",
   "emergencyName", "emergencyRelation", "emergencyNumber",
-  "qualification", "experience", "otherAccess",
+  "qualification", "specialization", "collegeOrUniversity", "yearOfPassing", "experience",
 ];
 
 const STAFF_REQUIRED_FIELDS = {
@@ -47,24 +47,21 @@ const buildStaffData = (body = {}) => {
   STAFF_TEXT_FIELDS.forEach((field) => {
     if (body[field] === undefined) return;
     const value = body[field] === null ? "" : String(body[field]).trim();
-    // Empty employeeId / employmentType → let the auto-code / default apply
-    if (!value && ["employeeId", "employmentType"].includes(field)) return;
+    // Empty employeeId → let the auto-code apply instead of saving ""
+    if (!value && field === "employeeId") return;
     data[field] = value;
   });
 
-  ["shiftStart", "shiftEnd"].forEach((field) => {
-    if (data[field] === "") data[field] = null;
-  });
-
   if (body.dateOfJoining !== undefined) data.dateOfJoining = body.dateOfJoining || null;
+  if (body.dateOfBirth !== undefined) data.dateOfBirth = body.dateOfBirth || null;
+  if (body.age !== undefined) {
+    const n = body.age === "" || body.age === null ? null : Number(body.age);
+    data.age = Number.isNaN(n) ? null : n;
+  }
   if (body.sameAsCurrent !== undefined) {
     data.sameAsCurrent = body.sameAsCurrent === true || body.sameAsCurrent === "true";
   }
-  if (body.keyResponsibilities !== undefined) {
-    data.keyResponsibilities = parseList(body.keyResponsibilities, /\r?\n/);
-  }
   if (body.skills !== undefined) data.skills = parseList(body.skills, ",");
-  if (body.accessLevels !== undefined) data.accessLevels = parseList(body.accessLevels, ",");
 
   return data;
 };

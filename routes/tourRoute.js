@@ -65,6 +65,11 @@ import {
   adminCreateEnquiry,
   updateBookingInvoice,
   deleteBookingInvoice,
+  getTourQueries,
+  markQueryPickup,
+  markQueryProcessing,
+  closeQuery,
+
   
 } from "../controllers/tourController.js";
 import authTour from "../middlewares/authTour.js";
@@ -227,6 +232,13 @@ tourRouter.get('/staff/all', authTour, getAllStaff); // '/staff/:id'-kku munnadi
 tourRouter.get('/staff/:id', authTour, getStaffById);
 tourRouter.put('/staff/:id/update', authTour, staffPhotoUpload, updateStaff);
 tourRouter.delete('/staff/:id/delete', authTour, deleteStaff);
+
+tourRouter.get("/queries", authTour, getTourQueries);
+tourRouter.patch("/queries/:queryId/pickup", authTour, markQueryPickup);
+tourRouter.patch("/queries/:queryId/processing", authTour, markQueryProcessing);
+tourRouter.patch("/queries/:queryId/reject", authTour, rejectEnquiry);
+tourRouter.patch("/queries/:queryId/close", authTour, closeQuery);
+
 
 
 

@@ -17,17 +17,36 @@ const staffSchema = new mongoose.Schema(
     department: { type: String, trim: true },
     reportingManager: { type: String, trim: true },
     dateOfJoining: { type: Date, default: null },
-    employmentType: {
+    dateOfBirth: { type: Date, default: null },
+    gender: {
       type: String,
-      enum: ["Full-time", "Part-time", "Contract"],
-      default: "Full-time",
+      enum: ["Male", "Female", "Other"],
+      default: null,
     },
-    workLocation: { type: String, trim: true },
-    shiftStart: { type: String, trim: true, default: null }, // "09:30"
-    shiftEnd: { type: String, trim: true, default: null },   // "18:00"
+    age: { type: Number, default: null },
+    maritalStatus: {
+      type: String,
+      enum: ["Single", "Married", "Divorced", "Widowed"],
+      default: null,
+    },
+    // Active / Inactive toggle
+    status: {
+      type: String,
+      enum: ["Active", "Inactive"],
+      default: "Active",
+    },
+    // Which side of the team this profile belongs to — lets admin & field
+    // (tour manager) profiles be created the same way but filtered/told apart
+    staffType: {
+      type: String,
+      enum: ["Admin Staff", "Field Staff"],
+      default: "Admin Staff",
+    },
 
     // ---------- Contact details ----------
     mobileNumber: { type: String, required: true, trim: true },
+    alternateNumber: { type: String, trim: true },
+    whatsappNumber: { type: String, trim: true },
     email: {
       type: String,
       trim: true,
@@ -41,21 +60,13 @@ const staffSchema = new mongoose.Schema(
     emergencyRelation: { type: String, trim: true },
     emergencyNumber: { type: String, trim: true },
 
-    // ---------- Job details ----------
-    keyResponsibilities: { type: [String], default: [] },
-    skills: { type: [String], default: [] }, // MS Office, Tally, Typing...
+    // ---------- Study details ----------
     qualification: { type: String, trim: true },
-    experience: { type: String, trim: true },
-    accessLevels: {
-      type: [String],
-      enum: [
-        "Office keys", "Cash counter", "Accounting software",
-        "Email and admin panel", "Staff records", "Visitor register",
-        "Server room", "Stationery store",
-      ],
-      default: [],
-    },
-    otherAccess: { type: String, trim: true },
+    specialization: { type: String, trim: true }, // subject
+    collegeOrUniversity: { type: String, trim: true },
+    yearOfPassing: { type: String, trim: true },
+    experience: { type: String, trim: true }, // Working experience
+    skills: { type: [String], default: [] }, // MS Office, Tally, Typing...
   },
   { timestamps: true }
 );
@@ -77,7 +88,7 @@ staffSchema.pre("save", async function (next) {
       const num = parseInt(last.employeeId.replace("EMP", ""), 10);
       if (!isNaN(num)) nextNum = num + 1;
     }
-    this.employeeId = `EMP${String(nextNum).padStart(4, "0")}`;
+    this.employeeId = `GVEMP${String(nextNum).padStart(3, "0")}`;
   }
   next();
 });

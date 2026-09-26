@@ -48,13 +48,22 @@ import {
   getQueryTypes,
   raiseQuery,
   updateQuery,
+  getAdminQueries,
+  getTourAdminReplies,
+  addTourAdminReply,
+  deleteQuery,
+  editTourAdminReply,
+  deleteTourAdminReply,
+  getTourAdminQuerySync,
+  getStaffForQueries,
+  getEditHistory,
+  reopenQuery,
 
 
 } from "../controllers/tourAdminController.js";
 import authAdmin from "../middlewares/authAdmin.js";
-import { tourUpload } from "../middlewares/multer.js"; // ✅ Correct import (pre-configured fields)
+import { tourUpload, queryUpload } from "../middlewares/multer.js";
 import { getAllEnquiries } from "../controllers/tourController.js";
-
 const touradminRouter = express.Router();
 
 // ✅ Route: Add a new tour with images
@@ -171,21 +180,22 @@ touradminRouter.get(
   authAdmin,
   adminFetchTourVehicleSeatOverview,
 );
+touradminRouter.get("/staff/all", authAdmin, getStaffForQueries);
 touradminRouter.get("/query-types", authAdmin, getQueryTypes);
-touradminRouter.get("/queries", authAdmin, getAllEnquiries);
-touradminRouter.post(
-  "/queries",
-  authAdmin,
-  upload.fields([{ name: "attachments", maxCount: 5 }]),
-  raiseQuery,
-);
-touradminRouter.patch(
-  "/queries/:queryId",
-  authAdmin,
-  upload.fields([{ name: "attachments", maxCount: 5 }]),
-  updateQuery,
-);
 
+// Queries
+touradminRouter.get("/queries/sync", authAdmin, getTourAdminQuerySync);
+touradminRouter.get("/queries/edit-history", authAdmin, getEditHistory);
+touradminRouter.get("/queries", authAdmin, getAdminQueries);
+touradminRouter.post("/queries", authAdmin, queryUpload, raiseQuery);
+touradminRouter.patch("/queries/:queryId", authAdmin, queryUpload, updateQuery);
+touradminRouter.delete("/queries/:queryId", authAdmin, deleteQuery);
+touradminRouter.patch("/queries/:queryId/reopen", authAdmin, reopenQuery);
 
+// Replies
+touradminRouter.get("/queries/:queryId/replies", authAdmin, getTourAdminReplies);
+touradminRouter.post("/queries/:queryId/replies", authAdmin, addTourAdminReply);
+touradminRouter.patch("/queries/:queryId/replies/:replyId", authAdmin, editTourAdminReply);
+touradminRouter.delete("/queries/:queryId/replies/:replyId", authAdmin, deleteTourAdminReply);
 
 export default touradminRouter;

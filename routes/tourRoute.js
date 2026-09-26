@@ -66,9 +66,15 @@ import {
   updateBookingInvoice,
   deleteBookingInvoice,
   getTourQueries,
-  markQueryPickup,
-  markQueryProcessing,
   closeQuery,
+  pickupQuery,
+  processQuery,
+  rejectQuery,
+  getAdminReplies,
+  addAdminReply,
+  getAdminQuerySync,
+  editAdminReply,
+  deleteAdminReply,
 
   
 } from "../controllers/tourController.js";
@@ -233,11 +239,16 @@ tourRouter.get('/staff/:id', authTour, getStaffById);
 tourRouter.put('/staff/:id/update', authTour, staffPhotoUpload, updateStaff);
 tourRouter.delete('/staff/:id/delete', authTour, deleteStaff);
 
+tourRouter.get("/queries/sync", authTour, getAdminQuerySync);
 tourRouter.get("/queries", authTour, getTourQueries);
-tourRouter.patch("/queries/:queryId/pickup", authTour, markQueryPickup);
-tourRouter.patch("/queries/:queryId/processing", authTour, markQueryProcessing);
-tourRouter.patch("/queries/:queryId/reject", authTour, rejectEnquiry);
+tourRouter.patch("/queries/:queryId/pickup", authTour, pickupQuery);
+tourRouter.patch("/queries/:queryId/processing", authTour, processQuery);
 tourRouter.patch("/queries/:queryId/close", authTour, closeQuery);
+tourRouter.patch("/queries/:queryId/reject", authTour, rejectQuery);
+tourRouter.get("/queries/:queryId/replies", authTour, getAdminReplies);
+tourRouter.post("/queries/:queryId/replies", authTour, addAdminReply);
+tourRouter.patch("/queries/:queryId/replies/:replyId", authTour, editAdminReply);
+tourRouter.delete("/queries/:queryId/replies/:replyId", authTour, deleteAdminReply);
 
 
 

@@ -16,7 +16,8 @@ import TourVehicle from "../models/tourVehicleModel.js";
 import PaymentMethod from "../models/paymentModel.js";
 import { resyncInvoiceForTnr } from "./tourController.js"; // ADDED: eager invoice resync on trip-cancel
 import fs from "fs/promises";
-import Query, { QUERY_STATUS } from "../models/queryModel.js";
+import Query, { QUERY_STATUS, REPLY_FROM } from "../models/queryModel.js";
+import staffModel from "../models/staffProfileModel.js";
 
 
 // controllers/adminController.js   (or wherever your admin controllers live)
@@ -5243,7 +5244,7 @@ const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /**
  * Query params:
- *   ?queryType=Payment&status=open|processing|closed
+ *   ?queryType=Payment&status=open|pickup|processing|close|reject
  *   &raisedBy=<staffId>&raisedTo=<staffId>
  *   &search=text&fromDate=YYYY-MM-DD&toDate=YYYY-MM-DD
  *   &page=1&limit=20
@@ -5266,7 +5267,7 @@ function buildQueryFilter(q = {}) {
     }
     if (q.search?.trim()) {
         const rx = new RegExp(escapeRegex(q.search.trim()), "i");
-        filter.$or = [{ subject: rx }, { description: rx }];
+        filter.$or = [{ ticketNo: rx }, { subject: rx }, { description: rx }];
     }
     if (q.fromDate || q.toDate) {
         filter.createdAt = {};
@@ -5281,7 +5282,32 @@ function buildQueryFilter(q = {}) {
 }
 
 /** List + pagination + status counts (filter tabs ku) */
+// ─── Ticket number: GVTKT001, GVTKT002 ... ───
+const TICKET_PREFIX = "GVTKT";
+const formatTicketNo = (seq) => `${TICKET_PREFIX}${String(seq).padStart(3, "0")}`;
+
+const nextTicketSeq = async () => {
+    const last = await Query.findOne({ ticketSeq: { $exists: true } }).sort({ ticketSeq: -1 }).select("ticketSeq").lean();
+    return (last?.ticketSeq || 0) + 1;
+};
+
+// Pazhaya queries ku number illana, created order la thaana podum (onre oru thadava)
+let ticketsBackfilled = false; // server start aana apram ore oru thadava check
+async function ensureTicketNumbers() {
+    if (ticketsBackfilled) return;
+    const missing = await Query.find({ ticketSeq: { $exists: false } }).sort({ createdAt: 1 }).select("_id").lean();
+    if (missing.length) {
+        let seq = (await nextTicketSeq()) - 1;
+        for (const m of missing) {
+            seq += 1;
+            await Query.updateOne({ _id: m._id, ticketSeq: { $exists: false } }, { $set: { ticketSeq: seq, ticketNo: formatTicketNo(seq) } });
+        }
+    }
+    ticketsBackfilled = true;
+}
+
 async function fetchQueries(reqQuery) {
+    await ensureTicketNumbers();
     const filter = buildQueryFilter(reqQuery);
     const page = Math.max(parseInt(reqQuery.page) || 1, 1);
     const limit = Math.min(Math.max(parseInt(reqQuery.limit) || 20, 1), 100);
@@ -5291,6 +5317,7 @@ async function fetchQueries(reqQuery) {
 
     const [queries, total, counts] = await Promise.all([
         Query.find(filter)
+            .select("-replies -editHistory") // replies / history thani API la varum
             .populate("raisedBy", "-password")
             .populate("raisedTo", "-password")
             .sort({ createdAt: -1 })
@@ -5304,7 +5331,7 @@ async function fetchQueries(reqQuery) {
         ]),
     ]);
 
-    const statusCounts = { open: 0, processing: 0, closed: 0, rejected: 0 };
+    const statusCounts = { open: 0, pickup: 0, processing: 0, close: 0, reject: 0 };
     counts.forEach((c) => (statusCounts[c._id] = c.count));
 
     return {
@@ -5351,10 +5378,11 @@ const destroyAttachments = (attachments) =>
     );
 
 // Image → "image", PDF → "raw" (raw la PDF direct ah open/download aagum)
+// Image → "image", PDF → "raw" (raw la PDF direct ah open/download aagum)
 const uploadQueryAttachments = async (files) => {
-    const uploaded = [];
-    try {
-        for (const file of files) {
+    // Ellaa files um ORE NERAM la upload (munnadi onnu onna — romba late aachu)
+    const results = await Promise.allSettled(
+        files.map(async (file) => {
             const fileType = QUERY_FILE_TYPES[file.mimetype];
             const result = await cloudinary.uploader.upload(file.path, {
                 folder: "queries",
@@ -5362,21 +5390,25 @@ const uploadQueryAttachments = async (files) => {
                 use_filename: true,
                 unique_filename: true,
             });
-            uploaded.push({
+            return {
                 url: result.secure_url,
                 publicId: result.public_id,
                 resourceType: result.resource_type,
                 fileType,
                 fileName: file.originalname,
                 size: file.size,
-            });
-        }
-        return uploaded;
-    } catch (err) {
-        // Paadhila fail aana, already upload aanadha Cloudinary la irundhu remove
+            };
+        }),
+    );
+
+    const uploaded = results.filter((r) => r.status === "fulfilled").map((r) => r.value);
+    const failed = results.find((r) => r.status === "rejected");
+    if (failed) {
+        // Onnu fail aanaalum, upload aanadha ellam Cloudinary la irundhu remove
         await destroyAttachments(uploaded);
-        throw err;
+        throw failed.reason;
     }
+    return uploaded; // files order la dhaan varum
 };
 
 // ════════════════════════════════════════════════════════════════
@@ -5460,16 +5492,28 @@ const raiseQuery = async (req, res) => {
         const finalType = existing ? existing.queryType : typeInput;
 
         // ── Upload → save ──
-        attachments = await uploadQueryAttachments(files);
+        // Raise pannum bodhu vara files ellam "Attachment 1"
+        attachments = (await uploadQueryAttachments(files)).map((a) => ({ ...a, set: 1 }));
 
-        const created = await Query.create({
-            queryType: finalType,
-            subject: subject.trim(),
-            description: description?.trim() || "",
-            attachments,
-            raisedBy,
-            raisedTo,
-        });
+        // GVTKT number — rendu per same time raise pannuna duplicate aagama retry
+        let created;
+        for (let attempt = 0; attempt < 5 && !created; attempt += 1) {
+            const seq = await nextTicketSeq();
+            try {
+                created = await Query.create({
+                    ticketSeq: seq,
+                    ticketNo: formatTicketNo(seq),
+                    queryType: finalType,
+                    subject: subject.trim(),
+                    description: description?.trim() || "",
+                    attachments,
+                    raisedBy,
+                    raisedTo,
+                });
+            } catch (e) {
+                if (e?.code !== 11000 || attempt === 4) throw e; // duplicate number na thirumba try
+            }
+        }
 
         const query = await Query.findById(created._id)
             .populate("raisedBy", "-password")
@@ -5518,7 +5562,7 @@ const getAdminQueries = async (req, res) => {
 //    removeAttachmentIds    → remove panna vendiya attachment _id list
 //                             (JSON string: '["id1","id2"]')
 //
-//  Closed / Rejected query ah edit panna mudiyadhu.
+//  Close / Reject aana query ah edit panna mudiyadhu.
 // ════════════════════════════════════════════════════════════════
 const updateQuery = async (req, res) => {
     const files = getQueryFiles(req);
@@ -5538,12 +5582,15 @@ const updateQuery = async (req, res) => {
                 .status(404)
                 .json({ success: false, message: "Query not found" });
         }
-        if (["closed", "rejected"].includes(query.status)) {
+        if (["close", "reject"].includes(query.status)) {
             return res.status(400).json({
                 success: false,
-                message: `This query is ${query.status} and can't be edited`,
+                message: `This query is ${query.status === "close" ? "closed" : "rejected"} and can't be edited`,
             });
         }
+
+        // ── Before snapshot (edit history ku) ──
+        const before = editSnapshot(query);
 
         const { queryType, subject, description, raisedBy, raisedTo } = req.body;
 
@@ -5638,8 +5685,18 @@ const updateQuery = async (req, res) => {
             });
         }
 
-        newAttachments = await uploadQueryAttachments(files);
+        // Indha edit la vara puthu files → adutha attachment set (2, 3, ...)
+        const nextSet = Math.max(0, ...query.attachments.map((a) => a.set || 1)) + 1;
+        newAttachments = (await uploadQueryAttachments(files)).map((a) => ({ ...a, set: nextSet }));
         query.attachments = [...kept, ...newAttachments];
+
+        // ── After snapshot → before / after changes ──
+        const changes = await buildEditChanges(before, editSnapshot(query));
+        if (!changes.length) {
+            return res.status(200).json({ success: true, message: "Nothing changed", noChange: true });
+        }
+        query.editHistory.push({ editedAt: new Date(), kind: "query", by: "touradmin", changes });
+        query.editCount = query.editHistory.length;
 
         await query.save();
 
@@ -5668,6 +5725,563 @@ const updateQuery = async (req, res) => {
         await removeTempFiles(files);
     }
 };
+
+// ════════════════════════════════════════════════════════════════
+//  REPLIES — common helpers (tourController um idha use pannum)
+// ════════════════════════════════════════════════════════════════
+
+// POST body: { message, staff? }   from = "touradmin" | "admin"
+async function saveQueryReply(req, res, from) {
+    try {
+        const { queryId } = req.params;
+        const message = String(req.body?.message || "").trim();
+        const staff = req.body?.staff;
+
+        if (!mongoose.isValidObjectId(queryId)) {
+            return res
+                .status(400)
+                .json({ success: false, message: "Invalid query ID" });
+        }
+        if (!REPLY_FROM.includes(from)) {
+            return res
+                .status(400)
+                .json({ success: false, message: "Invalid reply source" });
+        }
+        if (!message) {
+            return res
+                .status(400)
+                .json({ success: false, message: "Reply message is required" });
+        }
+        if (message.length > 2000) {
+            return res.status(400).json({
+                success: false,
+                message: "Reply can be at most 2000 characters",
+            });
+        }
+        if (staff && !mongoose.isValidObjectId(staff)) {
+            return res
+                .status(400)
+                .json({ success: false, message: "Invalid staff ID" });
+        }
+
+        const now = new Date();
+        const reply = { message, from, staff: staff || null, createdAt: now };
+
+        // Close / Reject aana query ku reply panna mudiyadhu.
+        // Oru single atomic update — rendu per same time la reply pannalum ok.
+        const updated = await Query.findOneAndUpdate(
+            { _id: queryId, status: { $nin: ["close", "reject"] } },
+            {
+                $push: { replies: reply },
+                $inc: { replyCount: 1 },
+                $set: { lastReplyAt: now, lastReplyFrom: from },
+            },
+            { new: true, runValidators: true },
+        )
+            .select("replies status replyCount lastReplyAt lastReplyFrom")
+            .populate("replies.staff", "-password")
+            .lean();
+
+        if (!updated) {
+            const exists = await Query.findById(queryId).select("status").lean();
+            if (!exists) {
+                return res
+                    .status(404)
+                    .json({ success: false, message: "Query not found" });
+            }
+            return res.status(400).json({
+                success: false,
+                message: `This query is ${exists.status === "close" ? "closed" : "rejected"} — replies are closed`,
+            });
+        }
+
+        return res.status(201).json({
+            success: true,
+            message: "Reply sent",
+            reply: updated.replies[updated.replies.length - 1],
+            replyCount: updated.replyCount,
+        });
+    } catch (err) {
+        console.error("saveQueryReply error:", err);
+        if (err.name === "ValidationError") {
+            return res.status(400).json({ success: false, message: err.message });
+        }
+        return res.status(500).json({ success: false, message: err.message });
+    }
+}
+
+// GET — oru query oda ellaa replies (pazhasu → puthusu)
+async function loadQueryReplies(req, res) {
+    try {
+        const { queryId } = req.params;
+        if (!mongoose.isValidObjectId(queryId)) {
+            return res
+                .status(400)
+                .json({ success: false, message: "Invalid query ID" });
+        }
+
+        const query = await Query.findById(queryId)
+            .select("subject status replies replyCount lastReplyAt lastReplyFrom updatedAt")
+            .populate("replies.staff", "-password")
+            .lean();
+
+        if (!query) {
+            return res
+                .status(404)
+                .json({ success: false, message: "Query not found" });
+        }
+
+        return res.status(200).json({
+            success: true,
+            queryId: query._id,
+            subject: query.subject,
+            status: query.status,
+            canReply: !["close", "reject"].includes(query.status),
+            // Frontend idha vechu "maariducha?" nu check pannum (sync)
+            version: query.updatedAt,
+            count: query.replies.length,
+            replies: query.replies,
+        });
+    } catch (err) {
+        console.error("loadQueryReplies error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+}
+
+// ─── Tour admin side ──────────────────────────────────────────
+// POST /api/touradmin/queries/:queryId/replies     body: { message, staff? }
+const addTourAdminReply = (req, res) => saveQueryReply(req, res, "touradmin");
+
+// GET  /api/touradmin/queries/:queryId/replies
+const getTourAdminReplies = (req, res) => loadQueryReplies(req, res);
+
+// ════════════════════════════════════════════════════════════════
+//  DELETE QUERY
+//  DELETE /api/touradmin/queries/:queryId
+//  Query + adhoda replies + Cloudinary files ellam remove aagum.
+//  Close / Reject aana query ah delete panna mudiyadhu.
+// ════════════════════════════════════════════════════════════════
+const deleteQuery = async (req, res) => {
+    try {
+        const { queryId } = req.params;
+        if (!mongoose.isValidObjectId(queryId)) {
+            return res
+                .status(400)
+                .json({ success: false, message: "Invalid query ID" });
+        }
+
+        // Close / Reject aana query ah delete panna mudiyadhu (history ku)
+        const query = await Query.findOneAndDelete({
+            _id: queryId,
+            status: { $nin: ["close", "reject"] },
+        }).lean();
+        if (!query) {
+            const exists = await Query.findById(queryId).select("status").lean();
+            if (!exists) {
+                return res
+                    .status(404)
+                    .json({ success: false, message: "Query not found" });
+            }
+            return res.status(400).json({
+                success: false,
+                message: `This query is ${exists.status === "close" ? "closed" : "rejected"} and can't be deleted`,
+            });
+        }
+
+        // DB la irundhu pona apram dhaan Cloudinary files remove
+        if (query.attachments?.length) await destroyAttachments(query.attachments);
+
+        return res.status(200).json({
+            success: true,
+            message: "Query deleted",
+            deletedId: query._id,
+        });
+    } catch (err) {
+        console.error("deleteQuery error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// ════════════════════════════════════════════════════════════════
+//  REPLY EDIT / DELETE — common helpers
+//  Ovvoruthar um avanga anuppuna reply ah mattum dhaan maatha mudiyum.
+//  Close / Reject aana query la maatha mudiyadhu.
+// ════════════════════════════════════════════════════════════════
+
+const CLOSED_STATUS_TEXT = { close: "closed", reject: "rejected" };
+
+// PATCH body: { message }
+async function editQueryReply(req, res, from) {
+    try {
+        const { queryId, replyId } = req.params;
+        const message = String(req.body?.message || "").trim();
+
+        if (!mongoose.isValidObjectId(queryId) || !mongoose.isValidObjectId(replyId)) {
+            return res.status(400).json({ success: false, message: "Invalid ID" });
+        }
+        if (!message) {
+            return res
+                .status(400)
+                .json({ success: false, message: "Reply message is required" });
+        }
+        if (message.length > 2000) {
+            return res.status(400).json({
+                success: false,
+                message: "Reply can be at most 2000 characters",
+            });
+        }
+
+        const query = await Query.findById(queryId).select("status replies editHistory editCount");
+        if (!query) {
+            return res
+                .status(404)
+                .json({ success: false, message: "Query not found" });
+        }
+        if (CLOSED_STATUS_TEXT[query.status]) {
+            return res.status(400).json({
+                success: false,
+                message: `This query is ${CLOSED_STATUS_TEXT[query.status]} — replies can't be changed`,
+            });
+        }
+
+        const reply = query.replies.id(replyId);
+        if (!reply) {
+            return res
+                .status(404)
+                .json({ success: false, message: "Reply not found" });
+        }
+        if (reply.from !== from) {
+            return res.status(403).json({
+                success: false,
+                message: "You can only edit your own replies",
+            });
+        }
+
+        const oldMessage = reply.message;
+        if (oldMessage === message) {
+            return res.status(200).json({ success: true, message: "Nothing changed", reply: reply.toObject() });
+        }
+        reply.message = message;
+        reply.editedAt = new Date();
+
+        // Edit history la reply before / after
+        query.editHistory.push({
+            editedAt: new Date(),
+            kind: "reply-edit",
+            by: from,
+            changes: [{ field: "reply", label: "Reply", before: oldMessage, after: message }],
+        });
+        query.editCount = query.editHistory.length;
+        await query.save();
+
+        return res.status(200).json({
+            success: true,
+            message: "Reply updated",
+            reply: reply.toObject(),
+        });
+    } catch (err) {
+        console.error("editQueryReply error:", err);
+        if (err.name === "ValidationError") {
+            return res.status(400).json({ success: false, message: err.message });
+        }
+        return res.status(500).json({ success: false, message: err.message });
+    }
+}
+
+async function removeQueryReply(req, res, from) {
+    try {
+        const { queryId, replyId } = req.params;
+        if (!mongoose.isValidObjectId(queryId) || !mongoose.isValidObjectId(replyId)) {
+            return res.status(400).json({ success: false, message: "Invalid ID" });
+        }
+
+        const query = await Query.findById(queryId).select(
+            "status replies replyCount lastReplyAt lastReplyFrom editHistory editCount",
+        );
+        if (!query) {
+            return res
+                .status(404)
+                .json({ success: false, message: "Query not found" });
+        }
+        if (CLOSED_STATUS_TEXT[query.status]) {
+            return res.status(400).json({
+                success: false,
+                message: `This query is ${CLOSED_STATUS_TEXT[query.status]} — replies can't be changed`,
+            });
+        }
+
+        const reply = query.replies.id(replyId);
+        if (!reply) {
+            return res
+                .status(404)
+                .json({ success: false, message: "Reply not found" });
+        }
+        if (reply.from !== from) {
+            return res.status(403).json({
+                success: false,
+                message: "You can only delete your own replies",
+            });
+        }
+
+        const deletedMessage = reply.message;
+        query.replies.pull(replyId); // ellaa mongoose version layum work aagum
+
+        // Edit history la delete aana reply um save aagum
+        query.editHistory.push({
+            editedAt: new Date(),
+            kind: "reply-delete",
+            by: from,
+            changes: [{ field: "reply", label: "Reply deleted", before: deletedMessage, after: "" }],
+        });
+        query.editCount = query.editHistory.length;
+
+        // Count and "last reply" info ah thirumba calculate
+        const last = query.replies[query.replies.length - 1];
+        query.replyCount = query.replies.length;
+        query.lastReplyAt = last ? last.createdAt : null;
+        query.lastReplyFrom = last ? last.from : null;
+        await query.save();
+
+        return res.status(200).json({
+            success: true,
+            message: "Reply deleted",
+            deletedId: replyId,
+            replyCount: query.replyCount,
+        });
+    } catch (err) {
+        console.error("removeQueryReply error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+}
+
+// PATCH  /api/touradmin/queries/:queryId/replies/:replyId     body: { message }
+const editTourAdminReply = (req, res) => editQueryReply(req, res, "touradmin");
+
+// DELETE /api/touradmin/queries/:queryId/replies/:replyId
+const deleteTourAdminReply = (req, res) => removeQueryReply(req, res, "touradmin");
+
+// ════════════════════════════════════════════════════════════════
+//  SYNC CHECK — rendu page um auto-refresh aaga
+//  GET /api/touradmin/queries/sync   |   GET /api/tour/queries/sync
+//
+//  Romba light API — full list anuppadhu. Frontend ovvoru 10 sec kum
+//  idha call pannum; "version" maarirundha mattum list ah refetch pannum.
+//  Yaar enna pannalum (raise, edit, delete, status, reply) version maarum.
+// ════════════════════════════════════════════════════════════════
+async function getQuerySync(req, res) {
+    try {
+        const [info] = await Query.aggregate([
+            {
+                $group: {
+                    _id: null,
+                    total: { $sum: 1 },
+                    lastUpdatedAt: { $max: "$updatedAt" },
+                },
+            },
+        ]);
+        const total = info?.total || 0;
+        const lastUpdatedAt = info?.lastUpdatedAt || null;
+
+        return res.status(200).json({
+            success: true,
+            total,
+            lastUpdatedAt,
+            // total um sethu — delete pannalum version maarum
+            version: `${total}-${lastUpdatedAt ? new Date(lastUpdatedAt).getTime() : 0}`,
+        });
+    } catch (err) {
+        console.error("getQuerySync error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+}
+
+// GET /api/touradmin/queries/sync
+const getTourAdminQuerySync = (req, res) => getQuerySync(req, res);
+
+// ════════════════════════════════════════════════════════════════
+//  STAFF LIST — raise form la "Raised by / Raised to" dropdown ku
+//  GET /api/touradmin/staff/all
+//  Inactive thavira ellaa staff um, A-Z order la, dropdown ku thevaiyana fields mattum.
+// ════════════════════════════════════════════════════════════════
+const getStaffForQueries = async (req, res) => {
+    try {
+        const staff = await mongoose.models.staff
+            // "Inactive" illadha ellarum — status field illadha pazhaya staff um varuvanga
+            .find({ status: { $ne: "Inactive" } })
+            .select("fullName employeeId designation department staffType photo")
+            .sort({ fullName: 1 })
+            .lean();
+        return res.status(200).json({ success: true, count: staff.length, data: staff });
+    } catch (err) {
+        console.error("getStaffForQueries error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// ════════════════════════════════════════════════════════════════
+//  EDIT HISTORY — before / after
+// ════════════════════════════════════════════════════════════════
+const EDIT_LABELS = {
+    queryType: "Ticket type",
+    subject: "Subject",
+    description: "Description",
+    raisedBy: "From (raised by)",
+    raisedTo: "To (raised to)",
+    attachments: "Attachments",
+};
+
+function editSnapshot(query) {
+    return {
+        queryType: query.queryType || "",
+        subject: query.subject || "",
+        description: query.description || "",
+        raisedBy: String(query.raisedBy || ""),
+        raisedTo: String(query.raisedTo || ""),
+        attachments: query.attachments
+            .map((a) => `${a.fileName || "file"} (Attachment ${a.set || 1})`)
+            .join(", "),
+    };
+}
+
+async function buildEditChanges(before, after) {
+    const changes = Object.keys(EDIT_LABELS)
+        .filter((f) => (before[f] || "") !== (after[f] || ""))
+        .map((f) => ({ field: f, label: EDIT_LABELS[f], before: before[f] || "", after: after[f] || "" }));
+
+    // Staff ID ku badhila peru save pannuvom — history padikka easy
+    const staffChanges = changes.filter((c) => c.field === "raisedBy" || c.field === "raisedTo");
+    if (staffChanges.length) {
+        const ids = staffChanges.flatMap((c) => [c.before, c.after]).filter((id) => mongoose.isValidObjectId(id));
+        const docs = await mongoose.model("staff").find({ _id: { $in: ids } }).select("fullName designation").lean();
+        const nameOf = (id) => {
+            const d = docs.find((x) => String(x._id) === String(id));
+            return d ? `${d.fullName}${d.designation ? ` (${d.designation})` : ""}` : id;
+        };
+        staffChanges.forEach((c) => {
+            c.before = nameOf(c.before);
+            c.after = nameOf(c.after);
+        });
+    }
+    return changes;
+}
+
+// GET /api/touradmin/queries/edit-history?page=1&limit=10&search=&queryId=
+// Ticket vaariya group — ore ticket oda ellaa edits um (query edit, reply edit,
+// reply delete) ore item la, puthusu mudhal la. Latest ah edit aana ticket mela.
+const getEditHistory = async (req, res) => {
+    try {
+        const page = Math.max(parseInt(req.query.page) || 1, 1);
+        const limit = Math.min(Math.max(parseInt(req.query.limit) || 10, 1), 50);
+
+        const match = { "editHistory.0": { $exists: true } };
+        if (req.query.search?.trim()) {
+            const rx = new RegExp(escapeRegex(req.query.search.trim()), "i");
+            match.$or = [{ ticketNo: rx }, { subject: rx }];
+        }
+        if (req.query.queryId && mongoose.isValidObjectId(req.query.queryId)) {
+            match._id = new mongoose.Types.ObjectId(req.query.queryId);
+        }
+
+        const [result] = await Query.aggregate([
+            { $match: match },
+            {
+                $project: {
+                    ticketNo: 1,
+                    subject: 1,
+                    status: 1,
+                    queryType: 1,
+                    editHistory: 1,
+                    editCount: { $size: "$editHistory" },
+                    lastEditedAt: { $max: "$editHistory.editedAt" },
+                },
+            },
+            { $sort: { lastEditedAt: -1 } },
+            {
+                $facet: {
+                    items: [{ $skip: (page - 1) * limit }, { $limit: limit }],
+                    total: [{ $count: "n" }],
+                },
+            },
+        ]);
+
+        const items = (result?.items || []).map((q) => ({
+            queryId: q._id,
+            ticketNo: q.ticketNo,
+            subject: q.subject,
+            status: q.status,
+            queryType: q.queryType,
+            editCount: q.editCount,
+            lastEditedAt: q.lastEditedAt,
+            // Edit 1, 2, 3... number vechu, puthusu mudhal la
+            edits: q.editHistory
+                .map((e, i) => ({
+                    id: e._id,
+                    editNo: i + 1,
+                    kind: e.kind || "query",
+                    by: e.by || "touradmin",
+                    editedAt: e.editedAt,
+                    changes: e.changes || [],
+                }))
+                .reverse(),
+        }));
+
+        const total = result?.total?.[0]?.n || 0;
+        return res.status(200).json({
+            success: true,
+            items,
+            total, // ethana tickets
+            page,
+            totalPages: Math.ceil(total / limit) || 1,
+        });
+    } catch (err) {
+        console.error("getEditHistory error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// ════════════════════════════════════════════════════════════════
+//  REOPEN — admin mattum
+//  PATCH /api/touradmin/queries/:queryId/reopen
+//  Close aana query → thirumba Open. Files, replies, edit history
+//  ellam apdiye irukum — status mattum maarum.
+// ════════════════════════════════════════════════════════════════
+const reopenQuery = async (req, res) => {
+    try {
+        const { queryId } = req.params;
+        if (!mongoose.isValidObjectId(queryId)) {
+            return res.status(400).json({ success: false, message: "Invalid query ID" });
+        }
+
+        // Atomic — close la irundha mattum dhaan open aagum
+        const updated = await Query.findOneAndUpdate(
+            { _id: queryId, status: "close" },
+            { $set: { status: "open", reopenedAt: new Date() }, $inc: { reopenCount: 1 } },
+            { new: true },
+        )
+            .select("-replies -editHistory")
+            .populate("raisedBy", "-password")
+            .populate("raisedTo", "-password")
+            .lean();
+
+        if (!updated) {
+            const current = await Query.findById(queryId).select("status").lean();
+            if (!current) {
+                return res.status(404).json({ success: false, message: "Query not found" });
+            }
+            return res.status(400).json({
+                success: false,
+                message: "Only closed queries can be reopened",
+            });
+        }
+
+        return res.status(200).json({ success: true, message: "Query reopened", query: updated });
+    } catch (err) {
+        console.error("reopenQuery error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+
 
 
 
@@ -5720,12 +6334,29 @@ export {
     cancelEntireTrip,
     reopenEntireTrip,
 
+    getStaffForQueries,
     getQueryTypes,
-    raiseQuery,
     getAdminQueries,
+    raiseQuery,
     updateQuery,
+    deleteQuery,
+    getTourAdminReplies,
+    addTourAdminReply,
+    editTourAdminReply,
+    deleteTourAdminReply,
+    getTourAdminQuerySync,
+    getEditHistory,
+    reopenQuery,
+    // tourController import pannum:
     fetchQueries,
-    fetchQueryTypes,
+    saveQueryReply,
+    loadQueryReplies,
+    editQueryReply,
+    removeQueryReply,
+    getQuerySync,
+
+
+
 
 
 };

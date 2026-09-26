@@ -150,4 +150,32 @@ const staffPhotoUpload = multer({
   limits: { fileSize: 5 * 1024 * 1024 },
 }).single("photo");
 
-export { upload, tourUpload, paymentQrUpload, staffPhotoUpload };
+// ────────────────────────────────────────────────
+// Dedicated multer for query attachments (image / pdf) – auto-create folder
+// ────────────────────────────────────────────────
+const queryFileDir = "uploads/temp/query-files/";
+
+if (!fs.existsSync(queryFileDir)) {
+  fs.mkdirSync(queryFileDir, { recursive: true });
+  console.log(`Created missing upload folder: ${queryFileDir}`);
+}
+
+const queryFileStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, queryFileDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.originalname)}`;
+    cb(null, uniqueName);
+  },
+});
+
+// Type (jpg/png/webp/pdf) and 5 MB check controller la nadakkum —
+// adhanala error JSON ah frontend ku correct ah pogum.
+// Inga 10 MB safety limit mattum.
+const queryUpload = multer({
+  storage: queryFileStorage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+}).fields([{ name: "attachments", maxCount: 5 }]);
+
+export { upload, tourUpload, paymentQrUpload, staffPhotoUpload, queryUpload };

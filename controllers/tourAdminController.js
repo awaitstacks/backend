@@ -5315,7 +5315,7 @@ async function fetchQueries(reqQuery) {
     // Tab counts la status filter apply panna koodadhu
     const { status, ...countFilter } = filter;
 
-    const [queries, total, counts] = await Promise.all([
+    const [queries, total, counts, queryTypes] = await Promise.all([
         Query.find(filter)
             .select("-replies -editHistory") // replies / history thani API la varum
             .populate("raisedBy", "-password")
@@ -5329,6 +5329,8 @@ async function fetchQueries(reqQuery) {
             { $match: countFilter },
             { $group: { _id: "$status", count: { $sum: 1 } } },
         ]),
+        // Type filter dropdown ku — ellaa types um (rendu page kum ore list)
+        fetchQueryTypes(),
     ]);
 
     const statusCounts = { open: 0, pickup: 0, processing: 0, close: 0, reject: 0 };
@@ -5340,6 +5342,7 @@ async function fetchQueries(reqQuery) {
         page,
         totalPages: Math.ceil(total / limit) || 1,
         statusCounts,
+        queryTypes,
     };
 }
 
@@ -5377,7 +5380,6 @@ const destroyAttachments = (attachments) =>
         ),
     );
 
-// Image → "image", PDF → "raw" (raw la PDF direct ah open/download aagum)
 // Image → "image", PDF → "raw" (raw la PDF direct ah open/download aagum)
 const uploadQueryAttachments = async (files) => {
     // Ellaa files um ORE NERAM la upload (munnadi onnu onna — romba late aachu)
@@ -5482,18 +5484,18 @@ const raiseQuery = async (req, res) => {
             });
         }
 
+        // Type spelling check um file upload um ORE NERAM la (onnukkaga onnu wait pannadhu)
         // Already irukura type na adhe spelling use pannu ("payment" → "Payment")
         const typeInput = queryType.trim();
-        const existing = await Query.findOne({
-            queryType: new RegExp(`^${escapeRegex(typeInput)}$`, "i"),
-        })
-            .select("queryType")
-            .lean();
+        const [existing, uploaded] = await Promise.all([
+            Query.findOne({ queryType: new RegExp(`^${escapeRegex(typeInput)}$`, "i") })
+                .select("queryType")
+                .lean(),
+            uploadQueryAttachments(files),
+        ]);
         const finalType = existing ? existing.queryType : typeInput;
-
-        // ── Upload → save ──
         // Raise pannum bodhu vara files ellam "Attachment 1"
-        attachments = (await uploadQueryAttachments(files)).map((a) => ({ ...a, set: 1 }));
+        attachments = uploaded.map((a) => ({ ...a, set: 1 }));
 
         // GVTKT number — rendu per same time raise pannuna duplicate aagama retry
         let created;
@@ -5515,15 +5517,11 @@ const raiseQuery = async (req, res) => {
             }
         }
 
-        const query = await Query.findById(created._id)
-            .populate("raisedBy", "-password")
-            .populate("raisedTo", "-password")
-            .lean();
-
+        // Thirumba DB la padikkama udane reply — page list ah refresh pannum
         return res.status(201).json({
             success: true,
             message: "Query raised successfully",
-            query,
+            query: created.toObject(),
         });
     } catch (err) {
         console.error("raiseQuery error:", err);
@@ -5534,7 +5532,7 @@ const raiseQuery = async (req, res) => {
         }
         return res.status(500).json({ success: false, message: err.message });
     } finally {
-        await removeTempFiles(files);
+        removeTempFiles(files); // background la — reply ah late aakkadhu
     }
 };
 
@@ -6254,7 +6252,7 @@ const reopenQuery = async (req, res) => {
 
         // Atomic — close la irundha mattum dhaan open aagum
         const updated = await Query.findOneAndUpdate(
-            { _id: queryId, status: "close" },
+            { _id: queryId, status: { $in: ["close", "reject"] } },
             { $set: { status: "open", reopenedAt: new Date() }, $inc: { reopenCount: 1 } },
             { new: true },
         )
@@ -6270,7 +6268,7 @@ const reopenQuery = async (req, res) => {
             }
             return res.status(400).json({
                 success: false,
-                message: "Only closed queries can be reopened",
+                message: "Only closed or rejected queries can be reopened",
             });
         }
 
@@ -6280,7 +6278,6 @@ const reopenQuery = async (req, res) => {
         return res.status(500).json({ success: false, message: err.message });
     }
 };
-
 
 
 

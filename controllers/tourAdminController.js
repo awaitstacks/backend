@@ -5284,7 +5284,7 @@ function buildQueryFilter(q = {}) {
 /** List + pagination + status counts (filter tabs ku) */
 // ─── Ticket number: GVTKT001, GVTKT002 ... ───
 const TICKET_PREFIX = "GVTKT";
-const formatTicketNo = (seq) => `${TICKET_PREFIX}${String(seq).padStart(3, "0")}`;
+const formatTicketNo = (seq) => `${TICKET_PREFIX}${String(seq).padStart(4, "0")}`;
 
 const nextTicketSeq = async () => {
     const last = await Query.findOne({ ticketSeq: { $exists: true } }).sort({ ticketSeq: -1 }).select("ticketSeq").lean();

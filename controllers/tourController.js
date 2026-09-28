@@ -21,6 +21,8 @@ import {
   editQueryReply,
   removeQueryReply,
   getQuerySync,
+  raiseQueryCore,
+
 } from "./tourAdminController.js";
 
 
@@ -6910,13 +6912,13 @@ const rejectEnquiry = async (req, res) => {
 // GET /api/tour/queries?queryType=&status=&raisedBy=&raisedTo=&search=&fromDate=&toDate=&page=&limit=
 // Tour admin raise panna ellaa queries um — attachments + replyCount oda
 const getTourQueries = async (req, res) => {
-    try {
-        const data = await fetchQueries(req.query);
-        return res.status(200).json({ success: true, ...data });
-    } catch (err) {
-        console.error("getTourQueries error:", err);
-        return res.status(500).json({ success: false, message: err.message });
-    }
+  try {
+    const data = await fetchQueries(req.query);
+    return res.status(200).json({ success: true, ...data });
+  } catch (err) {
+    console.error("getTourQueries error:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
 };
 
 // ─── Status rules (4 button um idha use pannum) ───────────────
@@ -6925,58 +6927,58 @@ const getTourQueries = async (req, res) => {
 //   Close      : open / pickup / processing → close
 //   Reject     : open / pickup / processing → reject
 const QUERY_STATUS_RULES = {
-    pickup: { from: ["open"], dateField: "pickupAt", done: "Query picked up" },
-    processing: { from: ["open", "pickup"], dateField: "processingAt", done: "Query moved to processing" },
-    close: { from: ["open", "pickup", "processing"], dateField: "closedAt", done: "Query closed" },
-    reject: { from: ["open", "pickup", "processing"], dateField: "rejectedAt", done: "Query rejected" },
+  pickup: { from: ["open"], dateField: "pickupAt", done: "Query picked up" },
+  processing: { from: ["open", "pickup"], dateField: "processingAt", done: "Query moved to processing" },
+  close: { from: ["open", "pickup", "processing"], dateField: "closedAt", done: "Query closed" },
+  reject: { from: ["open", "pickup", "processing"], dateField: "rejectedAt", done: "Query rejected" },
 };
 
 const changeQueryStatus = async (req, res, nextStatus) => {
-    try {
-        const { queryId } = req.params;
-        if (!mongoose.isValidObjectId(queryId)) {
-            return res
-                .status(400)
-                .json({ success: false, message: "Invalid query ID" });
-        }
-
-        const rule = QUERY_STATUS_RULES[nextStatus];
-        const set = { status: rule.to || nextStatus, [rule.dateField]: new Date() };
-        if (nextStatus === "reject") {
-            set.rejectReason = String(req.body?.reason || "").trim();
-        }
-
-        // Atomic — rendu per same time la click pannalum oru change dhaan nadakkum
-        const updated = await Query.findOneAndUpdate(
-            { _id: queryId, status: { $in: rule.from } },
-            rule.inc ? { $set: set, $inc: rule.inc } : { $set: set },
-            { new: true },
-        )
-            .select("-replies -editHistory")
-            .populate("raisedBy", "-password")
-            .populate("raisedTo", "-password")
-            .lean();
-
-        if (!updated) {
-            const current = await Query.findById(queryId).select("status").lean();
-            if (!current) {
-                return res
-                    .status(404)
-                    .json({ success: false, message: "Query not found" });
-            }
-            return res.status(400).json({
-                success: false,
-                message: `Can't move a "${current.status}" query to "${nextStatus}"`,
-            });
-        }
-
-        return res
-            .status(200)
-            .json({ success: true, message: rule.done, query: updated });
-    } catch (err) {
-        console.error(`changeQueryStatus(${nextStatus}) error:`, err);
-        return res.status(500).json({ success: false, message: err.message });
+  try {
+    const { queryId } = req.params;
+    if (!mongoose.isValidObjectId(queryId)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid query ID" });
     }
+
+    const rule = QUERY_STATUS_RULES[nextStatus];
+    const set = { status: rule.to || nextStatus, [rule.dateField]: new Date() };
+    if (nextStatus === "reject") {
+      set.rejectReason = String(req.body?.reason || "").trim();
+    }
+
+    // Atomic — rendu per same time la click pannalum oru change dhaan nadakkum
+    const updated = await Query.findOneAndUpdate(
+      { _id: queryId, status: { $in: rule.from } },
+      rule.inc ? { $set: set, $inc: rule.inc } : { $set: set },
+      { new: true },
+    )
+      .select("-replies -editHistory")
+      .populate("raisedBy", "-password")
+      .populate("raisedTo", "-password")
+      .lean();
+
+    if (!updated) {
+      const current = await Query.findById(queryId).select("status").lean();
+      if (!current) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Query not found" });
+      }
+      return res.status(400).json({
+        success: false,
+        message: `Can't move a "${current.status}" query to "${nextStatus}"`,
+      });
+    }
+
+    return res
+      .status(200)
+      .json({ success: true, message: rule.done, query: updated });
+  } catch (err) {
+    console.error(`changeQueryStatus(${nextStatus}) error:`, err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
 };
 
 // PATCH /api/tour/queries/:queryId/pickup
@@ -6993,21 +6995,25 @@ const rejectQuery = (req, res) => changeQueryStatus(req, res, "reject");
 
 // ─── Replies (admin side) ─────────────────────────────────────
 // POST /api/tour/queries/:queryId/replies      body: { message, staff? }
-const addAdminReply = (req, res) => saveQueryReply(req, res, "admin");
+const addAdminReply = (req, res) => saveQueryReply(req, res, "touradmin");
 
 // GET  /api/tour/queries/:queryId/replies
 const getAdminReplies = (req, res) => loadQueryReplies(req, res);
 
 // PATCH  /api/tour/queries/:queryId/replies/:replyId     body: { message }
 // Avanga anuppuna reply ah mattum edit panna mudiyum.
-const editAdminReply = (req, res) => editQueryReply(req, res, "admin");
+const editAdminReply = (req, res) => editQueryReply(req, res, "touradmin");
 
 // DELETE /api/tour/queries/:queryId/replies/:replyId
 // Avanga anuppuna reply ah mattum delete panna mudiyum.
-const deleteAdminReply = (req, res) => removeQueryReply(req, res, "admin");
+const deleteAdminReply = (req, res) => removeQueryReply(req, res, "touradmin");
 
 // GET /api/tour/queries/sync   (auto-refresh check)
 const getAdminQuerySync = (req, res) => getQuerySync(req, res);
+
+// POST /api/tour/queries   (multipart/form-data — admin page raise madhiriye)
+// Tour admin raise panna query — raisedVia: "touradmin"
+const raiseTourQuery = (req, res) => raiseQueryCore(req, res, "touradmin");
 
 export {
   tourList,
@@ -7093,6 +7099,8 @@ export {
   editAdminReply,
   deleteAdminReply,
   getAdminQuerySync,
+  raiseTourQuery,
+
 
 
 

@@ -5436,7 +5436,8 @@ const getQueryTypes = async (req, res) => {
 //  fields: queryType (text, e.g. "Payment"), subject, description, raisedBy, raisedTo
 //  files : attachments (max 5, jpg/png/webp/pdf, 5 MB each)
 // ════════════════════════════════════════════════════════════════
-const raiseQuery = async (req, res) => {
+// via = "admin" (Ticket Launching) / "touradmin" (Ticket Landing)
+async function raiseQueryCore(req, res, via = "admin") {
     const files = getQueryFiles(req);
     let attachments = [];
 
@@ -5511,6 +5512,7 @@ const raiseQuery = async (req, res) => {
                     attachments,
                     raisedBy,
                     raisedTo,
+                    raisedVia: via,
                 });
             } catch (e) {
                 if (e?.code !== 11000 || attempt === 4) throw e; // duplicate number na thirumba try
@@ -5534,7 +5536,10 @@ const raiseQuery = async (req, res) => {
     } finally {
         removeTempFiles(files); // background la — reply ah late aakkadhu
     }
-};
+}
+
+// POST /api/touradmin/queries  — admin page (Ticket Launching)
+const raiseQuery = (req, res) => raiseQueryCore(req, res, "admin");
 
 // ════════════════════════════════════════════════════════════════
 //  ADMIN PAGE LIST + FILTERS
@@ -5693,7 +5698,7 @@ const updateQuery = async (req, res) => {
         if (!changes.length) {
             return res.status(200).json({ success: true, message: "Nothing changed", noChange: true });
         }
-        query.editHistory.push({ editedAt: new Date(), kind: "query", by: "touradmin", changes });
+        query.editHistory.push({ editedAt: new Date(), kind: "query", by: "admin", changes });
         query.editCount = query.editHistory.length;
 
         await query.save();
@@ -5728,7 +5733,7 @@ const updateQuery = async (req, res) => {
 //  REPLIES — common helpers (tourController um idha use pannum)
 // ════════════════════════════════════════════════════════════════
 
-// POST body: { message, staff? }   from = "touradmin" | "admin"
+// POST body: { message, staff? }   from = "admin" (Launching) | "touradmin" (Landing)
 async function saveQueryReply(req, res, from) {
     try {
         const { queryId } = req.params;
@@ -5848,7 +5853,7 @@ async function loadQueryReplies(req, res) {
 
 // ─── Tour admin side ──────────────────────────────────────────
 // POST /api/touradmin/queries/:queryId/replies     body: { message, staff? }
-const addTourAdminReply = (req, res) => saveQueryReply(req, res, "touradmin");
+const addTourAdminReply = (req, res) => saveQueryReply(req, res, "admin");
 
 // GET  /api/touradmin/queries/:queryId/replies
 const getTourAdminReplies = (req, res) => loadQueryReplies(req, res);
@@ -6053,10 +6058,10 @@ async function removeQueryReply(req, res, from) {
 }
 
 // PATCH  /api/touradmin/queries/:queryId/replies/:replyId     body: { message }
-const editTourAdminReply = (req, res) => editQueryReply(req, res, "touradmin");
+const editTourAdminReply = (req, res) => editQueryReply(req, res, "admin");
 
 // DELETE /api/touradmin/queries/:queryId/replies/:replyId
-const deleteTourAdminReply = (req, res) => removeQueryReply(req, res, "touradmin");
+const deleteTourAdminReply = (req, res) => removeQueryReply(req, res, "admin");
 
 // ════════════════════════════════════════════════════════════════
 //  SYNC CHECK — rendu page um auto-refresh aaga
@@ -6216,7 +6221,7 @@ const getEditHistory = async (req, res) => {
                     id: e._id,
                     editNo: i + 1,
                     kind: e.kind || "query",
-                    by: e.by || "touradmin",
+                    by: e.by || "admin",
                     editedAt: e.editedAt,
                     changes: e.changes || [],
                 }))
@@ -6240,7 +6245,7 @@ const getEditHistory = async (req, res) => {
 // ════════════════════════════════════════════════════════════════
 //  REOPEN — admin mattum
 //  PATCH /api/touradmin/queries/:queryId/reopen
-//  Close aana query → thirumba Open. Files, replies, edit history
+//  Close / Reject aana query → thirumba Open. Files, replies, edit history
 //  ellam apdiye irukum — status mattum maarum.
 // ════════════════════════════════════════════════════════════════
 const reopenQuery = async (req, res) => {
@@ -6278,6 +6283,7 @@ const reopenQuery = async (req, res) => {
         return res.status(500).json({ success: false, message: err.message });
     }
 };
+
 
 
 
@@ -6343,6 +6349,7 @@ export {
     deleteTourAdminReply,
     getTourAdminQuerySync,
     getEditHistory,
+    raiseQueryCore,
     reopenQuery,
     // tourController import pannum:
     fetchQueries,
@@ -6351,6 +6358,7 @@ export {
     editQueryReply,
     removeQueryReply,
     getQuerySync,
+
 
 
 

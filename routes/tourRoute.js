@@ -75,12 +75,13 @@ import {
   getAdminQuerySync,
   editAdminReply,
   deleteAdminReply,
+  raiseTourQuery,
 
   
 } from "../controllers/tourController.js";
 import authTour from "../middlewares/authTour.js";
 import { tourUpload } from "../middlewares/multer.js";
-import { paymentQrUpload, staffPhotoUpload } from "../middlewares/multer.js";
+import { paymentQrUpload, staffPhotoUpload, queryUpload } from "../middlewares/multer.js";
 import cancelBookingController from "../controllers/cancelController.js";
 import {
   createStaff, getAllStaff, getStaffById, updateStaff, deleteStaff,
@@ -241,6 +242,7 @@ tourRouter.delete('/staff/:id/delete', authTour, deleteStaff);
 
 tourRouter.get("/queries/sync", authTour, getAdminQuerySync);
 tourRouter.get("/queries", authTour, getTourQueries);
+tourRouter.post("/queries", authTour, queryUpload, raiseTourQuery);   // ← puthusu
 tourRouter.patch("/queries/:queryId/pickup", authTour, pickupQuery);
 tourRouter.patch("/queries/:queryId/processing", authTour, processQuery);
 tourRouter.patch("/queries/:queryId/close", authTour, closeQuery);
@@ -249,7 +251,6 @@ tourRouter.get("/queries/:queryId/replies", authTour, getAdminReplies);
 tourRouter.post("/queries/:queryId/replies", authTour, addAdminReply);
 tourRouter.patch("/queries/:queryId/replies/:replyId", authTour, editAdminReply);
 tourRouter.delete("/queries/:queryId/replies/:replyId", authTour, deleteAdminReply);
-
 
 
 

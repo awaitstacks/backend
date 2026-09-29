@@ -197,5 +197,4 @@ touradminRouter.get("/queries/:queryId/replies", authAdmin, getTourAdminReplies)
 touradminRouter.post("/queries/:queryId/replies", authAdmin, addTourAdminReply);
 touradminRouter.patch("/queries/:queryId/replies/:replyId", authAdmin, editTourAdminReply);
 touradminRouter.delete("/queries/:queryId/replies/:replyId", authAdmin, deleteTourAdminReply);
-
 export default touradminRouter;

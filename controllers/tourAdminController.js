@@ -5240,8 +5240,11 @@ const reopenEntireTrip = async (req, res) => {
 };
 
 
+//  QUERY LIST HELPERS — idhu rendu page kum common
+//  (tourController um idhai import panni use pannum)
+// ════════════════════════════════════════════════════════════════
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
+ 
 /**
  * Query params:
  *   ?queryType=Payment&status=open|pickup|processing|close|reject
@@ -5250,111 +5253,111 @@ const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
  *   &page=1&limit=20
  */
 function buildQueryFilter(q = {}) {
-    const filter = {};
-
-    // "payment" / "Payment" rendum match aagum
-    if (q.queryType?.trim()) {
-        filter.queryType = new RegExp(`^${escapeRegex(q.queryType.trim())}$`, "i");
+  const filter = {};
+ 
+  // "payment" / "Payment" rendum match aagum
+  if (q.queryType?.trim()) {
+    filter.queryType = new RegExp(`^${escapeRegex(q.queryType.trim())}$`, "i");
+  }
+  if (q.status && QUERY_STATUS.includes(q.status)) {
+    filter.status = q.status;
+  }
+  if (q.raisedBy && mongoose.isValidObjectId(q.raisedBy)) {
+    filter.raisedBy = new mongoose.Types.ObjectId(q.raisedBy);
+  }
+  if (q.raisedTo && mongoose.isValidObjectId(q.raisedTo)) {
+    filter.raisedTo = new mongoose.Types.ObjectId(q.raisedTo);
+  }
+  if (q.search?.trim()) {
+    const rx = new RegExp(escapeRegex(q.search.trim()), "i");
+    filter.$or = [{ ticketNo: rx }, { subject: rx }, { description: rx }];
+  }
+  if (q.fromDate || q.toDate) {
+    filter.createdAt = {};
+    if (q.fromDate) filter.createdAt.$gte = new Date(q.fromDate);
+    if (q.toDate) {
+      const end = new Date(q.toDate);
+      end.setHours(23, 59, 59, 999);
+      filter.createdAt.$lte = end;
     }
-    if (q.status && QUERY_STATUS.includes(q.status)) {
-        filter.status = q.status;
-    }
-    if (q.raisedBy && mongoose.isValidObjectId(q.raisedBy)) {
-        filter.raisedBy = new mongoose.Types.ObjectId(q.raisedBy);
-    }
-    if (q.raisedTo && mongoose.isValidObjectId(q.raisedTo)) {
-        filter.raisedTo = new mongoose.Types.ObjectId(q.raisedTo);
-    }
-    if (q.search?.trim()) {
-        const rx = new RegExp(escapeRegex(q.search.trim()), "i");
-        filter.$or = [{ ticketNo: rx }, { subject: rx }, { description: rx }];
-    }
-    if (q.fromDate || q.toDate) {
-        filter.createdAt = {};
-        if (q.fromDate) filter.createdAt.$gte = new Date(q.fromDate);
-        if (q.toDate) {
-            const end = new Date(q.toDate);
-            end.setHours(23, 59, 59, 999);
-            filter.createdAt.$lte = end;
-        }
-    }
-    return filter;
+  }
+  return filter;
 }
-
+ 
 /** List + pagination + status counts (filter tabs ku) */
 // ─── Ticket number: GVTKT001, GVTKT002 ... ───
 const TICKET_PREFIX = "GVTKT";
-const formatTicketNo = (seq) => `${TICKET_PREFIX}${String(seq).padStart(4, "0")}`;
-
+const formatTicketNo = (seq) => `${TICKET_PREFIX}${String(seq).padStart(3, "0")}`;
+ 
 const nextTicketSeq = async () => {
-    const last = await Query.findOne({ ticketSeq: { $exists: true } }).sort({ ticketSeq: -1 }).select("ticketSeq").lean();
-    return (last?.ticketSeq || 0) + 1;
+  const last = await Query.findOne({ ticketSeq: { $exists: true } }).sort({ ticketSeq: -1 }).select("ticketSeq").lean();
+  return (last?.ticketSeq || 0) + 1;
 };
-
+ 
 // Pazhaya queries ku number illana, created order la thaana podum (onre oru thadava)
 let ticketsBackfilled = false; // server start aana apram ore oru thadava check
 async function ensureTicketNumbers() {
-    if (ticketsBackfilled) return;
-    const missing = await Query.find({ ticketSeq: { $exists: false } }).sort({ createdAt: 1 }).select("_id").lean();
-    if (missing.length) {
-        let seq = (await nextTicketSeq()) - 1;
-        for (const m of missing) {
-            seq += 1;
-            await Query.updateOne({ _id: m._id, ticketSeq: { $exists: false } }, { $set: { ticketSeq: seq, ticketNo: formatTicketNo(seq) } });
-        }
+  if (ticketsBackfilled) return;
+  const missing = await Query.find({ ticketSeq: { $exists: false } }).sort({ createdAt: 1 }).select("_id").lean();
+  if (missing.length) {
+    let seq = (await nextTicketSeq()) - 1;
+    for (const m of missing) {
+      seq += 1;
+      await Query.updateOne({ _id: m._id, ticketSeq: { $exists: false } }, { $set: { ticketSeq: seq, ticketNo: formatTicketNo(seq) } });
     }
-    ticketsBackfilled = true;
+  }
+  ticketsBackfilled = true;
 }
-
+ 
 async function fetchQueries(reqQuery) {
-    await ensureTicketNumbers();
-    const filter = buildQueryFilter(reqQuery);
-    const page = Math.max(parseInt(reqQuery.page) || 1, 1);
-    const limit = Math.min(Math.max(parseInt(reqQuery.limit) || 20, 1), 100);
-
-    // Tab counts la status filter apply panna koodadhu
-    const { status, ...countFilter } = filter;
-
-    const [queries, total, counts, queryTypes] = await Promise.all([
-        Query.find(filter)
-            .select("-replies -editHistory") // replies / history thani API la varum
-            .populate("raisedBy", "-password")
-            .populate("raisedTo", "-password")
-            .sort({ createdAt: -1 })
-            .skip((page - 1) * limit)
-            .limit(limit)
-            .lean(),
-        Query.countDocuments(filter),
-        Query.aggregate([
-            { $match: countFilter },
-            { $group: { _id: "$status", count: { $sum: 1 } } },
-        ]),
-        // Type filter dropdown ku — ellaa types um (rendu page kum ore list)
-        fetchQueryTypes(),
-    ]);
-
-    const statusCounts = { open: 0, pickup: 0, processing: 0, close: 0, reject: 0 };
-    counts.forEach((c) => (statusCounts[c._id] = c.count));
-
-    return {
-        queries,
-        total,
-        page,
-        totalPages: Math.ceil(total / limit) || 1,
-        statusCounts,
-        queryTypes,
-    };
+  await ensureTicketNumbers();
+  const filter = buildQueryFilter(reqQuery);
+  const page = Math.max(parseInt(reqQuery.page) || 1, 1);
+  const limit = Math.min(Math.max(parseInt(reqQuery.limit) || 20, 1), 100);
+ 
+  // Tab counts la status filter apply panna koodadhu
+  const { status, ...countFilter } = filter;
+ 
+  const [queries, total, counts, queryTypes] = await Promise.all([
+    Query.find(filter)
+      .select("-replies -editHistory") // replies / history thani API la varum
+      .populate("raisedBy", "-password")
+      .populate("raisedTo", "-password")
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean(),
+    Query.countDocuments(filter),
+    Query.aggregate([
+      { $match: countFilter },
+      { $group: { _id: "$status", count: { $sum: 1 } } },
+    ]),
+    // Type filter dropdown ku — ellaa types um (rendu page kum ore list)
+    fetchQueryTypes(),
+  ]);
+ 
+  const statusCounts = { open: 0, pickup: 0, processing: 0, close: 0, reject: 0 };
+  counts.forEach((c) => (statusCounts[c._id] = c.count));
+ 
+  return {
+    queries,
+    total,
+    page,
+    totalPages: Math.ceil(total / limit) || 1,
+    statusCounts,
+    queryTypes,
+  };
 }
-
+ 
 /** Filter dropdown ku — DB la save aana types (case duplicate illama) + count */
 async function fetchQueryTypes() {
-    const rows = await Query.aggregate([
-        { $group: { _id: { $toLower: "$queryType" }, name: { $first: "$queryType" }, count: { $sum: 1 } } },
-        { $sort: { name: 1 } },
-    ]);
-    return rows.map((r) => ({ name: r.name, count: r.count }));
+  const rows = await Query.aggregate([
+    { $group: { _id: { $toLower: "$queryType" }, name: { $first: "$queryType" }, count: { $sum: 1 } } },
+    { $sort: { name: 1 } },
+  ]);
+  return rows.map((r) => ({ name: r.name, count: r.count }));
 }
-
+ 
 // ─── Attachment rules ───────────────────────────────────────────
 const QUERY_FILE_TYPES = {
     "image/jpeg": "image",
@@ -5364,22 +5367,22 @@ const QUERY_FILE_TYPES = {
 };
 const QUERY_MAX_FILES = 5;
 const QUERY_MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
-
+ 
 // multer upload.array("attachments") → array
 // multer upload.fields([{ name: "attachments" }]) → object
 const getQueryFiles = (req) =>
     Array.isArray(req.files) ? req.files : req.files?.attachments || [];
-
+ 
 const removeTempFiles = (files) =>
     Promise.allSettled(files.filter((f) => f.path).map((f) => fs.unlink(f.path)));
-
+ 
 const destroyAttachments = (attachments) =>
     Promise.allSettled(
         attachments.map((a) =>
             cloudinary.uploader.destroy(a.publicId, { resource_type: a.resourceType }),
         ),
     );
-
+ 
 // Image → "image", PDF → "raw" (raw la PDF direct ah open/download aagum)
 const uploadQueryAttachments = async (files) => {
     // Ellaa files um ORE NERAM la upload (munnadi onnu onna — romba late aachu)
@@ -5402,7 +5405,7 @@ const uploadQueryAttachments = async (files) => {
             };
         }),
     );
-
+ 
     const uploaded = results.filter((r) => r.status === "fulfilled").map((r) => r.value);
     const failed = results.find((r) => r.status === "rejected");
     if (failed) {
@@ -5412,7 +5415,7 @@ const uploadQueryAttachments = async (files) => {
     }
     return uploaded; // files order la dhaan varum
 };
-
+ 
 // ════════════════════════════════════════════════════════════════
 //  QUERY TYPES — thani model illa, Query collection la irundhe varum
 //  GET /api/touradmin/query-types  →  [{ name: "Payment", count: 4 }, ...]
@@ -5429,7 +5432,7 @@ const getQueryTypes = async (req, res) => {
         return res.status(500).json({ success: false, message: err.message });
     }
 };
-
+ 
 // ════════════════════════════════════════════════════════════════
 //  RAISE QUERY (text + image/pdf)
 //  POST /api/touradmin/queries        Content-Type: multipart/form-data
@@ -5440,10 +5443,10 @@ const getQueryTypes = async (req, res) => {
 async function raiseQueryCore(req, res, via = "admin") {
     const files = getQueryFiles(req);
     let attachments = [];
-
+ 
     try {
         const { queryType, subject, description, raisedBy, raisedTo } = req.body;
-
+ 
         // ── Field validation ──
         if (!queryType?.trim() || !subject?.trim() || !raisedBy || !raisedTo) {
             return res.status(400).json({
@@ -5462,7 +5465,7 @@ async function raiseQueryCore(req, res, via = "admin") {
                 message: "Raised by and raised to can't be the same staff",
             });
         }
-
+ 
         // ── File validation (upload pannura munnadiye) ──
         if (files.length > QUERY_MAX_FILES) {
             return res.status(400).json({
@@ -5484,7 +5487,7 @@ async function raiseQueryCore(req, res, via = "admin") {
                 message: `"${tooBig.originalname}" is larger than 5 MB`,
             });
         }
-
+ 
         // Type spelling check um file upload um ORE NERAM la (onnukkaga onnu wait pannadhu)
         // Already irukura type na adhe spelling use pannu ("payment" → "Payment")
         const typeInput = queryType.trim();
@@ -5497,7 +5500,7 @@ async function raiseQueryCore(req, res, via = "admin") {
         const finalType = existing ? existing.queryType : typeInput;
         // Raise pannum bodhu vara files ellam "Attachment 1"
         attachments = uploaded.map((a) => ({ ...a, set: 1 }));
-
+ 
         // GVTKT number — rendu per same time raise pannuna duplicate aagama retry
         let created;
         for (let attempt = 0; attempt < 5 && !created; attempt += 1) {
@@ -5518,7 +5521,7 @@ async function raiseQueryCore(req, res, via = "admin") {
                 if (e?.code !== 11000 || attempt === 4) throw e; // duplicate number na thirumba try
             }
         }
-
+ 
         // Thirumba DB la padikkama udane reply — page list ah refresh pannum
         return res.status(201).json({
             success: true,
@@ -5537,10 +5540,10 @@ async function raiseQueryCore(req, res, via = "admin") {
         removeTempFiles(files); // background la — reply ah late aakkadhu
     }
 }
-
+ 
 // POST /api/touradmin/queries  — admin page (Ticket Launching)
 const raiseQuery = (req, res) => raiseQueryCore(req, res, "admin");
-
+ 
 // ════════════════════════════════════════════════════════════════
 //  ADMIN PAGE LIST + FILTERS
 //  GET /api/touradmin/queries?queryType=&status=&raisedBy=&raisedTo=&search=&fromDate=&toDate=&page=&limit=
@@ -5554,7 +5557,7 @@ const getAdminQueries = async (req, res) => {
         return res.status(500).json({ success: false, message: err.message });
     }
 };
-
+ 
 // ════════════════════════════════════════════════════════════════
 //  UPDATE QUERY (edit)
 //  PATCH /api/touradmin/queries/:queryId     Content-Type: multipart/form-data
@@ -5567,10 +5570,12 @@ const getAdminQueries = async (req, res) => {
 //
 //  Close / Reject aana query ah edit panna mudiyadhu.
 // ════════════════════════════════════════════════════════════════
-const updateQuery = async (req, res) => {
+// by = "admin" (Ticket Launching) / "touradmin" (Ticket Landing)
+// onlyOwn = true na, avanga raise panna ticket ah mattum edit panna mudiyum
+async function updateQueryCore(req, res, by = "admin", onlyOwn = false) {
     const files = getQueryFiles(req);
     let newAttachments = [];
-
+ 
     try {
         const { queryId } = req.params;
         if (!mongoose.isValidObjectId(queryId)) {
@@ -5578,7 +5583,7 @@ const updateQuery = async (req, res) => {
                 .status(400)
                 .json({ success: false, message: "Invalid query ID" });
         }
-
+ 
         const query = await Query.findById(queryId);
         if (!query) {
             return res
@@ -5591,12 +5596,19 @@ const updateQuery = async (req, res) => {
                 message: `This query is ${query.status === "close" ? "closed" : "rejected"} and can't be edited`,
             });
         }
-
+ 
+        if (onlyOwn && (query.raisedVia || "admin") !== by) {
+            return res.status(403).json({
+                success: false,
+                message: "You can only edit tickets you raised",
+            });
+        }
+ 
         // ── Before snapshot (edit history ku) ──
         const before = editSnapshot(query);
-
+ 
         const { queryType, subject, description, raisedBy, raisedTo } = req.body;
-
+ 
         // ── Text fields ──
         if (queryType !== undefined) {
             const typeInput = String(queryType).trim();
@@ -5625,7 +5637,7 @@ const updateQuery = async (req, res) => {
         if (description !== undefined) {
             query.description = String(description).trim();
         }
-
+ 
         // ── Staff ──
         if (raisedBy !== undefined) {
             if (!mongoose.isValidObjectId(raisedBy)) {
@@ -5649,7 +5661,7 @@ const updateQuery = async (req, res) => {
                 message: "Raised by and raised to can't be the same staff",
             });
         }
-
+ 
         // ── Attachments: remove ──
         let removeIds = [];
         if (req.body.removeAttachmentIds) {
@@ -5665,7 +5677,7 @@ const updateQuery = async (req, res) => {
         }
         const removed = query.attachments.filter((a) => removeIds.includes(String(a._id)));
         const kept = query.attachments.filter((a) => !removeIds.includes(String(a._id)));
-
+ 
         // ── Attachments: add (validate before upload) ──
         if (kept.length + files.length > QUERY_MAX_FILES) {
             return res.status(400).json({
@@ -5687,30 +5699,30 @@ const updateQuery = async (req, res) => {
                 message: `"${tooBig.originalname}" is larger than 5 MB`,
             });
         }
-
+ 
         // Indha edit la vara puthu files → adutha attachment set (2, 3, ...)
         const nextSet = Math.max(0, ...query.attachments.map((a) => a.set || 1)) + 1;
         newAttachments = (await uploadQueryAttachments(files)).map((a) => ({ ...a, set: nextSet }));
         query.attachments = [...kept, ...newAttachments];
-
+ 
         // ── After snapshot → before / after changes ──
         const changes = await buildEditChanges(before, editSnapshot(query));
         if (!changes.length) {
             return res.status(200).json({ success: true, message: "Nothing changed", noChange: true });
         }
-        query.editHistory.push({ editedAt: new Date(), kind: "query", by: "admin", changes });
+        query.editHistory.push({ editedAt: new Date(), kind: "query", by, changes });
         query.editCount = query.editHistory.length;
-
+ 
         await query.save();
-
+ 
         // Save aana apram dhaan pazhaya files ah Cloudinary la irundhu delete
         if (removed.length) await destroyAttachments(removed);
-
+ 
         const updated = await Query.findById(query._id)
             .populate("raisedBy", "-password")
             .populate("raisedTo", "-password")
             .lean();
-
+ 
         return res.status(200).json({
             success: true,
             message: "Query updated successfully",
@@ -5727,19 +5739,22 @@ const updateQuery = async (req, res) => {
     } finally {
         await removeTempFiles(files);
     }
-};
-
+}
+ 
+// PATCH /api/touradmin/queries/:queryId  — admin raise panna ticket mattum
+const updateQuery = (req, res) => updateQueryCore(req, res, "admin", true);
+ 
 // ════════════════════════════════════════════════════════════════
 //  REPLIES — common helpers (tourController um idha use pannum)
 // ════════════════════════════════════════════════════════════════
-
+ 
 // POST body: { message, staff? }   from = "admin" (Launching) | "touradmin" (Landing)
 async function saveQueryReply(req, res, from) {
     try {
         const { queryId } = req.params;
         const message = String(req.body?.message || "").trim();
         const staff = req.body?.staff;
-
+ 
         if (!mongoose.isValidObjectId(queryId)) {
             return res
                 .status(400)
@@ -5766,10 +5781,10 @@ async function saveQueryReply(req, res, from) {
                 .status(400)
                 .json({ success: false, message: "Invalid staff ID" });
         }
-
+ 
         const now = new Date();
         const reply = { message, from, staff: staff || null, createdAt: now };
-
+ 
         // Close / Reject aana query ku reply panna mudiyadhu.
         // Oru single atomic update — rendu per same time la reply pannalum ok.
         const updated = await Query.findOneAndUpdate(
@@ -5784,7 +5799,7 @@ async function saveQueryReply(req, res, from) {
             .select("replies status replyCount lastReplyAt lastReplyFrom")
             .populate("replies.staff", "-password")
             .lean();
-
+ 
         if (!updated) {
             const exists = await Query.findById(queryId).select("status").lean();
             if (!exists) {
@@ -5797,7 +5812,7 @@ async function saveQueryReply(req, res, from) {
                 message: `This query is ${exists.status === "close" ? "closed" : "rejected"} — replies are closed`,
             });
         }
-
+ 
         return res.status(201).json({
             success: true,
             message: "Reply sent",
@@ -5812,7 +5827,7 @@ async function saveQueryReply(req, res, from) {
         return res.status(500).json({ success: false, message: err.message });
     }
 }
-
+ 
 // GET — oru query oda ellaa replies (pazhasu → puthusu)
 async function loadQueryReplies(req, res) {
     try {
@@ -5822,18 +5837,18 @@ async function loadQueryReplies(req, res) {
                 .status(400)
                 .json({ success: false, message: "Invalid query ID" });
         }
-
+ 
         const query = await Query.findById(queryId)
             .select("subject status replies replyCount lastReplyAt lastReplyFrom updatedAt")
             .populate("replies.staff", "-password")
             .lean();
-
+ 
         if (!query) {
             return res
                 .status(404)
                 .json({ success: false, message: "Query not found" });
         }
-
+ 
         return res.status(200).json({
             success: true,
             queryId: query._id,
@@ -5850,21 +5865,22 @@ async function loadQueryReplies(req, res) {
         return res.status(500).json({ success: false, message: err.message });
     }
 }
-
+ 
 // ─── Tour admin side ──────────────────────────────────────────
 // POST /api/touradmin/queries/:queryId/replies     body: { message, staff? }
 const addTourAdminReply = (req, res) => saveQueryReply(req, res, "admin");
-
+ 
 // GET  /api/touradmin/queries/:queryId/replies
 const getTourAdminReplies = (req, res) => loadQueryReplies(req, res);
-
+ 
 // ════════════════════════════════════════════════════════════════
 //  DELETE QUERY
 //  DELETE /api/touradmin/queries/:queryId
 //  Query + adhoda replies + Cloudinary files ellam remove aagum.
 //  Close / Reject aana query ah delete panna mudiyadhu.
 // ════════════════════════════════════════════════════════════════
-const deleteQuery = async (req, res) => {
+// onlyVia = "admin" / "touradmin" — adhe side raise panna ticket ah mattum delete panna mudiyum
+async function deleteQueryCore(req, res, onlyVia = null) {
     try {
         const { queryId } = req.params;
         if (!mongoose.isValidObjectId(queryId)) {
@@ -5872,28 +5888,34 @@ const deleteQuery = async (req, res) => {
                 .status(400)
                 .json({ success: false, message: "Invalid query ID" });
         }
-
+ 
         // Close / Reject aana query ah delete panna mudiyadhu (history ku)
-        const query = await Query.findOneAndDelete({
-            _id: queryId,
-            status: { $nin: ["close", "reject"] },
-        }).lean();
+        const match = { _id: queryId, status: { $nin: ["close", "reject"] } };
+        // Pazhaya queries la raisedVia illa — adhu admin raise pannadhu
+        if (onlyVia) match.raisedVia = onlyVia === "admin" ? { $in: ["admin", null] } : onlyVia;
+        const query = await Query.findOneAndDelete(match).lean();
         if (!query) {
-            const exists = await Query.findById(queryId).select("status").lean();
+            const exists = await Query.findById(queryId).select("status raisedVia").lean();
             if (!exists) {
                 return res
                     .status(404)
                     .json({ success: false, message: "Query not found" });
+            }
+            if (onlyVia && (exists.raisedVia || "admin") !== onlyVia) {
+                return res.status(403).json({
+                    success: false,
+                    message: "You can only delete tickets you raised",
+                });
             }
             return res.status(400).json({
                 success: false,
                 message: `This query is ${exists.status === "close" ? "closed" : "rejected"} and can't be deleted`,
             });
         }
-
+ 
         // DB la irundhu pona apram dhaan Cloudinary files remove
         if (query.attachments?.length) await destroyAttachments(query.attachments);
-
+ 
         return res.status(200).json({
             success: true,
             message: "Query deleted",
@@ -5903,22 +5925,25 @@ const deleteQuery = async (req, res) => {
         console.error("deleteQuery error:", err);
         return res.status(500).json({ success: false, message: err.message });
     }
-};
-
+}
+ 
+// DELETE /api/touradmin/queries/:queryId  — admin raise panna ticket mattum
+const deleteQuery = (req, res) => deleteQueryCore(req, res, "admin");
+ 
 // ════════════════════════════════════════════════════════════════
 //  REPLY EDIT / DELETE — common helpers
 //  Ovvoruthar um avanga anuppuna reply ah mattum dhaan maatha mudiyum.
 //  Close / Reject aana query la maatha mudiyadhu.
 // ════════════════════════════════════════════════════════════════
-
+ 
 const CLOSED_STATUS_TEXT = { close: "closed", reject: "rejected" };
-
+ 
 // PATCH body: { message }
 async function editQueryReply(req, res, from) {
     try {
         const { queryId, replyId } = req.params;
         const message = String(req.body?.message || "").trim();
-
+ 
         if (!mongoose.isValidObjectId(queryId) || !mongoose.isValidObjectId(replyId)) {
             return res.status(400).json({ success: false, message: "Invalid ID" });
         }
@@ -5933,7 +5958,7 @@ async function editQueryReply(req, res, from) {
                 message: "Reply can be at most 2000 characters",
             });
         }
-
+ 
         const query = await Query.findById(queryId).select("status replies editHistory editCount");
         if (!query) {
             return res
@@ -5946,7 +5971,7 @@ async function editQueryReply(req, res, from) {
                 message: `This query is ${CLOSED_STATUS_TEXT[query.status]} — replies can't be changed`,
             });
         }
-
+ 
         const reply = query.replies.id(replyId);
         if (!reply) {
             return res
@@ -5959,14 +5984,14 @@ async function editQueryReply(req, res, from) {
                 message: "You can only edit your own replies",
             });
         }
-
+ 
         const oldMessage = reply.message;
         if (oldMessage === message) {
             return res.status(200).json({ success: true, message: "Nothing changed", reply: reply.toObject() });
         }
         reply.message = message;
         reply.editedAt = new Date();
-
+ 
         // Edit history la reply before / after
         query.editHistory.push({
             editedAt: new Date(),
@@ -5976,7 +6001,7 @@ async function editQueryReply(req, res, from) {
         });
         query.editCount = query.editHistory.length;
         await query.save();
-
+ 
         return res.status(200).json({
             success: true,
             message: "Reply updated",
@@ -5990,14 +6015,14 @@ async function editQueryReply(req, res, from) {
         return res.status(500).json({ success: false, message: err.message });
     }
 }
-
+ 
 async function removeQueryReply(req, res, from) {
     try {
         const { queryId, replyId } = req.params;
         if (!mongoose.isValidObjectId(queryId) || !mongoose.isValidObjectId(replyId)) {
             return res.status(400).json({ success: false, message: "Invalid ID" });
         }
-
+ 
         const query = await Query.findById(queryId).select(
             "status replies replyCount lastReplyAt lastReplyFrom editHistory editCount",
         );
@@ -6012,7 +6037,7 @@ async function removeQueryReply(req, res, from) {
                 message: `This query is ${CLOSED_STATUS_TEXT[query.status]} — replies can't be changed`,
             });
         }
-
+ 
         const reply = query.replies.id(replyId);
         if (!reply) {
             return res
@@ -6025,10 +6050,10 @@ async function removeQueryReply(req, res, from) {
                 message: "You can only delete your own replies",
             });
         }
-
+ 
         const deletedMessage = reply.message;
         query.replies.pull(replyId); // ellaa mongoose version layum work aagum
-
+ 
         // Edit history la delete aana reply um save aagum
         query.editHistory.push({
             editedAt: new Date(),
@@ -6037,14 +6062,14 @@ async function removeQueryReply(req, res, from) {
             changes: [{ field: "reply", label: "Reply deleted", before: deletedMessage, after: "" }],
         });
         query.editCount = query.editHistory.length;
-
+ 
         // Count and "last reply" info ah thirumba calculate
         const last = query.replies[query.replies.length - 1];
         query.replyCount = query.replies.length;
         query.lastReplyAt = last ? last.createdAt : null;
         query.lastReplyFrom = last ? last.from : null;
         await query.save();
-
+ 
         return res.status(200).json({
             success: true,
             message: "Reply deleted",
@@ -6056,13 +6081,13 @@ async function removeQueryReply(req, res, from) {
         return res.status(500).json({ success: false, message: err.message });
     }
 }
-
+ 
 // PATCH  /api/touradmin/queries/:queryId/replies/:replyId     body: { message }
 const editTourAdminReply = (req, res) => editQueryReply(req, res, "admin");
-
+ 
 // DELETE /api/touradmin/queries/:queryId/replies/:replyId
 const deleteTourAdminReply = (req, res) => removeQueryReply(req, res, "admin");
-
+ 
 // ════════════════════════════════════════════════════════════════
 //  SYNC CHECK — rendu page um auto-refresh aaga
 //  GET /api/touradmin/queries/sync   |   GET /api/tour/queries/sync
@@ -6084,7 +6109,7 @@ async function getQuerySync(req, res) {
         ]);
         const total = info?.total || 0;
         const lastUpdatedAt = info?.lastUpdatedAt || null;
-
+ 
         return res.status(200).json({
             success: true,
             total,
@@ -6097,10 +6122,10 @@ async function getQuerySync(req, res) {
         return res.status(500).json({ success: false, message: err.message });
     }
 }
-
+ 
 // GET /api/touradmin/queries/sync
 const getTourAdminQuerySync = (req, res) => getQuerySync(req, res);
-
+ 
 // ════════════════════════════════════════════════════════════════
 //  STAFF LIST — raise form la "Raised by / Raised to" dropdown ku
 //  GET /api/touradmin/staff/all
@@ -6120,7 +6145,7 @@ const getStaffForQueries = async (req, res) => {
         return res.status(500).json({ success: false, message: err.message });
     }
 };
-
+ 
 // ════════════════════════════════════════════════════════════════
 //  EDIT HISTORY — before / after
 // ════════════════════════════════════════════════════════════════
@@ -6132,7 +6157,7 @@ const EDIT_LABELS = {
     raisedTo: "To (raised to)",
     attachments: "Attachments",
 };
-
+ 
 function editSnapshot(query) {
     return {
         queryType: query.queryType || "",
@@ -6145,12 +6170,12 @@ function editSnapshot(query) {
             .join(", "),
     };
 }
-
+ 
 async function buildEditChanges(before, after) {
     const changes = Object.keys(EDIT_LABELS)
         .filter((f) => (before[f] || "") !== (after[f] || ""))
         .map((f) => ({ field: f, label: EDIT_LABELS[f], before: before[f] || "", after: after[f] || "" }));
-
+ 
     // Staff ID ku badhila peru save pannuvom — history padikka easy
     const staffChanges = changes.filter((c) => c.field === "raisedBy" || c.field === "raisedTo");
     if (staffChanges.length) {
@@ -6167,7 +6192,7 @@ async function buildEditChanges(before, after) {
     }
     return changes;
 }
-
+ 
 // GET /api/touradmin/queries/edit-history?page=1&limit=10&search=&queryId=
 // Ticket vaariya group — ore ticket oda ellaa edits um (query edit, reply edit,
 // reply delete) ore item la, puthusu mudhal la. Latest ah edit aana ticket mela.
@@ -6175,7 +6200,7 @@ const getEditHistory = async (req, res) => {
     try {
         const page = Math.max(parseInt(req.query.page) || 1, 1);
         const limit = Math.min(Math.max(parseInt(req.query.limit) || 10, 1), 50);
-
+ 
         const match = { "editHistory.0": { $exists: true } };
         if (req.query.search?.trim()) {
             const rx = new RegExp(escapeRegex(req.query.search.trim()), "i");
@@ -6184,7 +6209,7 @@ const getEditHistory = async (req, res) => {
         if (req.query.queryId && mongoose.isValidObjectId(req.query.queryId)) {
             match._id = new mongoose.Types.ObjectId(req.query.queryId);
         }
-
+ 
         const [result] = await Query.aggregate([
             { $match: match },
             {
@@ -6206,7 +6231,7 @@ const getEditHistory = async (req, res) => {
                 },
             },
         ]);
-
+ 
         const items = (result?.items || []).map((q) => ({
             queryId: q._id,
             ticketNo: q.ticketNo,
@@ -6227,7 +6252,7 @@ const getEditHistory = async (req, res) => {
                 }))
                 .reverse(),
         }));
-
+ 
         const total = result?.total?.[0]?.n || 0;
         return res.status(200).json({
             success: true,
@@ -6241,7 +6266,7 @@ const getEditHistory = async (req, res) => {
         return res.status(500).json({ success: false, message: err.message });
     }
 };
-
+ 
 // ════════════════════════════════════════════════════════════════
 //  REOPEN — admin mattum
 //  PATCH /api/touradmin/queries/:queryId/reopen
@@ -6254,7 +6279,7 @@ const reopenQuery = async (req, res) => {
         if (!mongoose.isValidObjectId(queryId)) {
             return res.status(400).json({ success: false, message: "Invalid query ID" });
         }
-
+ 
         // Atomic — close la irundha mattum dhaan open aagum
         const updated = await Query.findOneAndUpdate(
             { _id: queryId, status: { $in: ["close", "reject"] } },
@@ -6265,7 +6290,7 @@ const reopenQuery = async (req, res) => {
             .populate("raisedBy", "-password")
             .populate("raisedTo", "-password")
             .lean();
-
+ 
         if (!updated) {
             const current = await Query.findById(queryId).select("status").lean();
             if (!current) {
@@ -6276,7 +6301,7 @@ const reopenQuery = async (req, res) => {
                 message: "Only closed or rejected queries can be reopened",
             });
         }
-
+ 
         return res.status(200).json({ success: true, message: "Query reopened", query: updated });
     } catch (err) {
         console.error("reopenQuery error:", err);
@@ -6350,6 +6375,8 @@ export {
     getTourAdminQuerySync,
     getEditHistory,
     raiseQueryCore,
+    updateQueryCore,
+    deleteQueryCore,
     reopenQuery,
     // tourController import pannum:
     fetchQueries,
@@ -6358,6 +6385,7 @@ export {
     editQueryReply,
     removeQueryReply,
     getQuerySync,
+
 
 
 

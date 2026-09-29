@@ -22,6 +22,8 @@ import {
   removeQueryReply,
   getQuerySync,
   raiseQueryCore,
+  updateQueryCore,
+  deleteQueryCore,
 
 } from "./tourAdminController.js";
 
@@ -7015,6 +7017,14 @@ const getAdminQuerySync = (req, res) => getQuerySync(req, res);
 // Tour admin raise panna query — raisedVia: "touradmin"
 const raiseTourQuery = (req, res) => raiseQueryCore(req, res, "touradmin");
 
+// PATCH /api/tour/queries/:queryId   (multipart/form-data — admin edit madhiriye)
+// Tour admin raise panna ticket ah mattum edit panna mudiyum
+const updateTourQuery = (req, res) => updateQueryCore(req, res, "touradmin", true);
+
+// DELETE /api/tour/queries/:queryId
+// Tour admin raise panna ticket ah mattum delete panna mudiyum
+const deleteTourQuery = (req, res) => deleteQueryCore(req, res, "touradmin");
+
 export {
   tourList,
   loginTour,
@@ -7100,6 +7110,9 @@ export {
   deleteAdminReply,
   getAdminQuerySync,
   raiseTourQuery,
+  updateTourQuery,
+  deleteTourQuery,
+
 
 
 

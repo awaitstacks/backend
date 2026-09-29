@@ -817,7 +817,7 @@ const getAllStaff = async (req, res) => {
     const staff = await staffModel
       .find()
       .collation({ locale: "en", strength: 2 }) // case-insensitive A-Z
-      .sort({ fullName: 1 });
+      .sort({ employeeId: 1 });
     return res.status(200).json({ success: true, data: staff });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });

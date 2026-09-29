@@ -6137,7 +6137,7 @@ const getStaffForQueries = async (req, res) => {
             // "Inactive" illadha ellarum — status field illadha pazhaya staff um varuvanga
             .find({ status: { $ne: "Inactive" } })
             .select("fullName employeeId designation department staffType photo")
-            .sort({ fullName: 1 })
+            .sort({ employeeId: 1 })
             .lean();
         return res.status(200).json({ success: true, count: staff.length, data: staff });
     } catch (err) {

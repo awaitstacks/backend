@@ -78,16 +78,21 @@ import {
   raiseTourQuery,
   updateTourQuery,
   deleteTourQuery,
+  getAdminCreatedBookings,
+  adminAddBooking,
+  adminCancelTraveller,
 
-  
+
 } from "../controllers/tourController.js";
 import authTour from "../middlewares/authTour.js";
 import { tourUpload } from "../middlewares/multer.js";
-import { paymentQrUpload, staffPhotoUpload, queryUpload } from "../middlewares/multer.js";
+import { paymentQrUpload, staffPhotoUpload, queryUpload, aadhaarUpload, paymentScreenshotUpload } from "../middlewares/multer.js";
 import cancelBookingController from "../controllers/cancelController.js";
+import { extractAadhaar, uploadPaymentScreenshot } from "../controllers/aadhaarController.js";
 import {
   createStaff, getAllStaff, getStaffById, updateStaff, deleteStaff,
 } from "../controllers/staffController.js";
+
 import { get } from "mongoose";
 
 const tourRouter = express.Router();
@@ -120,7 +125,7 @@ tourRouter.post("/update-tour-balance/:tnr", authTour, updateTourBalance);
 tourRouter.post("/update-tour-advance/:tnr", authTour, updateTourAdvance);
 
 tourRouter.put("/mark-modify-receipt", authTour, updateModifyReceipt); // New route
-tourRouter.get("/view-booking-cancel/:tnr", viewBooking); 
+tourRouter.get("/view-booking-cancel/:tnr", viewBooking);
 tourRouter.get("/invoice/:tnr", getBookingInvoice);// New route
 tourRouter.put("/invoice/:tnr", updateBookingInvoice);
 tourRouter.delete("/invoice/:tnr", deleteBookingInvoice);
@@ -256,6 +261,12 @@ tourRouter.get("/queries/:queryId/replies", authTour, getAdminReplies);
 tourRouter.post("/queries/:queryId/replies", authTour, addAdminReply);
 tourRouter.patch("/queries/:queryId/replies/:replyId", authTour, editAdminReply);
 tourRouter.delete("/queries/:queryId/replies/:replyId", authTour, deleteAdminReply);
+
+tourRouter.post("/ocr/aadhaar", authTour, aadhaarUpload, extractAadhaar);
+tourRouter.post("/ocr/payment-screenshot", authTour, paymentScreenshotUpload, uploadPaymentScreenshot);
+tourRouter.get("/bookings/admin-created", authTour, getAdminCreatedBookings);
+tourRouter.post("/bookings", authTour, adminAddBooking);
+tourRouter.post("/cancel-traveller", authTour, adminCancelTraveller);
 
 
 

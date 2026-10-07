@@ -265,6 +265,11 @@ const manageBookingSchema = new mongoose.Schema({
       ],
       staffRemarks: { type: String },
       remarks: { type: String },
+      aadhaarId: { type: mongoose.Schema.Types.ObjectId, ref: "aadhaar", default: null },
+      isCoTraveller: { type: Boolean, default: false },
+      addedBy: { type: String, enum: ["user", "admin"], default: "user" },
+      addedPostBooking: { type: Boolean, default: false },
+
       cancelled: {
         byAdmin: { type: Boolean, default: false },
         byTraveller: { type: Boolean, default: false },

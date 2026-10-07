@@ -14,6 +14,8 @@ import enquiryModel from "../models/enquiryModel.js";
 import { buildInvoiceView, currencyRound } from "./invoiceView.js";
 import invoiceModel from "../models/invoiceModel.js"; // ← the new separate model
 import Query from "../models/queryModel.js";
+import aadhaarModel from "../models/aadhaarModel.js"; // add to top imports
+
 import {
   fetchQueries,
   saveQueryReply,
@@ -595,6 +597,278 @@ const bookingsTour = async (req, res) => {
   }
 };
 
+// ↓ ADD HERE — "My Bookings" for Tour Admin: lists admin-created
+// bookings across ALL tours at once (bookingsTour above needs one
+// tourId picked first — this is the all-tours version, same idea as
+// a customer's "My Bookings" page).
+const getAdminCreatedBookings = async (req, res) => {
+  try {
+    const bookings = await tourBookingModel
+      .find({ createdBy: "admin" })
+      .sort({ bookingDate: -1 })
+      .lean();
+
+    res.status(200).json({ success: true, bookings });
+  } catch (error) {
+    console.error("getAdminCreatedBookings error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch admin-created bookings",
+      error: error.message,
+    });
+  }
+};
+async function findOrCreateWalkInUser({ firstName, lastName, phone, email }) {
+  let user = await userModel.findOne({
+    $or: [{ phone }, ...(email ? [{ email }] : [])],
+  });
+  if (user) return user;
+
+  const randomPassword = await bcrypt.hash((phone || "x") + Date.now(), 10);
+  user = await userModel.create({
+    name: `${firstName} ${lastName}`.trim(),
+    email: email || `walkin_${phone}@gvtourplanners.local`,
+    phone,
+    password: randomPassword,
+  });
+  return user;
+}
+
+// ───────────────────────────────────────────────
+// POST /api/tour/bookings — admin-created walk-in booking
+// ───────────────────────────────────────────────
+const adminAddBooking = async (req, res) => {
+  try {
+    const { tourId, travellers = [], billingAddress, bookingType, contact, paymentScreenshots } = req.body;
+
+    const mobile = (contact?.mobile || "").trim();
+    if (!mobile || !/^[\d+\-\s()]{7,25}$/.test(mobile)) {
+      return res.status(400).json({ success: false, message: "Valid contact mobile number is required" });
+    }
+    if (!contact?.email || !/.+@.+\..+/.test(contact.email)) {
+      return res.status(400).json({ success: false, message: "Valid contact email is required" });
+    }
+    if (!tourId) return res.status(400).json({ success: false, message: "Tour ID is required" });
+    if (!Array.isArray(travellers) || travellers.length === 0) {
+      return res.status(400).json({ success: false, message: "At least one traveller is required" });
+    }
+
+    const tour = await tourModel.findById(tourId);
+    if (!tour) return res.status(404).json({ success: false, message: "Tour not found" });
+
+    let totalAdvance = 0, totalBalance = 0;
+    const updatedTravellers = [];
+
+    for (const trav of travellers) {
+      const age = Number(trav.age);
+      if (isNaN(age) || age < 1 || (age >= 1 && age <= 5)) {
+        return res.status(400).json({ success: false, message: `Invalid age for traveller ${trav.firstName || "Unknown"}. Age must be greater than 5.` });
+      }
+      if (!trav.firstName?.trim() || !trav.lastName?.trim()) {
+        return res.status(400).json({ success: false, message: "First name and last name are required for every traveller (as per Aadhaar)." });
+      }
+      if (!["main", "variant"].includes(trav.packageType)) {
+        return res.status(400).json({ success: false, message: `Invalid package type for traveller: ${trav.firstName}` });
+      }
+
+      let selectedPackage = tour;
+      if (trav.packageType === "variant") {
+        selectedPackage = tour.variantPackage?.[trav.variantPackageIndex];
+        if (!selectedPackage) return res.status(400).json({ success: false, message: `Variant package not found for traveller: ${trav.firstName}` });
+      }
+
+      const validBoarding = selectedPackage.boardingPoints?.find((bp) => bp.stationCode === trav.boardingPoint?.stationCode);
+      if (!validBoarding) return res.status(400).json({ success: false, message: `Invalid boarding point for traveller: ${trav.firstName}` });
+      const validDeboarding = selectedPackage.deboardingPoints?.find((dp) => dp.stationCode === trav.deboardingPoint?.stationCode);
+      if (!validDeboarding) return res.status(400).json({ success: false, message: `Invalid deboarding point for traveller: ${trav.firstName}` });
+
+      let travellerAdvance = 0, travellerBalance = 0;
+      if (age >= 11) {
+        travellerAdvance = Number(selectedPackage.advanceAmount?.adult) || 0;
+        if (trav.sharingType === "double") travellerBalance = Number(selectedPackage.balanceDouble) || 0;
+        else if (trav.sharingType === "triple") travellerBalance = Number(selectedPackage.balanceTriple) || 0;
+      } else if (age >= 6 && age <= 10) {
+        travellerAdvance = Number(selectedPackage.advanceAmount?.child) || 0;
+        if (trav.sharingType === "withBerth") travellerBalance = Number(selectedPackage.balanceChildWithBerth) || 0;
+        else if (trav.sharingType === "withoutBerth") travellerBalance = Number(selectedPackage.balanceChildWithoutBerth) || 0;
+      }
+
+      const flatAddonPrice = Number(trav.selectedAddon?.price) || 0;
+      travellerAdvance += flatAddonPrice;
+      const legAddons = Array.isArray(trav.selectedAddons) ? trav.selectedAddons : [];
+      travellerAdvance += legAddons.reduce((s, a) => s + (Number(a.amount) || 0), 0);
+
+      totalAdvance += travellerAdvance;
+      totalBalance += travellerBalance;
+
+      updatedTravellers.push({
+        title: trav.title || "Mr",
+        firstName: trav.firstName.trim(),
+        lastName: trav.lastName.trim(),
+        age, gender: trav.gender, sharingType: trav.sharingType,
+        packageType: trav.packageType,
+        variantPackageIndex: trav.packageType === "variant" ? trav.variantPackageIndex : null,
+        boardingPoint: { stationCode: validBoarding.stationCode, stationName: validBoarding.stationName },
+        deboardingPoint: { stationCode: validDeboarding.stationCode, stationName: validDeboarding.stationName },
+        selectedAddon: trav.selectedAddon || null,
+        selectedAddons: legAddons,
+        remarks: trav.remarks || null,
+        // address/phone REMOVED — booking-level billingAddress/contact only
+        isCoTraveller: false,
+        addedBy: "admin",
+        addedPostBooking: false,
+        _aadhaarPayload: trav.aadhaar || null, // stripped before save
+      });
+    }
+
+    // TNR — identical scheme to addToTrolly
+    let tnr, attempts = 0;
+    const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ", digits = "0123456789";
+    while (attempts < 10) {
+      tnr = letters[Math.floor(Math.random() * 26)] + letters[Math.floor(Math.random() * 26)]
+        + digits[Math.floor(Math.random() * 10)] + digits[Math.floor(Math.random() * 10)]
+        + letters[Math.floor(Math.random() * 26)] + letters[Math.floor(Math.random() * 26)];
+      if (!(await tourBookingModel.exists({ tnr }))) break;
+      attempts++;
+    }
+    if (attempts >= 10) return res.status(503).json({ success: false, message: "Unable to generate unique booking reference." });
+
+    const aadhaarPayloads = updatedTravellers.map((t) => t._aadhaarPayload);
+    updatedTravellers.forEach((t) => delete t._aadhaarPayload);
+
+    // ✅ FIX: resolve/create the walk-in user BEFORE building the booking
+    const primaryTraveller = updatedTravellers[0];
+    const walkInUser = await findOrCreateWalkInUser({
+      firstName: primaryTraveller.firstName,
+      lastName: primaryTraveller.lastName,
+      phone: mobile,       // ✅ matches userModel's real field name
+      email: contact.email,
+    });
+
+    const newBooking = new tourBookingModel({
+      userId: walkInUser._id,   // ✅ required:true now satisfied
+      tourId, tnr,
+      tourData: { id: tour._id, title: tour.title, titleImage: tour.titleImage, duration: tour.duration, price: tour.price },
+      travellers: updatedTravellers,
+      billingAddress: billingAddress || {},
+      contact: { email: contact.email, mobile },
+      bookingType: bookingType || "offline",
+      payment: { advance: { amount: totalAdvance }, balance: { amount: totalBalance } },
+      bookingDate: new Date(),
+      createdBy: "admin",
+    });
+    await newBooking.save();
+
+    // Aadhaar docs, now that travellers have real _ids
+    await Promise.all(newBooking.travellers.map(async (t, i) => {
+      const payload = aadhaarPayloads[i];
+      if (!payload?.front?.url) return;
+      const frontDoc = await aadhaarModel.create({
+        tnr, travellerId: t._id, type: "aadhaarFront", isCoTraveller: false,
+        url: payload.front.url, ocrText: payload.front.ocrText, parsed: payload.parsed || {}, uploadedBy: "admin",
+      });
+      if (payload.back?.url) {
+        await aadhaarModel.create({
+          tnr, travellerId: t._id, type: "aadhaarBack", isCoTraveller: false,
+          url: payload.back.url, ocrText: payload.back.ocrText, parsed: payload.parsed || {}, uploadedBy: "admin",
+        });
+      }
+      await tourBookingModel.updateOne({ _id: newBooking._id, "travellers._id": t._id }, { $set: { "travellers.$.aadhaarId": frontDoc._id } });
+    }));
+
+    // Payment screenshots
+    const paymentIds = {};
+    if (paymentScreenshots) {
+      for (const slot of ["advance", "balance", "partial"]) {
+        const shot = paymentScreenshots[slot];
+        if (!shot?.url) continue;
+        const doc = await aadhaarModel.create({
+          tnr, type: `payment${slot[0].toUpperCase()}${slot.slice(1)}`,
+          url: shot.url, amount: shot.amount ?? null, uploadedBy: "admin",
+        });
+        paymentIds[slot] = doc._id;
+      }
+      if (Object.keys(paymentIds).length) {
+        await tourBookingModel.updateOne({ _id: newBooking._id }, { $set: { paymentScreenshots: paymentIds } });
+      }
+    }
+
+    return res.status(201).json({ success: true, message: "Booking created successfully", booking: newBooking });
+  } catch (error) {
+    console.error("adminAddBooking error:", error);
+    return res.status(500).json({ success: false, message: "Internal server error", error: error.message });
+  }
+};
+
+
+// Admin-side cancel traveller — for admin-created (walk-in) bookings.
+// Unlike the customer cancelTraveller (which only sets byTraveller as a
+// "request" that admin later approves), this is a DIRECT admin action —
+// sets byAdmin = true straight away, matching the existing
+// "Cancelled/Rejected" bucket definition used everywhere else:
+//   byAdmin = true AND byTraveller ≠ true  → Rejected by Admin
+const adminCancelTraveller = async (req, res) => {
+  try {
+    const { tnr, travellerId } = req.body;
+
+    if (!tnr || !travellerId) {
+      return res.status(400).json({
+        success: false,
+        message: "tnr and travellerId are required",
+      });
+    }
+
+    const bookingData = await tourBookingModel.findOne({
+      tnr: tnr.trim().toUpperCase(),
+    });
+    if (!bookingData) {
+      return res.status(404).json({
+        success: false,
+        message: "Booking not found with this TNR",
+      });
+    }
+
+    const travellerIndex = bookingData.travellers.findIndex(
+      (traveller) => traveller._id.toString() === String(travellerId),
+    );
+    if (travellerIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        message: "Traveller not found in this booking",
+      });
+    }
+
+    const traveller = bookingData.travellers[travellerIndex];
+
+    if (traveller.cancelled?.byAdmin) {
+      return res.status(400).json({
+        success: false,
+        message: "Traveller has already been cancelled",
+      });
+    }
+
+    traveller.cancelled = {
+      ...traveller.cancelled,
+      byAdmin: true,
+      cancelledAt: new Date(),
+    };
+
+    await bookingData.save();
+
+    return res.status(200).json({
+      success: true,
+      message: `Traveller cancelled: ${traveller.firstName} ${traveller.lastName}`,
+      tnr: bookingData.tnr,
+      travellerId: traveller._id,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "An unexpected error occurred",
+      error: error.message,
+    });
+  }
+};
 
 const bookingComplete = async (req, res) => {
   try {
@@ -7029,6 +7303,9 @@ export {
   tourList,
   loginTour,
   bookingsTour,
+  getAdminCreatedBookings,
+  adminAddBooking, 
+  adminCancelTraveller, 
   bookingComplete,
   tourDashboard,
   tourProfile,

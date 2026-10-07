@@ -313,4 +313,67 @@ const queryUpload = multer({
   limits: { fileSize: 10 * 1024 * 1024 },
 }).fields([{ name: "attachments", maxCount: 5 }]);
 
-export { upload, tourUpload, paymentQrUpload, staffPhotoUpload, queryUpload };
+// ────────────────────────────────────────────────
+// Dedicated multer for Aadhaar front/back uploads – auto-create folder
+// ────────────────────────────────────────────────
+const aadhaarDir = "uploads/temp/aadhaar/";
+
+if (!fs.existsSync(aadhaarDir)) {
+  fs.mkdirSync(aadhaarDir, { recursive: true });
+  console.log(`Created missing upload folder: ${aadhaarDir}`);
+}
+
+const aadhaarStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, aadhaarDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.originalname)}`;
+    cb(null, uniqueName);
+  },
+});
+
+const aadhaarFileFilter = (req, file, cb) => {
+  if (file.mimetype.startsWith("image/")) {
+    cb(null, true);
+  } else {
+    cb(new Error("Only image files are allowed for Aadhaar upload"), false);
+  }
+};
+
+const aadhaarUpload = multer({
+  storage: aadhaarStorage,
+  fileFilter: aadhaarFileFilter,
+  limits: { fileSize: 8 * 1024 * 1024 },
+}).fields([
+  { name: "front", maxCount: 1 },
+  { name: "back", maxCount: 1 },
+]);
+
+// ────────────────────────────────────────────────
+// Dedicated multer for payment screenshot uploads – auto-create folder
+// ────────────────────────────────────────────────
+const paymentScreenshotDir = "uploads/temp/payment-screenshot/";
+
+if (!fs.existsSync(paymentScreenshotDir)) {
+  fs.mkdirSync(paymentScreenshotDir, { recursive: true });
+  console.log(`Created missing upload folder: ${paymentScreenshotDir}`);
+}
+
+const paymentScreenshotStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, paymentScreenshotDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.originalname)}`;
+    cb(null, uniqueName);
+  },
+});
+
+const paymentScreenshotUpload = multer({
+  storage: paymentScreenshotStorage,
+  fileFilter: aadhaarFileFilter, // images only
+  limits: { fileSize: 8 * 1024 * 1024 },
+}).single("screenshot");
+
+export { upload, tourUpload, paymentQrUpload, staffPhotoUpload, queryUpload, aadhaarUpload, paymentScreenshotUpload };

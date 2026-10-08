@@ -88,7 +88,7 @@ import authTour from "../middlewares/authTour.js";
 import { tourUpload } from "../middlewares/multer.js";
 import { paymentQrUpload, staffPhotoUpload, queryUpload, aadhaarUpload, paymentScreenshotUpload } from "../middlewares/multer.js";
 import cancelBookingController from "../controllers/cancelController.js";
-import { extractAadhaar, uploadPaymentScreenshot } from "../controllers/aadhaarController.js";
+import { extractAadhaar, uploadPaymentScreenshot, saveBookingNotes } from "../controllers/aadhaarController.js";
 import {
   createStaff, getAllStaff, getStaffById, updateStaff, deleteStaff,
 } from "../controllers/staffController.js";
@@ -267,6 +267,8 @@ tourRouter.post("/ocr/payment-screenshot", authTour, paymentScreenshotUpload, up
 tourRouter.get("/bookings/admin-created", authTour, getAdminCreatedBookings);
 tourRouter.post("/bookings", authTour, adminAddBooking);
 tourRouter.post("/cancel-traveller", authTour, adminCancelTraveller);
+tourRouter.post("/ocr/booking-notes", authTour, saveBookingNotes);
+
 
 
 

@@ -15,6 +15,8 @@ import { buildInvoiceView, currencyRound } from "./invoiceView.js";
 import invoiceModel from "../models/invoiceModel.js"; // ← the new separate model
 import Query from "../models/queryModel.js";
 import aadhaarModel from "../models/aadhaarModel.js"; // add to top imports
+import userModel from "../models/userModel.js";
+import bcrypt from "bcrypt";
 
 import {
   fetchQueries,
@@ -746,7 +748,13 @@ const adminAddBooking = async (req, res) => {
     });
 
     const newBooking = new tourBookingModel({
-      userId: walkInUser._id,   // ✅ required:true now satisfied
+      userId: walkInUser._id,
+      userData: {
+        id: walkInUser._id,
+        name: walkInUser.name,
+        email: walkInUser.email,
+        phone: walkInUser.phone,
+      },
       tourId, tnr,
       tourData: { id: tour._id, title: tour.title, titleImage: tour.titleImage, duration: tour.duration, price: tour.price },
       travellers: updatedTravellers,
@@ -756,8 +764,7 @@ const adminAddBooking = async (req, res) => {
       payment: { advance: { amount: totalAdvance }, balance: { amount: totalBalance } },
       bookingDate: new Date(),
       createdBy: "admin",
-    });
-    await newBooking.save();
+    }); await newBooking.save();
 
     // Aadhaar docs, now that travellers have real _ids
     await Promise.all(newBooking.travellers.map(async (t, i) => {
@@ -840,16 +847,16 @@ const adminCancelTraveller = async (req, res) => {
 
     const traveller = bookingData.travellers[travellerIndex];
 
-    if (traveller.cancelled?.byAdmin) {
+    if (traveller.cancelled?.byTraveller) {
       return res.status(400).json({
         success: false,
-        message: "Traveller has already been cancelled",
+        message: "Cancellation already requested for this traveller",
       });
     }
 
     traveller.cancelled = {
       ...traveller.cancelled,
-      byAdmin: true,
+      byTraveller: true,
       cancelledAt: new Date(),
     };
 
@@ -857,7 +864,7 @@ const adminCancelTraveller = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: `Traveller cancelled: ${traveller.firstName} ${traveller.lastName}`,
+      message: `Cancellation requested for traveller: ${traveller.firstName} ${traveller.lastName}`,
       tnr: bookingData.tnr,
       travellerId: traveller._id,
     });
@@ -7304,8 +7311,8 @@ export {
   loginTour,
   bookingsTour,
   getAdminCreatedBookings,
-  adminAddBooking, 
-  adminCancelTraveller, 
+  adminAddBooking,
+  adminCancelTraveller,
   bookingComplete,
   tourDashboard,
   tourProfile,

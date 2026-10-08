@@ -1,5 +1,6 @@
 import { v2 as cloudinary } from "cloudinary";
 import { createWorker } from "tesseract.js";
+import aadhaarModel from "../models/aadhaarModel.js";
 
 let workerPromise;
 function getWorker() {
@@ -101,5 +102,31 @@ export const uploadPaymentScreenshot = async (req, res) => {
   } catch (error) {
     console.error("uploadPaymentScreenshot error:", error);
     return res.status(500).json({ success: false, message: "Upload failed.", error: error.message });
+  }
+};
+
+export const saveBookingNotes = async (req, res) => {
+  try {
+    const { tourId, packageType, boardingPoint, deboardingPoint, addons, remarks } = req.body;
+ 
+    if (!tourId) {
+      return res.status(400).json({ success: false, message: "tourId is required" });
+    }
+ 
+    const doc = await aadhaarModel.create({
+      type: "bookingNotes",
+      tourId,
+      packageType: packageType || "",
+      boardingPoint: boardingPoint || "",
+      deboardingPoint: deboardingPoint || "",
+      addons: addons || "",
+      remarks: remarks || "",
+      uploadedBy: "admin",
+    });
+ 
+    return res.status(201).json({ success: true, note: doc });
+  } catch (error) {
+    console.error("saveBookingNotes error:", error);
+    return res.status(500).json({ success: false, message: "Could not save booking notes.", error: error.message });
   }
 };

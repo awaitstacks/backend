@@ -88,7 +88,7 @@ import authTour from "../middlewares/authTour.js";
 import { tourUpload } from "../middlewares/multer.js";
 import { paymentQrUpload, staffPhotoUpload, queryUpload, aadhaarUpload, paymentScreenshotUpload } from "../middlewares/multer.js";
 import cancelBookingController from "../controllers/cancelController.js";
-import { extractAadhaar, uploadPaymentScreenshot, saveBookingNotes, saveAadhaarUpload, getAadhaarBookings, addCoTraveller, uploadGroupPayment, linkGroupTnr, editAadhaarTraveller, deleteAadhaarTraveller } from "../controllers/aadhaarController.js";
+import { extractAadhaar, uploadPaymentScreenshot, saveBookingNotes, saveAadhaarUpload, getAadhaarBookings, addCoTraveller, uploadGroupPayment, linkGroupTnr, editAadhaarTraveller, deleteAadhaarTraveller, linkGuestTnr, unlinkGuestTnr, deleteGroupPayment } from "../controllers/aadhaarController.js";
 import {
   createStaff, getAllStaff, getStaffById, updateStaff, deleteStaff,
 } from "../controllers/staffController.js";
@@ -272,9 +272,12 @@ tourRouter.post("/save-aadhaar-upload", saveAadhaarUpload);
 tourRouter.get("/bookings", getAadhaarBookings);
 tourRouter.post("/add-co-traveller", addCoTraveller);
 tourRouter.post("/upload-group-payment", paymentScreenshotUpload, uploadGroupPayment);
+tourRouter.post("/delete-group-payment", deleteGroupPayment);   // ← NEW
 tourRouter.post("/link-tnr", linkGroupTnr);
 tourRouter.post("/edit-traveller", editAadhaarTraveller);
 tourRouter.post("/delete-traveller", deleteAadhaarTraveller);
+tourRouter.post("/guest/link", linkGuestTnr);
+tourRouter.post("/guest/unlink", unlinkGuestTnr);
 
 
 

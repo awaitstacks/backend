@@ -88,7 +88,7 @@ import authTour from "../middlewares/authTour.js";
 import { tourUpload } from "../middlewares/multer.js";
 import { paymentQrUpload, staffPhotoUpload, queryUpload, aadhaarUpload, paymentScreenshotUpload } from "../middlewares/multer.js";
 import cancelBookingController from "../controllers/cancelController.js";
-import { extractAadhaar, uploadPaymentScreenshot, saveBookingNotes, saveAadhaarUpload, getAadhaarBookings, addCoTraveller, uploadGroupPayment, linkGroupTnr, editAadhaarTraveller, deleteAadhaarTraveller, linkGuestTnr, unlinkGuestTnr, deleteGroupPayment } from "../controllers/aadhaarController.js";
+import { extractAadhaar, uploadPaymentScreenshot, saveBookingNotes, saveAadhaarUpload, getAadhaarBookings, addCoTraveller, uploadGroupPayment, linkGroupTnr, editAadhaarTraveller, deleteAadhaarTraveller, linkGuestTnr, unlinkGuestTnr, deleteGroupPayment, getPaymentTasks, markPaymentTaskDone } from "../controllers/aadhaarController.js";
 import {
   createStaff, getAllStaff, getStaffById, updateStaff, deleteStaff,
 } from "../controllers/staffController.js";
@@ -278,6 +278,9 @@ tourRouter.post("/edit-traveller", editAadhaarTraveller);
 tourRouter.post("/delete-traveller", deleteAadhaarTraveller);
 tourRouter.post("/guest/link", linkGuestTnr);
 tourRouter.post("/guest/unlink", unlinkGuestTnr);
+tourRouter.get("/payment-tasks", getPaymentTasks);
+tourRouter.post("/payment-tasks/mark-done", markPaymentTaskDone);
+
 
 
 

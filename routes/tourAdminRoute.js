@@ -64,6 +64,8 @@ import {
 import authAdmin from "../middlewares/authAdmin.js";
 import { tourUpload, queryUpload } from "../middlewares/multer.js";
 import { getAllEnquiries } from "../controllers/tourController.js";
+import { getPaymentTasks, markPaymentTaskDone } from "../controllers/aadhaarController.js";
+import { get } from "mongoose";
 const touradminRouter = express.Router();
 
 // ✅ Route: Add a new tour with images
@@ -197,4 +199,7 @@ touradminRouter.get("/queries/:queryId/replies", authAdmin, getTourAdminReplies)
 touradminRouter.post("/queries/:queryId/replies", authAdmin, addTourAdminReply);
 touradminRouter.patch("/queries/:queryId/replies/:replyId", authAdmin, editTourAdminReply);
 touradminRouter.delete("/queries/:queryId/replies/:replyId", authAdmin, deleteTourAdminReply);
+// Payment Tasks dashboard — same backend as Tour Admin side, authAdmin-oda gate pannirukom mattum.
+touradminRouter.get("/payment-tasks", authAdmin, getPaymentTasks);
+touradminRouter.post("/payment-tasks/mark-done", authAdmin, markPaymentTaskDone);
 export default touradminRouter;

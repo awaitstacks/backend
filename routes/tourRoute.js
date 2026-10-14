@@ -88,7 +88,7 @@ import authTour from "../middlewares/authTour.js";
 import { tourUpload } from "../middlewares/multer.js";
 import { paymentQrUpload, staffPhotoUpload, queryUpload, aadhaarUpload, paymentScreenshotUpload } from "../middlewares/multer.js";
 import cancelBookingController from "../controllers/cancelController.js";
-import { extractAadhaar, uploadPaymentScreenshot, saveBookingNotes, saveAadhaarUpload, getAadhaarBookings, addCoTraveller, uploadGroupPayment, linkGroupTnr, editAadhaarTraveller, deleteAadhaarTraveller, linkGuestTnr, unlinkGuestTnr, deleteGroupPayment, getPaymentTasks, markPaymentTaskDone } from "../controllers/aadhaarController.js";
+import { extractAadhaar, uploadPaymentScreenshot, saveBookingNotes, saveAadhaarUpload, getAadhaarBookings, addCoTraveller, uploadGroupPayment, linkGroupTnr, editAadhaarTraveller, deleteAadhaarTraveller, linkGuestTnr, unlinkGuestTnr, deleteGroupPayment, getPaymentTasks, markPaymentTaskDone, searchUserBookings, uploadUserTravellerAadhaar, uploadUserBookingPayment } from "../controllers/aadhaarController.js";
 import {
   createStaff, getAllStaff, getStaffById, updateStaff, deleteStaff,
 } from "../controllers/staffController.js";
@@ -280,6 +280,13 @@ tourRouter.post("/guest/link", linkGuestTnr);
 tourRouter.post("/guest/unlink", unlinkGuestTnr);
 tourRouter.get("/payment-tasks", getPaymentTasks);
 tourRouter.post("/payment-tasks/mark-done", markPaymentTaskDone);
+// "User Bookings" tab — attach Aadhaar/payment proof to a real ONLINE
+// booking the guest already made on the website themselves (found by tour
+// + email), instead of the walk-in Save Booking flow above.
+tourRouter.get("/user-bookings", authTour, searchUserBookings);
+tourRouter.post("/user-bookings/upload-aadhaar", authTour, uploadUserTravellerAadhaar);
+tourRouter.post("/user-bookings/upload-payment", authTour, paymentScreenshotUpload, uploadUserBookingPayment);
+
 
 
 

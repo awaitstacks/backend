@@ -789,8 +789,26 @@ const adminAddBooking = async (req, res) => {
       for (const slot of ["advance", "balance", "partial"]) {
         const shot = paymentScreenshots[slot];
         if (!shot?.url) continue;
+        const docType = `payment${slot[0].toUpperCase()}${slot.slice(1)}`;
+
+        // BUG FIX: walk-in capture → Create Booking carries the SAME
+        // already-uploaded screenshot URL forward (never re-uploads), so
+        // without this check a second aadhaarModel doc got created here
+        // alongside the walk-in group's original one — both later share
+        // the same tnr (via linkGroupTnr/autoMatchTnrForGroup) → "Payment
+        // History (2)" for one real screenshot. Exact-url match is safe:
+        // two unrelated screenshots never share the same Cloudinary url.
+        const existing = await aadhaarModel.findOne({ type: docType, url: shot.url });
+        if (existing) {
+          if (existing.tnr !== tnr) {
+            await aadhaarModel.updateOne({ _id: existing._id }, { $set: { tnr } });
+          }
+          paymentIds[slot] = existing._id;
+          continue;
+        }
+
         const doc = await aadhaarModel.create({
-          tnr, type: `payment${slot[0].toUpperCase()}${slot.slice(1)}`,
+          tnr, type: docType,
           url: shot.url, amount: shot.amount ?? null, uploadedBy: "admin",
         });
         paymentIds[slot] = doc._id;

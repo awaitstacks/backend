@@ -7526,7 +7526,7 @@ const archiver = require("archiver");
 import aadhaarModel from "../models/aadhaarModel.js";
 // Read-only use for pricing/cancellation lookups (plus the narrowly scoped
 // writes noted at each call site).
-import tourBookingModel from "../models/tourBookingModel.js";
+import tourBookingModel from "../models/tourBookingmodel.js";
 // Read-only — pricing fields only (computePackageAmount).
 import tourModel from "../models/tourModel.js";
 // Read-only — Cancellation Requested / Rejected / Cancelled badges.

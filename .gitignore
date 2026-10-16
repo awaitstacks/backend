@@ -36,3 +36,7 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
+
+uploads/temp/**
+!uploads/temp/**/
+!uploads/temp/**/.gitkeep

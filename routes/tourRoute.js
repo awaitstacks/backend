@@ -81,6 +81,8 @@ import {
   getAdminCreatedBookings,
   adminAddBooking,
   adminCancelTraveller,
+  closeEnquiry,
+  reopenEnquiry,
 
 
 } from "../controllers/tourController.js";
@@ -257,6 +259,8 @@ tourRouter.patch("/queries/:queryId/pickup", authTour, pickupQuery);
 tourRouter.patch("/queries/:queryId/processing", authTour, processQuery);
 tourRouter.patch("/queries/:queryId/close", authTour, closeQuery);
 tourRouter.patch("/queries/:queryId/reject", authTour, rejectQuery);
+tourRouter.put("/enquiry/:id/close",  authTour, closeEnquiry);
+tourRouter.put("/enquiry/:id/reopen", authTour, reopenEnquiry);
 tourRouter.get("/queries/:queryId/replies", authTour, getAdminReplies);
 tourRouter.post("/queries/:queryId/replies", authTour, addAdminReply);
 tourRouter.patch("/queries/:queryId/replies/:replyId", authTour, editAdminReply);

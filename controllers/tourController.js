@@ -7060,9 +7060,18 @@ const getAllEnquiries = async (req, res) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
+    // await enquiryModel.updateMany(
+    //   { status: "pending", preferredTravelDate: { $lt: today } },
+    //   { $set: { status: "rejected" } }
+    // );
+
     await enquiryModel.updateMany(
-      { status: "pending", preferredTravelDate: { $lt: today } },
-      { $set: { status: "rejected" } }
+      {
+        status: "pending",
+        preferredTravelDate: { $lt: today },
+        skipAutoReject: { $ne: true },
+      },
+      { $set: { status: "rejected", previousStatus: "pending", rejectedAt: new Date() } }
     );
 
     const enquiries = await enquiryModel.find().sort({ createdAt: -1 });
@@ -7084,11 +7093,35 @@ const getEnquiryById = async (req, res) => {
 };
 
 // UPDATE — PUT /api/tour/enquiry/:id/update
+// const updateEnquiry = async (req, res) => {
+//   try {
+//     const enquiry = await enquiryModel.findByIdAndUpdate(
+//       req.params.id,
+//       { $set: req.body },
+//       { new: true, runValidators: false }
+//     );
+//     if (!enquiry) return res.status(404).json({ success: false, message: "Enquiry not found" });
+//     return res.status(200).json({ success: true, message: "Enquiry updated successfully", data: enquiry });
+//   } catch (error) {
+//     return res.status(500).json({ success: false, message: "Internal server error", error: error.message });
+//   }
+// };
+
 const updateEnquiry = async (req, res) => {
   try {
+    const update = { ...req.body };
+
+    if (update.status === "rejected") {
+      const current = await enquiryModel.findById(req.params.id).select("status").lean();
+      if (current && current.status !== "rejected") {
+        update.previousStatus = current.status;
+        update.rejectedAt = new Date();
+      }
+    }
+
     const enquiry = await enquiryModel.findByIdAndUpdate(
       req.params.id,
-      { $set: req.body },
+      { $set: update },
       { new: true, runValidators: false }
     );
     if (!enquiry) return res.status(404).json({ success: false, message: "Enquiry not found" });
@@ -7197,17 +7230,94 @@ const acceptEnquiry = async (req, res) => {
 };
 
 // REJECT — PUT /api/tour/enquiry/:id/reject
+// const rejectEnquiry = async (req, res) => {
+//   try {
+//     const enquiry = await enquiryModel.findByIdAndUpdate(
+//       req.params.id,
+//       { status: "rejected" },
+//       { new: true }
+//     );
+//     if (!enquiry) return res.status(404).json({ success: false, message: "Enquiry not found" });
+//     return res.status(200).json({ success: true, message: "Enquiry rejected", data: enquiry });
+//   } catch (error) {
+//     return res.status(500).json({ success: false, message: error.message });
+//   }
+// };
+
 const rejectEnquiry = async (req, res) => {
   try {
-    const enquiry = await enquiryModel.findByIdAndUpdate(
-      req.params.id,
-      { status: "rejected" },
-      { new: true }
-    );
+    const enquiry = await enquiryModel.findById(req.params.id);
     if (!enquiry) return res.status(404).json({ success: false, message: "Enquiry not found" });
-    return res.status(200).json({ success: true, message: "Enquiry rejected", data: enquiry });
+    if (enquiry.status === "rejected") {
+      return res.status(400).json({ success: false, message: "Enquiry already rejected" });
+    }
+
+    enquiry.previousStatus = enquiry.status;   // reject ku munnadi irundha stage
+    enquiry.status = "rejected";
+    enquiry.rejectedAt = new Date();
+
+    const updated = await enquiry.save({ validateBeforeSave: false });
+    return res.status(200).json({ success: true, message: "Enquiry rejected", data: updated });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+
+// PUT /api/tour/enquiry/:id/close
+const closeEnquiry = async (req, res) => {
+  try {
+    const enquiry = await enquiryModel.findById(req.params.id);
+    if (!enquiry) return res.status(404).json({ success: false, message: "Enquiry not found" });
+    if (enquiry.status !== "accepted") {
+      return res.status(400).json({ success: false, message: "Only accepted enquiries can be closed" });
+    }
+    if (enquiry.isClosed) {
+      return res.status(400).json({ success: false, message: "Enquiry already closed" });
+    }
+
+    enquiry.isClosed = true;
+    enquiry.closedAt = new Date();
+
+    const updated = await enquiry.save({ validateBeforeSave: false });
+    return res.status(200).json({ success: true, message: "Enquiry closed", data: updated });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "Internal server error", error: error.message });
+  }
+};
+
+// PUT /api/tour/enquiry/:id/reopen
+const reopenEnquiry = async (req, res) => {
+  try {
+    const enquiry = await enquiryModel.findById(req.params.id);
+    if (!enquiry) return res.status(404).json({ success: false, message: "Enquiry not found" });
+    if (enquiry.status !== "rejected") {
+      return res.status(400).json({ success: false, message: "Only rejected enquiries can be reopened" });
+    }
+
+    const restoreTo = ["pending", "accepted"].includes(enquiry.previousStatus)
+      ? enquiry.previousStatus
+      : "pending";
+
+    enquiry.status = restoreTo;
+    enquiry.previousStatus = null;
+    enquiry.reopenedAt = new Date();
+    enquiry.skipAutoReject = true;
+
+    const updated = await enquiry.save({ validateBeforeSave: false });
+
+    const stageLabel =
+      restoreTo === "accepted"
+        ? (updated.isClosed ? "Closed" : "Accepted")
+        : (updated.isRatePassed ? "Rate Shared" : "Pending");
+
+    return res.status(200).json({
+      success: true,
+      message: `Enquiry reopened — moved back to ${stageLabel}`,
+      data: updated,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "Internal server error", error: error.message });
   }
 };
 // GET /api/tour/queries?queryType=&status=&raisedBy=&raisedTo=&search=&fromDate=&toDate=&page=&limit=
@@ -7400,6 +7510,8 @@ export {
   toggleRatePassed,
   acceptEnquiry,
   rejectEnquiry,
+  closeEnquiry,    // ← new
+  reopenEnquiry,   // ← new
 
   getTourQueries,
   pickupQuery,

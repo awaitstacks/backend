@@ -21,7 +21,7 @@
 // import tourModel from "../models/tourModel.js";
 // // Read-only — Cancellation Requested / Rejected / Cancelled badges.
 // import cancellationModel from "../models/cancellationModel.js";
- 
+
 // let workerPromise;
 // function getWorker() {
 //   if (!workerPromise) {
@@ -34,7 +34,7 @@
 //   }
 //   return workerPromise;
 // }
- 
+
 // // Upscale + grayscale + normalize + sharpen before OCR. Falls back to the
 // // original file if preprocessing fails.
 // async function preprocessForOcr(filePath) {
@@ -50,7 +50,7 @@
 //     .toFile(outPath);
 //   return outPath;
 // }
- 
+
 // // A PDF always starts with "%PDF-" — check content, not extension.
 // function isPdfFile(filePath) {
 //   const fd = fs.openSync(filePath, "r");
@@ -62,7 +62,7 @@
 //     fs.closeSync(fd);
 //   }
 // }
- 
+
 // // Renders page 1 of a PDF to a PNG (~300 DPI) with mupdf. Throws on a
 // // corrupt/password-protected PDF — caller must NOT fall back to OCR-ing
 // // the raw PDF.
@@ -88,7 +88,7 @@
 //     doc.destroy();
 //   }
 // }
- 
+
 // function removeTempUploads(req) {
 //   const files = [];
 //   if (req.file) files.push(req.file);
@@ -107,11 +107,11 @@
 //     removeTempUploads(req);
 //   }
 // };
- 
- 
+
+
 // async function readImageText(filePath) {
 //   const worker = await getWorker();
- 
+
 //   // PDF → PNG FIRST, unconditionally.
 //   let sourcePath = filePath;
 //   let pdfPngPath = null;
@@ -124,7 +124,7 @@
 //       throw new Error("Could not read this PDF — it may be corrupted or password-protected. Try a clear photo instead.");
 //     }
 //   }
- 
+
 //   let ocrPath = sourcePath;
 //   let preprocessed = false;
 //   try {
@@ -146,7 +146,7 @@
 //     }
 //   }
 // }
- 
+
 // // Backfill helper — re-OCR an already-uploaded Aadhaar image just for its
 // // number. Used only by exportActiveTravellersPdfData.
 // async function ocrAadhaarNumberFromUrl(url) {
@@ -162,7 +162,7 @@
 //     fs.unlink(tmpPath, () => { });
 //   }
 // }
- 
+
 // // Plain edit-distance (gender word only).
 // function levenshtein(a, b) {
 //   const m = a.length, n = b.length;
@@ -179,14 +179,14 @@
 //   }
 //   return dp[m][n];
 // }
- 
+
 // // Exact match first; otherwise fuzzy-match tokens against FEMALE/MALE/
 // // TRANSGENDER (OCR often reads "FEMALZ", "FEMAIE", etc).
 // function detectGender(text) {
 //   if (/female/i.test(text)) return "Female";
 //   if (/\bmale\b/i.test(text)) return "Male";
 //   if (/transgender/i.test(text)) return "Other";
- 
+
 //   const words = text.match(/[A-Za-z]{3,}/g) || [];
 //   let best = { gender: "", dist: Infinity };
 //   for (const raw of words) {
@@ -208,7 +208,7 @@
 //   if (today < new Date(today.getFullYear(), m - 1, d)) age--;
 //   return age;
 // }
- 
+
 // // e-Aadhaar PDF detection — the postal "To" line is e-PDF-only, so it's
 // // required alongside the letterhead/enrolment text; VTC:+PIN Code: labels
 // // are self-sufficient.
@@ -220,7 +220,7 @@
 //     (/VTC\s*[:\-]/i.test(text) && /PIN\s*Code\s*[:\-]/i.test(text))
 //   );
 // }
- 
+
 // // UIDAI boilerplate vocabulary that gets interleaved with the real
 // // name/address on e-Aadhaar PDF OCR.
 // const UIDAI_BOILERPLATE_WORDS = new Set([
@@ -242,7 +242,7 @@
 //   "no", "on", "by", "for", "with", "benefits", "ensure", "security",
 //   "when", "lock", "unlock", "biometrics", "feature", "digitally", "signed",
 // ]);
- 
+
 // // Rejects regional-script OCR noise misread as Latin letters.
 // function looksLikeRealWord(token) {
 //   const lower = token.toLowerCase();
@@ -251,7 +251,7 @@
 //   if (/[^aeiou]{3,}/.test(lower)) return false;
 //   return true;
 // }
- 
+
 // function classifyNameToken(token) {
 //   if (/^[a-z]/.test(token)) return "noise";
 //   if (UIDAI_BOILERPLATE_WORDS.has(token.toLowerCase())) return "noise";
@@ -259,7 +259,7 @@
 //   if (!looksLikeRealWord(token)) return "noise";
 //   return "word";
 // }
- 
+
 // // Longest unbroken run of name-like tokens in one OCR line.
 // function bestNameSegmentInLine(line) {
 //   const tokens = line.match(/[A-Za-z]+/g) || [];
@@ -278,7 +278,7 @@
 //   if (current.length && isBetter(current, best)) best = current;
 //   return best;
 // }
- 
+
 // function extractNameFromEAadhaarPdf(lines) {
 //   const isBetter = (a, b) =>
 //     a.length !== b.length ? a.length > b.length : a.join("").length > b.join("").length;
@@ -306,7 +306,7 @@
 //     .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
 //     .join(" ");
 // }
- 
+
 // // Keeps just the leading real-address words of one OCR line, stopping at
 // // boilerplate merged onto its end.
 // function addressLineLeadingRun(line) {
@@ -323,7 +323,7 @@
 //   }
 //   return kept.join(" ").trim();
 // }
- 
+
 // // Unlabeled e-Aadhaar layout: "To" block up to the 6-digit PIN line.
 // function extractAddressFallbackFromToBlock(lines, toIdx, name) {
 //   if (toIdx === -1) return "";
@@ -352,14 +352,14 @@
 //   }
 //   return cleanAddressNoise(joined.replace(/,\s*,/g, ",").replace(/^[\s,]+|[\s,]+$/g, ""));
 // }
- 
+
 // function parseEAadhaarPdf(text) {
 //   const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
 //   const name = extractNameFromEAadhaarPdf(lines);
 //   const nameParts = name.split(/\s+/).filter(Boolean);
 //   const firstName = nameParts[0] || "";
 //   const lastName = nameParts.slice(1).join(" ") || firstName;
- 
+
 //   const get = (re) => {
 //     const m = text.match(re);
 //     return m ? m[1].replace(/\s{2,}/g, " ").trim() : "";
@@ -369,7 +369,7 @@
 //   const district = get(/District\s*[:\-]?\s*([A-Za-z .]+?)\s*,/i);
 //   const stateLabel = get(/State\s*[:\-]?\s*([A-Za-z .]+?)\s*,/i);
 //   const pin = get(/PIN\s*Code\s*[:\-]?\s*(\d{6})/i);
- 
+
 //   const toIdx = lines.findIndex((l, i) => i < 40 && /^to\b/i.test(l));
 //   const vtcIdx = lines.findIndex((l) => /VTC\s*[:\-]/i.test(l));
 //   let street = "";
@@ -385,17 +385,17 @@
 //     }
 //     street = street.replace(/^[\s,]+/, "").replace(/[\s,]+$/, "").trim();
 //   }
- 
+
 //   let address = [street, vtc, district, stateLabel, pin].filter(Boolean).join(", ");
 //   if (!address) {
 //     address = extractAddressFallbackFromToBlock(lines, toIdx, name);
 //   }
 //   const addressParts = splitAddressComponents(address);
 //   const mobileMatch = text.match(/Mobile\s*[:\-]?\s*(\d{10})/i);
- 
+
 //   return { firstName, lastName, address, addressParts, phone: mobileMatch ? mobileMatch[1] : "" };
 // }
- 
+
 // function parseAadhaarText(text = "") {
 //   const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
 //   const dobMatch = text.match(/(?:DOB|D\.O\.B|Date of Birth)\s*[:\-]?\s*(\d{2}[/\-]\d{2}[/\-]\d{4})/i);
@@ -404,7 +404,7 @@
 //   if (dobMatch) { dob = dobMatch[1]; age = calcAge(dob); }
 //   else if (yobMatch) { age = new Date().getFullYear() - Number(yobMatch[1]); }
 //   const gender = detectGender(text);
- 
+
 //   if (isEAadhaarPdfText(text)) {
 //     const e = parseEAadhaarPdf(text);
 //     const phone = e.phone || extractPhone(text);
@@ -421,7 +421,7 @@
 //       ...e.addressParts,
 //     };
 //   }
- 
+
 //   let fullName = "";
 //   const dobIdx = lines.findIndex((l) => /DOB|D\.O\.B|Year of Birth|YOB|Date of Birth/i.test(l));
 //   // Scan a window above DOB and keep the line with the most Title-Case
@@ -439,11 +439,11 @@
 //       .flatMap((r) => r.trim().split(/\s+/))
 //       .filter((w) => w.length > 1);
 //     if (words.length === 0) continue;
- 
+
 //     const titleCaseWords = words.filter((w) => /^[A-Z][a-z]+$/.test(w));
 //     const candidate = (titleCaseWords.length > 0 ? titleCaseWords : words).join(" ");
 //     if (candidate.length < 3) continue;
- 
+
 //     const score = titleCaseWords.length;
 //     if (score > bestScore) {
 //       bestScore = score;
@@ -464,13 +464,13 @@
 //   const aadhaarNumber = extractAadhaarNumber(text);
 //   return { firstName, lastName, age, dob, gender, address, phone, aadhaarNumber, ...addressParts };
 // }
- 
+
 // // Mobile number — tolerates an internal space/hyphen.
 // function extractPhone(text = "") {
 //   const match = text.match(/\b([6-9]\d{4})[\s-]?(\d{5})\b/);
 //   return match ? `${match[1]}${match[2]}` : "";
 // }
- 
+
 // // 12-digit Aadhaar number (never starts with 0/1), returned as "XXXX XXXX XXXX".
 // function extractAadhaarNumber(text = "") {
 //   const candidates = text.match(/\b\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g) || [];
@@ -482,7 +482,7 @@
 //   }
 //   return "";
 // }
- 
+
 // // Strips background-pattern OCR noise from the address block.
 // function cleanAddressNoise(addr = "") {
 //   if (!addr) return addr;
@@ -506,7 +506,7 @@
 //     .replace(/[\s,]+$/, "")
 //     .trim();
 // }
- 
+
 // const INDIAN_STATES_UTS = [
 //   "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh",
 //   "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka",
@@ -521,7 +521,7 @@
 // function splitAddressComponents(addr = "") {
 //   const out = { addressLine1: "", addressLine2: "", city: "", state: "", pincode: "" };
 //   if (!addr) return out;
- 
+
 //   let segments = addr.split(",").map((s) => s.trim()).filter(Boolean);
 //   for (let i = segments.length - 1; i >= 0; i--) {
 //     const m = segments[i].match(/\b(\d{6})\b/);
@@ -535,7 +535,7 @@
 //     }
 //     break;
 //   }
- 
+
 //   // Fuzzy state match on the trailing segment (longest names first).
 //   const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 //   const sortedStates = [...INDIAN_STATES_UTS].sort((a, b) => b.length - a.length);
@@ -548,7 +548,7 @@
 //       break;
 //     }
 //   }
- 
+
 //   // City deliberately NOT auto-filled (usually the district).
 //   if (segments.length <= 1) {
 //     out.addressLine1 = segments.join(", ");
@@ -557,18 +557,18 @@
 //     out.addressLine1 = segments.slice(0, mid).join(", ");
 //     out.addressLine2 = segments.slice(mid).join(", ");
 //   }
- 
+
 //   return out;
 // }
- 
+
 // // Address — progressively looser fallbacks, all anchored on the 6-digit PIN.
 // function extractAddress(text = "") {
 //   let match = text.match(/Address[:\s]*([\s\S]*?\b\d{6}\b)/i);
 //   if (match) return cleanAddressNoise(match[1].replace(/\s*\n\s*/g, ", ").trim());
- 
+
 //   match = text.match(/\b[SDWC]\/O[:\s]*([\s\S]*?\b\d{6}\b)/i);
 //   if (match) return cleanAddressNoise(match[1].replace(/\s*\n\s*/g, ", ").trim());
- 
+
 //   match = text.match(/\b\d{6}\b/);
 //   if (match) {
 //     const idx = text.indexOf(match[0]);
@@ -576,7 +576,7 @@
 //     const lines = before.split("\n").map((l) => l.trim()).filter(Boolean);
 //     return cleanAddressNoise(lines.slice(-6).join(", "));
 //   }
- 
+
 //   return "";
 // }
 // function mergeSides(front, back) {
@@ -597,7 +597,7 @@
 //     pincode: addrSource.pincode || "",
 //   };
 // }
- 
+
 // // POST /ocr/aadhaar — multipart: front (required), back (optional)
 // export const extractAadhaar = withTempCleanup(async (req, res) => {
 //   try {
@@ -609,7 +609,7 @@
 //     const frontText = await readImageText(frontFile.path);
 //     const frontData = parseAadhaarText(frontText);
 //     const frontUpload = await cloudinary.uploader.upload(frontFile.path, { folder: "aadhaar", resource_type: "image" });
- 
+
 //     let backData = {}, backUpload = null, backText = "";
 //     if (backFile) {
 //       backText = await readImageText(backFile.path);
@@ -628,7 +628,7 @@
 //     return res.status(500).json({ success: false, message: "Could not read the Aadhaar image.", error: error.message });
 //   }
 // });
- 
+
 // // POST /ocr/payment-screenshot — OCR amount first, typed amount as fallback.
 // export const uploadPaymentScreenshot = withTempCleanup(async (req, res) => {
 //   try {
@@ -642,7 +642,7 @@
 //       return res.status(400).json({ success: false, message: "Amount, if entered, must be a positive number." });
 //     }
 //     const upload = await cloudinary.uploader.upload(file.path, { folder: "payment-screenshots", resource_type: "image" });
- 
+
 //     // let ocrAmount = null;
 //     // try {
 //     //   const text = await readImageText(file.path);
@@ -651,7 +651,7 @@
 //     //   console.error("Payment screenshot OCR failed, falling back to typed amount:", err.message);
 //     // }
 //     // const finalAmount = ocrAmount ?? (amount ? Number(amount) : null);
- 
+
 //     // The amount the admin typed always wins. OCR is only a fallback when
 //     // the box was left empty (it can misread "₹10,000" as "310000").
 //     const typedAmount = amount !== undefined && amount !== "" ? Number(amount) : null;
@@ -665,7 +665,7 @@
 //       }
 //     }
 //     const finalAmount = typedAmount ?? ocrAmount;
- 
+
 //     return res.status(200).json({
 //       success: true,
 //       type,
@@ -679,15 +679,15 @@
 //     return res.status(500).json({ success: false, message: "Upload failed.", error: error.message });
 //   }
 // });
- 
+
 // export const saveBookingNotes = async (req, res) => {
 //   try {
 //     const { tourId, packageType, packageKind, variantPackageIndex, boardingPoint, deboardingPoint, addons, remarks, raisedBy } = req.body;
- 
+
 //     if (!tourId) {
 //       return res.status(400).json({ success: false, message: "tourId is required" });
 //     }
- 
+
 //     const doc = await aadhaarModel.create({
 //       type: "bookingNotes",
 //       tourId,
@@ -706,14 +706,14 @@
 //         ? { name: raisedBy.name || "", employeeId: raisedBy.employeeId || "" }
 //         : undefined,
 //     });
- 
+
 //     return res.status(201).json({ success: true, note: doc });
 //   } catch (error) {
 //     console.error("saveBookingNotes error:", error);
 //     return res.status(500).json({ success: false, message: "Could not save booking notes.", error: error.message });
 //   }
 // };
- 
+
 // // POST /ocr/save-aadhaar-upload — "Save Booking" on the Aadhaar Upload page.
 // // Creates every aadhaarModel doc for one walk-in capture, all sharing one
 // // groupId. Only an Advance Payment screenshot is hard-required.
@@ -735,7 +735,7 @@
 //       advanceScreenshot, // legacy single-object shape
 //       advanceScreenshots, // current shape
 //     } = req.body;
- 
+
 //     const hasAdvanceScreenshot =
 //       (Array.isArray(advanceScreenshots) && advanceScreenshots.some((s) => s?.url)) ||
 //       !!advanceScreenshot?.url;
@@ -745,7 +745,7 @@
 //         message: "Attach the Advance Payment screenshot before creating this booking",
 //       });
 //     }
- 
+
 //     const groupId = new mongoose.Types.ObjectId().toString();
 //     const parsed = {
 //       firstName: traveller.firstName || "",
@@ -764,7 +764,7 @@
 //       title: traveller.title || "",
 //       sharingType: traveller.sharingType || "",
 //     };
- 
+
 //     const docs = [
 //       {
 //         groupId,
@@ -776,7 +776,7 @@
 //         uploadedBy: "admin",
 //       },
 //     ];
- 
+
 //     if (traveller.back?.url) {
 //       docs.push({
 //         groupId,
@@ -788,7 +788,7 @@
 //         uploadedBy: "admin",
 //       });
 //     }
- 
+
 //     if (Array.isArray(coTravellers)) {
 //       for (const ct of coTravellers) {
 //         // Skip only a totally blank row.
@@ -820,7 +820,7 @@
 //         });
 //       }
 //     }
- 
+
 //     const advanceList = Array.isArray(advanceScreenshots)
 //       ? advanceScreenshots
 //       : advanceScreenshot?.url
@@ -837,7 +837,7 @@
 //         uploadedBy: "admin",
 //       });
 //     }
- 
+
 //     docs.push({
 //       groupId,
 //       type: "bookingNotes",
@@ -856,20 +856,20 @@
 //       uploadedBy: "admin",
 //       raisedBy: { name: raisedBy?.name || "", employeeId: raisedBy?.employeeId || "" },
 //     });
- 
+
 //     const created = await aadhaarModel.insertMany(docs);
- 
+
 //     return res.status(201).json({ success: true, groupId, docs: created });
 //   } catch (error) {
 //     console.error("saveAadhaarUpload error:", error);
 //     return res.status(500).json({ success: false, message: "Could not save this booking.", error: error.message });
 //   }
 // };
- 
+
 // // Compare phones by last 10 digits so formatting differences don't block
 // // the auto-match.
 // const normalizePhone = (p) => String(p || "").replace(/\D/g, "").slice(-10);
- 
+
 // // Auto-links a walk-in group to the real booking Create Booking produced
 // // for it: same tour, same contact mobile, booked at/after the group.
 // async function autoMatchTnrForGroup(group) {
@@ -879,11 +879,11 @@
 //     );
 //     return null;
 //   }
- 
+
 //   try {
 //     const claimedTnrs = await aadhaarModel.distinct("tnr", { tnr: { $nin: [null, ""] } });
 //     const wantPhone = normalizePhone(group.main.phone);
- 
+
 //     const candidates = await tourBookingModel
 //       .find({
 //         tourId: group.tourId,
@@ -893,9 +893,9 @@
 //       .sort({ bookingDate: 1 })
 //       .select("tnr contact.mobile")
 //       .lean();
- 
+
 //     const candidate = candidates.find((c) => normalizePhone(c.contact?.mobile) === wantPhone);
- 
+
 //     if (!candidate?.tnr) {
 //       console.log(
 //         `[autoMatchTnr] no match for group ${group.groupId} (looking for phone ending ${wantPhone}); checked ${candidates.length} same-tour booking(s): ${candidates.map((c) => normalizePhone(c.contact?.mobile)).join(", ") || "none"}`,
@@ -903,7 +903,7 @@
 //       return null;
 //     }
 //     console.log(`[autoMatchTnr] linked tnr ${candidate.tnr} to group ${group.groupId}`);
- 
+
 //     await aadhaarModel.updateMany({ groupId: group.groupId }, { $set: { tnr: candidate.tnr } });
 //     return candidate.tnr;
 //   } catch (err) {
@@ -911,13 +911,13 @@
 //     return null;
 //   }
 // }
- 
+
 // // What a walk-in group's package SHOULD cost (same age-bracket +
 // // sharingType formula as adminAddBooking, + addons). null when it can't be
 // // priced reliably.
 // function computePackageAmount(tourDoc, mainTraveller, coTravellers, bookingNotes) {
 //   if (!tourDoc || !mainTraveller) return null;
- 
+
 //   let selectedPackage = tourDoc;
 //   if (bookingNotes?.packageKind === "variant") {
 //     if (bookingNotes.variantPackageIndex === null || bookingNotes.variantPackageIndex === undefined) {
@@ -928,7 +928,7 @@
 //   } else if (bookingNotes?.packageKind !== "main") {
 //     return null;
 //   }
- 
+
 //   const travellers = [mainTraveller, ...(coTravellers || [])];
 //   let total = 0;
 //   for (const t of travellers) {
@@ -944,13 +944,13 @@
 //       else if (t.sharingType === "withoutBerth") total += Number(selectedPackage.balanceChildWithoutBerth) || 0;
 //     }
 //   }
- 
+
 //   const addonsTotal = (bookingNotes?.addonsDetail || []).reduce((s, a) => s + (Number(a.amount) || 0), 0);
 //   total += addonsTotal;
- 
+
 //   return total;
 // }
- 
+
 // // GET /ocr/bookings — All Bookings tab.
 // export const getAadhaarBookings = async (req, res) => {
 //   try {
@@ -959,7 +959,7 @@
 //       .sort({ createdAt: 1 })
 //       .populate("tourId", "title")
 //       .lean();
- 
+
 //     const groups = {};
 //     for (const d of docs) {
 //       const gid = d.groupId;
@@ -979,7 +979,7 @@
 //       }
 //       const g = groups[gid];
 //       if (d.tnr) g.tnr = d.tnr;
- 
+
 //       if (d.type === "bookingNotes") {
 //         g.tourId = d.tourId?._id || d.tourId || null;
 //         g.tourTitle = d.tourId?.title || "";
@@ -1024,9 +1024,9 @@
 //         g.payments.partial.push({ _id: d._id, url: d.url, amount: d.amount, createdAt: d.createdAt, remarks: d.remarks || "" });
 //       }
 //     }
- 
+
 //     let bookings = Object.values(groups);
- 
+
 //     // Auto-link tnr for groups that don't have one yet.
 //     for (const b of bookings) {
 //       if (!b.tnr) {
@@ -1034,7 +1034,7 @@
 //         if (matched) b.tnr = matched;
 //       }
 //     }
- 
+
 //     // Fold orphaned groupId:null payment docs back into their group by tnr.
 //     const tnrsForOrphanSweep = [...new Set(bookings.map((b) => b.tnr).filter(Boolean))];
 //     if (tnrsForOrphanSweep.length) {
@@ -1057,7 +1057,7 @@
 //         }
 //       }
 //     }
- 
+
 //     // ── Every other real booking (USER online / Create-Booking-page ADMIN) ──
 //     const groupedTnrs = new Set(bookings.map((b) => b.tnr).filter(Boolean));
 //     const ungroupedRealDocs = await tourBookingModel
@@ -1065,7 +1065,7 @@
 //       .select("tnr tourId createdBy contact travellers payment bookingDate")
 //       .populate("tourId", "title")
 //       .lean();
- 
+
 //     const ungroupedRealTnrs = ungroupedRealDocs.map((d) => d.tnr).filter(Boolean);
 //     const ungroupedProofDocs = ungroupedRealTnrs.length
 //       ? await aadhaarModel.find({ tnr: { $in: ungroupedRealTnrs }, groupId: null }).lean()
@@ -1075,9 +1075,9 @@
 //       if (!proofsByTnr.has(d.tnr)) proofsByTnr.set(d.tnr, []);
 //       proofsByTnr.get(d.tnr).push(d);
 //     }
- 
+
 //     const nameKey = (x) => [x?.firstName, x?.lastName].filter(Boolean).join(" ").trim().toLowerCase();
- 
+
 //     for (const rb of ungroupedRealDocs) {
 //       if (!rb.tnr) continue;
 //       const proofs = proofsByTnr.get(rb.tnr) || [];
@@ -1109,16 +1109,16 @@
 //           payments.partial.push({ _id: d._id, url: d.url, amount: d.amount, createdAt: d.createdAt, remarks: d.remarks || "" });
 //         }
 //       }
- 
+
 //       // travellers[0] is the main traveller, everyone after is a co-traveller.
 //       const mainT = (rb.travellers || [])[0] || null;
 //       const coTs = (rb.travellers || []).slice(1);
 //       const proofFor = (t) => aadhaarByTraveller.get(String(t._id)) || { front: null, back: null };
- 
+
 //       // Any (non-pending) aadhaarFront doc under this tnr as the group-delete key.
 //       const anyFrontDocId =
 //         proofs.find((d) => d.type === "aadhaarFront" && !(d.postBooking && !d.travellerId))?._id || null;
- 
+
 //       const main = mainT
 //         ? {
 //           _id: mainT._id,
@@ -1135,7 +1135,7 @@
 //           back: proofFor(mainT).back,
 //         }
 //         : null;
- 
+
 //       const coTravellers = coTs.map((t) => {
 //         const proof = proofFor(t);
 //         return {
@@ -1154,7 +1154,7 @@
 //           postBooking: !!t.addedPostBooking,
 //         };
 //       });
- 
+
 //       // Pending co-travellers → shown with the Raise Manage Booking button.
 //       // Once approved, Manage Booking puts them in rb.travellers — then the
 //       // same-name real entry is shown instead ("Added to booking" via
@@ -1187,11 +1187,11 @@
 //           postBooking: true,
 //         });
 //       }
- 
+
 //       // Real bookings already know their exact price.
 //       const directPackageAmount =
 //         (Number(rb.payment?.advance?.amount) || 0) + (Number(rb.payment?.balance?.amount) || 0);
- 
+
 //       bookings.push({
 //         groupId: `real-${rb._id}`,
 //         tnr: rb.tnr,
@@ -1206,9 +1206,9 @@
 //         _directPackageAmount: directPackageAmount,
 //       });
 //     }
- 
+
 //     bookings = bookings.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
- 
+
 //     // Guest-group info ("same guest, different TNR").
 //     const tnrs = bookings.map((b) => b.tnr).filter(Boolean);
 //     const guestGroups = tnrs.length
@@ -1225,7 +1225,7 @@
 //         }
 //         : null;
 //     }
- 
+
 //     // Payment summary — package amount vs every uploaded screenshot.
 //     const tourIds = [...new Set(bookings.map((b) => b.tourId).filter(Boolean).map(String))];
 //     const tourDocs = tourIds.length
@@ -1235,7 +1235,7 @@
 //         .lean()
 //       : [];
 //     const tourById = new Map(tourDocs.map((t) => [String(t._id), t]));
- 
+
 //     // Once a walk-in group has a TNR, its real tourBookingModel booking is
 //     // the source of truth for the price (advance + balance, which already
 //     // include add-ons/changes made at Create Booking or Manage Booking) —
@@ -1261,7 +1261,7 @@
 //         (d.payment?.balance?.paid ? Number(d.payment?.balance?.amount) || 0 : 0),
 //       ]),
 //     );
- 
+
 //     for (const b of bookings) {
 //       let packageAmount;
 //       const realPrice = b.tnr ? realPriceByTnr.get(b.tnr) : undefined;
@@ -1274,19 +1274,19 @@
 //         const tourDoc = b.tourId ? tourById.get(String(b.tourId)) : null;
 //         packageAmount = computePackageAmount(tourDoc, b.main, b.coTravellers, b.bookingNotes);
 //       }
- 
+
 //       if (packageAmount === null) {
 //         b.paymentSummary = null;
 //         continue;
 //       }
- 
+
 //       const screenshotsPaid =
 //         (b.payments.advance || []).reduce((s, p) => s + (Number(p.amount) || 0), 0) +
 //         b.payments.balance.reduce((s, p) => s + (Number(p.amount) || 0), 0) +
 //         b.payments.partial.reduce((s, p) => s + (Number(p.amount) || 0), 0);
 //       const bookingPaid = b.tnr ? realPaidByTnr.get(b.tnr) || 0 : 0;
 //       const amountPaid = Math.max(screenshotsPaid, bookingPaid);
- 
+
 //       const balanceRemaining = Math.max(0, packageAmount - amountPaid);
 //       b.paymentSummary = {
 //         packageAmount,
@@ -1295,7 +1295,7 @@
 //         fullyPaid: amountPaid >= packageAmount,
 //       };
 //     }
- 
+
 //     // Admin/User badge + cancellation status + "Added to booking" flag,
 //     // all read from the REAL tourBookingModel booking.
 //     const linkedTnrs = bookings.map((b) => b.tnr).filter(Boolean);
@@ -1303,9 +1303,9 @@
 //       ? await tourBookingModel.find({ tnr: { $in: linkedTnrs } }).select("tnr createdBy cancelled travellers").lean()
 //       : [];
 //     const realBookingByTnr = new Map(realBookingDocs.map((d) => [d.tnr, d]));
- 
+
 //     const normName = (t) => [t?.firstName, t?.lastName].filter(Boolean).join(" ").trim().toLowerCase();
- 
+
 //     const cancellationDocs = linkedTnrs.length
 //       ? await cancellationModel
 //         .find({ tnr: { $in: linkedTnrs } })
@@ -1320,20 +1320,20 @@
 //         cancelDocByTnrTraveller.set(`${doc.tnr}::${tid}`, doc);
 //       }
 //     }
- 
+
 //     for (const b of bookings) {
 //       const real = b.tnr ? realBookingByTnr.get(b.tnr) : null;
 //       b.createdBy = real?.createdBy || "admin";
- 
+
 //       if (!real) continue;
 //       const wholeCancelled = !!(real.cancelled?.byAdmin || real.cancelled?.byTraveller);
 //       const realTravellerByName = new Map((real.travellers || []).map((t) => [normName(t), t]));
- 
+
 //       const markCancelled = (t) => {
 //         if (!t) return t;
 //         const realT = realTravellerByName.get(normName(t));
 //         const cancelDoc = realT ? cancelDocByTnrTraveller.get(`${b.tnr}::${realT._id}`) : null;
- 
+
 //         let status = null;
 //         if (cancelDoc) {
 //           status = cancelDoc.approvedBy ? "cancelled" : cancelDoc.raisedBy ? "request" : "rejected";
@@ -1349,12 +1349,12 @@
 //           // byTraveller alone = pending cancellation request.
 //           status = "request";
 //         }
- 
+
 //         // Already in the REAL booking (Tour Bookings)? → Raise Manage
 //         // Booking was approved → frontend hides Edit/Remove/Raise and shows
 //         // "Added to booking". Not there yet (or rejected) → button visible.
 //         t.inRealBooking = !!realT;
- 
+
 //         t.cancelStatus = status; // null | "request" | "rejected" | "cancelled"
 //         // Aadhaar ZIP filter only cares about approved cancellations.
 //         t.cancelled = status === "cancelled";
@@ -1363,14 +1363,14 @@
 //       if (b.main) markCancelled(b.main);
 //       b.coTravellers = (b.coTravellers || []).map(markCancelled);
 //     }
- 
+
 //     return res.status(200).json({ success: true, bookings });
 //   } catch (error) {
 //     console.error("getAadhaarBookings error:", error);
 //     return res.status(500).json({ success: false, message: "Could not fetch bookings.", error: error.message });
 //   }
 // };
- 
+
 // // POST /api/tour/guest/link — body: { tnr, linkToTnr, label? }. Overlapping
 // // guest groups always merge into ONE.
 // export const linkGuestTnr = async (req, res) => {
@@ -1389,49 +1389,49 @@
 //     if (!(await tourBookingModel.exists({ tnr: linkToTnr }))) {
 //       return res.status(404).json({ success: false, message: `No booking found with TNR ${linkToTnr}` });
 //     }
- 
+
 //     const existingGroups = await aadhaarModel.find({
 //       type: "guestLink",
 //       guestTnrs: { $in: [tnr, linkToTnr] },
 //     });
- 
+
 //     const mergedTnrs = new Set([tnr, linkToTnr]);
 //     existingGroups.forEach((g) => (g.guestTnrs || []).forEach((t) => mergedTnrs.add(t)));
- 
+
 //     let label = (req.body.label || "").trim();
 //     if (!label) {
 //       label = existingGroups.find((g) => g.remarks)?.remarks || "";
 //     }
- 
+
 //     if (existingGroups.length) {
 //       await aadhaarModel.deleteMany({ _id: { $in: existingGroups.map((g) => g._id) } });
 //     }
- 
+
 //     const saved = await aadhaarModel.create({
 //       type: "guestLink",
 //       tnr,
 //       guestTnrs: Array.from(mergedTnrs),
 //       remarks: label,
 //     });
- 
+
 //     return res.status(200).json({ success: true, guestGroup: saved });
 //   } catch (error) {
 //     console.error("linkGuestTnr error:", error);
 //     return res.status(500).json({ success: false, message: "Could not link guest.", error: error.message });
 //   }
 // };
- 
+
 // // POST /api/tour/guest/unlink — body: { tnr }.
 // export const unlinkGuestTnr = async (req, res) => {
 //   try {
 //     const tnr = (req.body.tnr || "").trim().toUpperCase();
 //     if (!tnr) return res.status(400).json({ success: false, message: "tnr is required" });
- 
+
 //     const group = await aadhaarModel.findOne({ type: "guestLink", guestTnrs: tnr });
 //     if (!group) {
 //       return res.status(404).json({ success: false, message: "This booking isn't linked to any guest group." });
 //     }
- 
+
 //     const remaining = group.guestTnrs.filter((t) => t !== tnr);
 //     if (remaining.length < 2) {
 //       await aadhaarModel.deleteOne({ _id: group._id });
@@ -1440,14 +1440,14 @@
 //       if (group.tnr === tnr) group.tnr = remaining[0];
 //       await group.save();
 //     }
- 
+
 //     return res.status(200).json({ success: true });
 //   } catch (error) {
 //     console.error("unlinkGuestTnr error:", error);
 //     return res.status(500).json({ success: false, message: "Could not unlink guest.", error: error.message });
 //   }
 // };
- 
+
 // // POST /ocr/add-co-traveller — adds ONE more traveller (Aadhaar front only).
 // // NEVER writes to tourBookingModel: the traveller reaches Tour Bookings only
 // // via Raise Manage Booking → approval.
@@ -1457,11 +1457,11 @@
 //       groupId, tnr, title, firstName, lastName, age, dob, gender, sharingType, phone,
 //       address, addressLine1, addressLine2, city, state, pincode, front, aadhaarNumber,
 //     } = req.body;
- 
+
 //     if (!groupId && !tnr) {
 //       return res.status(400).json({ success: false, message: "groupId or tnr is required" });
 //     }
- 
+
 //     const parsedFields = {
 //       firstName: firstName || "",
 //       lastName: lastName || "",
@@ -1479,7 +1479,7 @@
 //       title: title || "",
 //       sharingType: sharingType || "",
 //     };
- 
+
 //     // ── Real booking (tnr path — USER online / Create-Booking-page ADMIN) ──
 //     // Saved ONLY as a pending aadhaarModel doc (tnr set, no travellerId,
 //     // postBooking: true). getAadhaarBookings shows it on the card with the
@@ -1490,7 +1490,7 @@
 //       if (!booking) {
 //         return res.status(404).json({ success: false, message: "Booking not found for this tnr." });
 //       }
- 
+
 //       const frontDoc = await aadhaarModel.create({
 //         tnr: booking.tnr,
 //         type: "aadhaarFront",
@@ -1501,13 +1501,13 @@
 //         parsed: parsedFields,
 //         uploadedBy: "admin",
 //       });
- 
+
 //       return res.status(201).json({ success: true, traveller: frontDoc });
 //     }
- 
+
 //     // ── Walk-in group (groupId path) ──
 //     const existing = await aadhaarModel.findOne({ groupId }).select("tnr");
- 
+
 //     const doc = await aadhaarModel.create({
 //       groupId,
 //       tnr: existing?.tnr || "",
@@ -1520,14 +1520,14 @@
 //       parsed: parsedFields,
 //       uploadedBy: "admin",
 //     });
- 
+
 //     return res.status(201).json({ success: true, traveller: doc });
 //   } catch (error) {
 //     console.error("addCoTraveller error:", error);
 //     return res.status(500).json({ success: false, message: "Could not add co-traveller.", error: error.message });
 //   }
 // };
- 
+
 // // POST /api/tour/edit-traveller — body: { docId, ...fields }. Blocked once
 // // the booking has a tnr, EXCEPT for a post-booking added traveller.
 // export const editAadhaarTraveller = async (req, res) => {
@@ -1552,7 +1552,7 @@
 //         message: "This booking already has a TNR — edit it through Raise Manage Booking instead.",
 //       });
 //     }
- 
+
 //     const editable = [
 //       "title", "firstName", "lastName", "age", "gender", "sharingType", "phone",
 //       "address", "addressLine1", "addressLine2", "city", "state", "pincode",
@@ -1564,7 +1564,7 @@
 //     });
 //     doc.parsed = parsed;
 //     await doc.save();
- 
+
 //     // Older post-booking travellers that were pushed straight into the real
 //     // booking — mirror the edit onto that subdocument too.
 //     if (doc.travellerId) {
@@ -1577,20 +1577,20 @@
 //         await tourBookingModel.updateOne({ tnr: doc.tnr, "travellers._id": doc.travellerId }, { $set });
 //       }
 //     }
- 
+
 //     return res.status(200).json({ success: true, traveller: { _id: doc._id, ...parsed } });
 //   } catch (error) {
 //     console.error("editAadhaarTraveller error:", error);
 //     return res.status(500).json({ success: false, message: "Could not update traveller.", error: error.message });
 //   }
 // };
- 
+
 // // Cloudinary public_id from a secure_url (best-effort).
 // function extractCloudinaryPublicId(url = "") {
 //   const match = url.match(/\/upload\/(?:v\d+\/)?(.+?)(?:\.[a-zA-Z0-9]+)?$/);
 //   return match ? match[1] : null;
 // }
- 
+
 // async function destroyCloudinaryFile(url) {
 //   const publicId = extractCloudinaryPublicId(url);
 //   if (!publicId) return;
@@ -1600,7 +1600,7 @@
 //     console.error(`destroyCloudinaryFile: could not destroy ${publicId}:`, err.message);
 //   }
 // }
- 
+
 // // POST /api/tour/delete-traveller — body: { docId }.
 // //   Co-traveller → removes that one traveller's doc(s) + files.
 // //   Main traveller → clears files for every traveller in the booking
@@ -1613,7 +1613,7 @@
 //     if (!doc) {
 //       return res.status(404).json({ success: false, message: "Traveller not found." });
 //     }
- 
+
 //     // Older post-booking co-traveller that was pushed straight into the real
 //     // booking — pull them back out of travellers[] too.
 //     if (doc.travellerId && doc.tnr) {
@@ -1623,7 +1623,7 @@
 //       );
 //       const travellerRecord = parentBooking?.travellers?.[0];
 //       const isPostBookingAdd = !!(doc.postBooking || travellerRecord?.addedPostBooking);
- 
+
 //       if (isPostBookingAdd) {
 //         const pullResult = await tourBookingModel.updateOne(
 //           { tnr: doc.tnr },
@@ -1645,7 +1645,7 @@
 //         });
 //       }
 //     }
- 
+
 //     if (doc.isCoTraveller) {
 //       // No travellerId (walk-in co-traveller / pending co-traveller) →
 //       // scope to this exact doc, never the whole group.
@@ -1655,39 +1655,39 @@
 //           : { tnr: doc.tnr, travellerId: doc.travellerId })
 //         : { _id: doc._id };
 //       const docs = await aadhaarModel.find({ ...scopeMatch, type: { $in: ["aadhaarFront", "aadhaarBack"] } });
- 
+
 //       for (const d of docs) {
 //         if (d.url) await destroyCloudinaryFile(d.url);
 //         if (d.front?.url) await destroyCloudinaryFile(d.front.url);
 //         if (d.back?.url) await destroyCloudinaryFile(d.back.url);
 //       }
 //       await aadhaarModel.deleteMany({ _id: { $in: docs.map((d) => d._id) } });
- 
+
 //       return res.status(200).json({ success: true, clearedCount: docs.length, removedTraveller: docs.length > 0 });
 //     }
- 
+
 //     // MAIN traveller — clear (not delete) every traveller's files.
 //     const groupMatch = doc.tnr
 //       ? (doc.groupId ? { groupId: doc.groupId } : { tnr: doc.tnr })
 //       : { groupId: doc.groupId };
 //     const docs = await aadhaarModel.find({ ...groupMatch, type: { $in: ["aadhaarFront", "aadhaarBack"] } });
- 
+
 //     for (const d of docs) {
 //       if (d.url) await destroyCloudinaryFile(d.url);
 //       if (d.front?.url) await destroyCloudinaryFile(d.front.url);
 //       if (d.back?.url) await destroyCloudinaryFile(d.back.url);
 //     }
- 
+
 //     const ids = docs.map((d) => d._id);
 //     await aadhaarModel.updateMany({ _id: { $in: ids } }, { $set: { url: null, front: null, back: null } });
- 
+
 //     return res.status(200).json({ success: true, clearedCount: ids.length, deletedGroup: true });
 //   } catch (error) {
 //     console.error("deleteAadhaarTraveller error:", error);
 //     return res.status(500).json({ success: false, message: "Could not delete Aadhaar files.", error: error.message });
 //   }
 // };
- 
+
 // // GET /api/tour/download-all-aadhaar?docId=<docId> — ZIP of the raw files.
 // export const downloadAllAadhaarZip = async (req, res) => {
 //   try {
@@ -1695,7 +1695,7 @@
 //     if (!docId) return res.status(400).json({ success: false, message: "docId is required" });
 //     const doc = await aadhaarModel.findOne({ _id: docId, type: "aadhaarFront" });
 //     if (!doc) return res.status(404).json({ success: false, message: "Traveller not found." });
- 
+
 //     let docs;
 //     if (doc.isCoTraveller) {
 //       docs = [doc];
@@ -1705,7 +1705,7 @@
 //         : { groupId: doc.groupId };
 //       docs = await aadhaarModel.find({ ...groupMatch, type: "aadhaarFront" });
 //     }
- 
+
 //     const filesToZip = [];
 //     docs.forEach((d, idx) => {
 //       const parsed = d.parsed || {};
@@ -1722,22 +1722,22 @@
 //         filesToZip.push({ url: d.back.url, filename: `${idx + 1}-${safeLabel}-Back.${extFromUrl(d.back.url)}` });
 //       }
 //     });
- 
+
 //     if (filesToZip.length === 0) {
 //       return res.status(404).json({ success: false, message: "No Aadhaar files uploaded for this booking yet." });
 //     }
- 
+
 //     const zipName = doc.tnr ? `Aadhaar-${doc.tnr}.zip` : `Aadhaar-Draft-${doc.groupId}.zip`;
 //     res.setHeader("Content-Type", "application/zip");
 //     res.setHeader("Content-Disposition", `attachment; filename="${zipName}"`);
- 
+
 //     const archive = archiver("zip", { zlib: { level: 9 } });
 //     archive.on("error", (err) => {
 //       console.error("downloadAllAadhaarZip archive error:", err);
 //       if (!res.headersSent) res.status(500).end();
 //     });
 //     archive.pipe(res);
- 
+
 //     for (const f of filesToZip) {
 //       try {
 //         const response = await fetch(f.url);
@@ -1751,7 +1751,7 @@
 //         console.error(`downloadAllAadhaarZip: failed to fetch ${f.url}:`, err.message);
 //       }
 //     }
- 
+
 //     await archive.finalize();
 //   } catch (error) {
 //     console.error("downloadAllAadhaarZip error:", error);
@@ -1760,7 +1760,7 @@
 //     }
 //   }
 // };
- 
+
 // // Payment amount from a UPI/bank screenshot: spaced "hero" digit line first
 // // (immune to the ₹-glyph misread), then ₹/Rs/INR marker, then bare
 // // comma-grouped numbers.
@@ -1778,7 +1778,7 @@
 //       return heroAmount;
 //     }
 //   }
- 
+
 //   const markedMatches = [
 //     ...text.matchAll(/(?:₹|Rs\.?|INR)\s*([\d,]+(?:\.\d{1,2})?)/gi),
 //   ].map((m) => Number(m[1].replace(/,/g, "")));
@@ -1789,7 +1789,7 @@
 //     );
 //     return result;
 //   }
- 
+
 //   // const bareNumbers = [...text.matchAll(/\b\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?\b/g)]
 //   //   .map((m) => Number(m[0].replace(/,/g, "")))
 //   //   .filter((n) => !Number.isNaN(n) && n > 0);
@@ -1815,14 +1815,14 @@
 //   );
 //   return result;
 // }
- 
+
 // // POST /ocr/upload-group-payment — saves a payment screenshot straight into
 // // aadhaarModel against the group (or tnr for a real booking).
 // export const uploadGroupPayment = withTempCleanup(async (req, res) => {
 //   try {
 //     const file = req.file;
 //     const { groupId, tnr, type, amount, remarks } = req.body;
- 
+
 //     if (!file) return res.status(400).json({ success: false, message: "Screenshot image is required" });
 //     if (!groupId && !tnr) return res.status(400).json({ success: false, message: "groupId or tnr is required" });
 //     if (!["advance", "balance", "partial"].includes(type)) {
@@ -1831,7 +1831,7 @@
 //     if (amount !== undefined && amount !== "" && (isNaN(Number(amount)) || Number(amount) <= 0)) {
 //       return res.status(400).json({ success: false, message: "Amount, if entered, must be a positive number." });
 //     }
- 
+
 //     const upload = await cloudinary.uploader.upload(file.path, { folder: "payment-screenshots", resource_type: "image" });
 //     let resolvedGroupId = null;
 //     let resolvedTnr = tnr ? tnr.trim().toUpperCase() : "";
@@ -1846,7 +1846,7 @@
 //         if (byTnr?.groupId) resolvedGroupId = byTnr.groupId;
 //       }
 //     }
- 
+
 //     // let ocrAmount = null;
 //     // try {
 //     //   const text = await readImageText(file.path);
@@ -1868,11 +1868,11 @@
 //     }
 //     const finalAmount = typedAmount ?? ocrAmount;
 //     const docType = type === "advance" ? "paymentAdvance" : type === "balance" ? "paymentBalance" : "paymentPartial";
- 
- 
+
+
 //     // No duplicate guard here: two different screenshots can share the same
 //     // amount (e.g. two ₹10,000 instalments) and both must be saved.
- 
+
 //     const doc = await aadhaarModel.create({
 //       groupId: resolvedGroupId,
 //       tnr: resolvedTnr,
@@ -1882,7 +1882,7 @@
 //       remarks: remarks?.trim() || "",
 //       uploadedBy: "admin",
 //     });
- 
+
 //     return res.status(201).json({
 //       success: true,
 //       payment: doc,
@@ -1894,14 +1894,14 @@
 //     return res.status(500).json({ success: false, message: "Upload failed.", error: error.message });
 //   }
 // });
- 
+
 // // POST /delete-group-payment — body: { docId }. Never touches
 // // tourBookingModel.payment or invoices.
 // export const deleteGroupPayment = async (req, res) => {
 //   try {
 //     const { docId } = req.body;
 //     if (!docId) return res.status(400).json({ success: false, message: "docId is required" });
- 
+
 //     const doc = await aadhaarModel.findOne({
 //       _id: docId,
 //       type: { $in: ["paymentAdvance", "paymentBalance", "paymentPartial"] },
@@ -1909,16 +1909,16 @@
 //     if (!doc) {
 //       return res.status(404).json({ success: false, message: "Payment screenshot not found." });
 //     }
- 
+
 //     await aadhaarModel.deleteOne({ _id: doc._id });
- 
+
 //     return res.status(200).json({ success: true });
 //   } catch (error) {
 //     console.error("deleteGroupPayment error:", error);
 //     return res.status(500).json({ success: false, message: "Could not delete payment screenshot.", error: error.message });
 //   }
 // };
- 
+
 // // ─────────────── Payment Tasks dashboard ───────────────
 // const buildBookingDetails = (b, extra = {}) => {
 //   if (!b) return null;
@@ -1943,12 +1943,12 @@
 //     paymentTotals: extra.paymentTotals || { advancePaid: 0, partialPaid: 0, balancePaid: 0 },
 //   };
 // };
- 
+
 // const BOOKING_DETAIL_SELECT =
 //   "tnr tourId travellers payment bookingDate contact bookingType " +
 //   "isTripCompleted isBookingCompleted manageBooking gvCancellationPool " +
 //   "irctcCancellationPool billingAddress receipts advanceAdminRemarks adminRemarks";
- 
+
 // const computePaymentTotals = (history) => {
 //   const sum = (type) =>
 //     history
@@ -1960,7 +1960,7 @@
 //     balancePaid: sum("paymentBalance"),
 //   };
 // };
- 
+
 // export const getPaymentTasks = async (req, res) => {
 //   try {
 //     const allBookingsNeedingAdvance = await tourBookingModel
@@ -1969,7 +1969,7 @@
 //       .select(BOOKING_DETAIL_SELECT)
 //       .sort({ bookingDate: -1 })
 //       .lean();
- 
+
 //     const advanceTnrs = allBookingsNeedingAdvance.map((b) => b.tnr).filter(Boolean);
 //     const advanceClearedDocs = advanceTnrs.length
 //       ? await aadhaarModel
@@ -1978,7 +1978,7 @@
 //         .lean()
 //       : [];
 //     const advanceClearedTnrs = new Set(advanceClearedDocs.map((d) => d.tnr));
- 
+
 //     const advanceScreenshotDocs = advanceTnrs.length
 //       ? await aadhaarModel
 //         .find({ type: "paymentAdvance", tnr: { $in: advanceTnrs } })
@@ -1986,16 +1986,16 @@
 //         .lean()
 //       : [];
 //     const tnrsWithAdvanceScreenshot = new Set(advanceScreenshotDocs.map((d) => d.tnr));
- 
+
 //     const bookingsNeedingAdvance = allBookingsNeedingAdvance.filter(
 //       (b) => !advanceClearedTnrs.has(b.tnr) && tnrsWithAdvanceScreenshot.has(b.tnr),
 //     );
- 
+
 //     const screenshotDocs = await aadhaarModel
 //       .find({ type: { $in: ["paymentPartial", "paymentBalance"] }, taskCleared: { $ne: true } })
 //       .sort({ createdAt: -1 })
 //       .lean();
- 
+
 //     const groupIds = [...new Set(screenshotDocs.map((d) => d.groupId).filter(Boolean))];
 //     const mainDocs = groupIds.length
 //       ? await aadhaarModel
@@ -2010,7 +2010,7 @@
 //       : [];
 //     const mainByGroup = new Map(mainDocs.map((d) => [d.groupId, d]));
 //     const notesByGroup = new Map(bookingNotesDocs.map((d) => [d.groupId, d]));
- 
+
 //     const screenshotTnrs = [
 //       ...new Set(screenshotDocs.map((d) => d.tnr).filter(Boolean)),
 //     ];
@@ -2022,7 +2022,7 @@
 //         .lean()
 //       : [];
 //     const bookingByTnr = new Map(linkedBookings.map((b) => [b.tnr, b]));
- 
+
 //     const allTnrs = [
 //       ...new Set([
 //         ...bookingsNeedingAdvance.map((b) => b.tnr).filter(Boolean),
@@ -2069,7 +2069,7 @@
 //         paymentTotals: computePaymentTotals(history),
 //       };
 //     };
- 
+
 //     const advanceTasks = bookingsNeedingAdvance.map((b) => {
 //       const main = (b.travellers || []).find((t) => !t.isCoTraveller) || b.travellers?.[0];
 //       return {
@@ -2081,7 +2081,7 @@
 //         booking: buildBookingDetails(b, extraForTnr(b.tnr)),
 //       };
 //     });
- 
+
 //     const screenshotToTask = (d) => {
 //       const main = mainByGroup.get(d.groupId);
 //       const notes = notesByGroup.get(d.groupId);
@@ -2100,23 +2100,23 @@
 //         booking: buildBookingDetails(linkedBooking, extraForTnr(d.tnr)),
 //       };
 //     };
- 
+
 //     const partialTasks = screenshotDocs.filter((d) => d.type === "paymentPartial").map(screenshotToTask);
 //     const balanceTasks = screenshotDocs.filter((d) => d.type === "paymentBalance").map(screenshotToTask);
- 
+
 //     return res.status(200).json({ success: true, advanceTasks, partialTasks, balanceTasks });
 //   } catch (error) {
 //     console.error("getPaymentTasks error:", error);
 //     return res.status(500).json({ success: false, message: "Could not fetch payment tasks.", error: error.message });
 //   }
 // };
- 
+
 // // POST /payment-tasks/mark-done — body: { docId }. Purely a to-do checkbox.
 // export const markPaymentTaskDone = async (req, res) => {
 //   try {
 //     const { docId } = req.body;
 //     if (!docId) return res.status(400).json({ success: false, message: "docId is required" });
- 
+
 //     const doc = await aadhaarModel.findOneAndUpdate(
 //       { _id: docId, type: { $in: ["paymentPartial", "paymentBalance"] } },
 //       { $set: { taskCleared: true } },
@@ -2125,42 +2125,42 @@
 //     if (!doc) {
 //       return res.status(404).json({ success: false, message: "Payment task not found." });
 //     }
- 
+
 //     return res.status(200).json({ success: true });
 //   } catch (error) {
 //     console.error("markPaymentTaskDone error:", error);
 //     return res.status(500).json({ success: false, message: "Could not mark this task done.", error: error.message });
 //   }
 // };
- 
+
 // // POST /payment-tasks/mark-advance-done — body: { tnr }. Purely a to-do
 // // checkbox; never touches payment.advance.
 // export const markAdvanceTaskDone = async (req, res) => {
 //   try {
 //     const { tnr } = req.body;
 //     if (!tnr) return res.status(400).json({ success: false, message: "tnr is required" });
- 
+
 //     await aadhaarModel.findOneAndUpdate(
 //       { type: "advanceTaskCleared", tnr },
 //       { $setOnInsert: { type: "advanceTaskCleared", tnr, uploadedBy: "admin" } },
 //       { upsert: true, new: true },
 //     );
- 
+
 //     return res.status(200).json({ success: true });
 //   } catch (error) {
 //     console.error("markAdvanceTaskDone error:", error);
 //     return res.status(500).json({ success: false, message: "Could not mark this task done.", error: error.message });
 //   }
 // };
- 
+
 // // ═══════════════════════ "User Bookings" tab ═══════════════════════
- 
+
 // // GET /ocr/user-bookings?tourId=...&email= (email optional)
 // export const searchUserBookings = async (req, res) => {
 //   try {
 //     const { tourId, email } = req.query;
 //     if (!tourId) return res.status(400).json({ success: false, message: "tourId is required" });
- 
+
 //     const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 //     const query = { tourId, createdBy: "user" };
 //     if (email && email.trim()) {
@@ -2171,7 +2171,7 @@
 //       .select("tnr travellers contact bookingDate payment cancelled")
 //       .sort({ bookingDate: -1 })
 //       .lean();
- 
+
 //     const tnrs = bookings.map((b) => b.tnr).filter(Boolean);
 //     const proofDocs = tnrs.length
 //       ? await aadhaarModel.find({ tnr: { $in: tnrs } }).lean()
@@ -2181,7 +2181,7 @@
 //       if (!docsByTnr.has(d.tnr)) docsByTnr.set(d.tnr, []);
 //       docsByTnr.get(d.tnr).push(d);
 //     }
- 
+
 //     const cancellationDocs = tnrs.length
 //       ? await cancellationModel
 //         .find({ tnr: { $in: tnrs } })
@@ -2207,7 +2207,7 @@
 //       }
 //       return null;
 //     };
- 
+
 //     return res.status(200).json({
 //       success: true,
 //       bookings: bookings.map((b) => {
@@ -2229,7 +2229,7 @@
 //             payments.partial.push({ _id: d._id, url: d.url, amount: d.amount, uploadedAt: d.createdAt, remarks: d.remarks || "" });
 //           }
 //         }
- 
+
 //         const packageAmount = (Number(b.payment?.advance?.amount) || 0) + (Number(b.payment?.balance?.amount) || 0);
 //         const screenshotsPaid =
 //           payments.advance.reduce((s, p) => s + (Number(p.amount) || 0), 0) +
@@ -2240,7 +2240,7 @@
 //           (b.payment?.balance?.paid ? Number(b.payment?.balance?.amount) || 0 : 0);
 //         const amountPaid = Math.max(screenshotsPaid, bookingPaid);
 //         const balanceRemaining = Math.max(0, packageAmount - amountPaid);
- 
+
 //         return {
 //           tnr: b.tnr,
 //           bookingDate: b.bookingDate,
@@ -2272,7 +2272,7 @@
 //     return res.status(500).json({ success: false, message: "Could not search online bookings.", error: error.message });
 //   }
 // };
- 
+
 // // POST /ocr/user-bookings/upload-aadhaar — attaches Aadhaar to ONE existing
 // // traveller (real booking), or to an existing walk-in / pending
 // // co-traveller aadhaarModel doc (fallback).
@@ -2281,12 +2281,12 @@
 //     const { tnr, travellerId, front, back, parsed } = req.body;
 //     if (!tnr) return res.status(400).json({ success: false, message: "tnr is required" });
 //     if (!travellerId) return res.status(400).json({ success: false, message: "travellerId is required" });
- 
+
 //     const booking = await tourBookingModel.findOne({
 //       tnr: tnr.trim().toUpperCase(),
 //       "travellers._id": travellerId,
 //     });
- 
+
 //     if (!booking) {
 //       // FALLBACK — travellerId is an existing aadhaarModel doc's own _id.
 //       const existingDoc = await aadhaarModel.findOne({
@@ -2296,12 +2296,12 @@
 //       if (!existingDoc) {
 //         return res.status(404).json({ success: false, message: "Booking/traveller not found for this tnr." });
 //       }
- 
+
 //       existingDoc.url = front?.url || existingDoc.url || "";
 //       existingDoc.ocrText = front?.ocrText || existingDoc.ocrText || "";
 //       existingDoc.parsed = { ...(existingDoc.parsed || {}), ...(parsed || {}) };
 //       await existingDoc.save();
- 
+
 //       if (back?.url) {
 //         await aadhaarModel.create({
 //           groupId: existingDoc.groupId,
@@ -2315,11 +2315,11 @@
 //           uploadedBy: "admin",
 //         });
 //       }
- 
+
 //       return res.status(201).json({ success: true, traveller: existingDoc });
 //     }
 //     const traveller = booking.travellers.id(travellerId);
- 
+
 //     const frontDoc = await aadhaarModel.create({
 //       tnr: booking.tnr,
 //       travellerId,
@@ -2330,7 +2330,7 @@
 //       parsed: parsed || {},
 //       uploadedBy: "admin",
 //     });
- 
+
 //     if (back?.url) {
 //       await aadhaarModel.create({
 //         tnr: booking.tnr,
@@ -2343,7 +2343,7 @@
 //         uploadedBy: "admin",
 //       });
 //     }
- 
+
 //     await tourBookingModel.updateOne(
 //       { _id: booking._id, "travellers._id": travellerId },
 //       {
@@ -2353,14 +2353,14 @@
 //         },
 //       },
 //     );
- 
+
 //     return res.status(201).json({ success: true, traveller: frontDoc });
 //   } catch (error) {
 //     console.error("uploadUserTravellerAadhaar error:", error);
 //     return res.status(500).json({ success: false, message: "Could not save Aadhaar for this traveller.", error: error.message });
 //   }
 // };
- 
+
 // // POST /bookings/export-active-travellers — body: { tnrs?: string[] }.
 // export const exportActiveTravellersPdfData = async (req, res) => {
 //   try {
@@ -2369,13 +2369,13 @@
 //       Array.isArray(tnrs) && tnrs.length > 0
 //         ? { tnr: { $in: tnrs.map((t) => String(t).trim().toUpperCase()) } }
 //         : {};
- 
+
 //     const bookings = await tourBookingModel.find(filter);
 //     const rows = [];
- 
+
 //     for (const booking of bookings) {
 //       let bookingChanged = false;
- 
+
 //       const aadhaarDocs = await aadhaarModel
 //         .find({ tnr: booking.tnr, type: "aadhaarFront" })
 //         .sort({ createdAt: 1 });
@@ -2387,7 +2387,7 @@
 //         else if (d.isCoTraveller) coDocs.push(d);
 //         else mainDocs.push(d);
 //       }
- 
+
 //       let coIndex = 0;
 //       for (let i = 0; i < (booking.travellers || []).length; i++) {
 //         const t = booking.travellers[i];
@@ -2395,10 +2395,10 @@
 //         const matchedById = byTravellerId.get(String(t._id));
 //         const positionalDoc = isMain ? mainDocs[0] : coDocs[coIndex];
 //         if (!isMain && !matchedById) coIndex++;
- 
+
 //         const isCancelled = t.cancelled?.byAdmin || t.cancelled?.byTraveller;
 //         if (isCancelled) continue;
- 
+
 //         let aadhaarNumber = t.aadhaarNumber || "";
 //         let aDoc = null;
 //         if (!aadhaarNumber && t.aadhaarId) {
@@ -2415,10 +2415,10 @@
 //         if (!aadhaarNumber && !aDoc) {
 //           aDoc = matchedById || positionalDoc || null;
 //         }
- 
+
 //         if (!aadhaarNumber && aDoc) {
 //           aadhaarNumber = aDoc.parsed?.aadhaarNumber || "";
- 
+
 //           if (!aadhaarNumber && aDoc.url) {
 //             try {
 //               aadhaarNumber = await ocrAadhaarNumberFromUrl(aDoc.url);
@@ -2430,18 +2430,18 @@
 //               );
 //             }
 //           }
- 
+
 //           if (aadhaarNumber && aDoc.parsed?.aadhaarNumber !== aadhaarNumber) {
 //             aDoc.parsed = { ...(aDoc.parsed || {}), aadhaarNumber };
 //             await aDoc.save();
 //           }
 //         }
- 
+
 //         if (aadhaarNumber) {
 //           t.aadhaarNumber = aadhaarNumber;
 //           bookingChanged = true;
 //         }
- 
+
 //         rows.push({
 //           tnr: booking.tnr,
 //           name: `${t.firstName || ""} ${t.lastName || ""}`.trim() || "Unknown",
@@ -2450,12 +2450,12 @@
 //           aadhaarNumber: aadhaarNumber || "Not Available",
 //         });
 //       }
- 
+
 //       if (bookingChanged) {
 //         await booking.save();
 //       }
 //     }
- 
+
 //     return res.status(200).json({ success: true, travellers: rows });
 //   } catch (error) {
 //     console.error("exportActiveTravellersPdfData error:", error);
@@ -2466,7 +2466,7 @@
 //     });
 //   }
 // };
- 
+
 // // POST /ocr/user-bookings/upload-payment — multipart: screenshot; body:
 // // { tnr, type, amount }. Never touches payment.advance/balance.paid.
 // export const uploadUserBookingPayment = withTempCleanup(async (req, res) => {
@@ -2481,14 +2481,14 @@
 //     if (amount !== undefined && amount !== "" && (isNaN(Number(amount)) || Number(amount) <= 0)) {
 //       return res.status(400).json({ success: false, message: "Amount, if entered, must be a positive number." });
 //     }
- 
+
 //     const booking = await tourBookingModel.findOne({ tnr: tnr.trim().toUpperCase(), createdBy: "user" }).select("tnr");
 //     if (!booking) {
 //       return res.status(404).json({ success: false, message: "Online booking not found for this tnr." });
 //     }
- 
+
 //     const upload = await cloudinary.uploader.upload(file.path, { folder: "payment-screenshots", resource_type: "image" });
- 
+
 //     // let ocrAmount = null;
 //     // try {
 //     //   const text = await readImageText(file.path);
@@ -2508,8 +2508,8 @@
 //       }
 //     }
 //     const finalAmount = typedAmount ?? ocrAmount;
- 
- 
+
+
 //     const doc = await aadhaarModel.create({
 //       tnr: booking.tnr,
 //       type: type === "advance" ? "paymentAdvance" : type === "balance" ? "paymentBalance" : "paymentPartial",
@@ -2518,7 +2518,7 @@
 //       remarks: remarks?.trim() || "",
 //       uploadedBy: "admin",
 //     });
- 
+
 //     return res.status(201).json({
 //       success: true,
 //       payment: doc,
@@ -2530,7 +2530,7 @@
 //     return res.status(500).json({ success: false, message: "Upload failed.", error: error.message });
 //   }
 // });
- 
+
 // // POST /ocr/link-tnr — manual fallback when auto-match can't find the tnr.
 // export const linkGroupTnr = async (req, res) => {
 //   try {
@@ -2545,13 +2545,13 @@
 //     return res.status(500).json({ success: false, message: "Could not link TNR.", error: error.message });
 //   }
 // };
- 
+
 // // GET /ocr/payment-records?from=YYYY-MM-DD&to=YYYY-MM-DD&type=advance|balance|partial
 // // Every payment screenshot saved from the Aadhaar Upload page, newest first.
 // export const getPaymentRecords = async (req, res) => {
 //   try {
 //     const { from, to, type } = req.query;
- 
+
 //     const typeMap = { advance: "paymentAdvance", balance: "paymentBalance", partial: "paymentPartial" };
 //     const query = {
 //       type: typeMap[type] ? typeMap[type] : { $in: ["paymentAdvance", "paymentBalance", "paymentPartial"] },
@@ -2561,14 +2561,14 @@
 //       if (from) query.createdAt.$gte = new Date(`${from}T00:00:00+05:30`);
 //       if (to) query.createdAt.$lte = new Date(`${to}T23:59:59.999+05:30`);
 //     }
- 
+
 //     const payments = await aadhaarModel
 //       .find(query)
 //       .select("type amount remarks url createdAt tnr groupId taskCleared uploadedBy")
 //       .sort({ createdAt: -1 })
 //       .limit(2000)
 //       .lean();
- 
+
 //     const groupIds = [...new Set(payments.map((p) => p.groupId).filter(Boolean))];
 //     const groupDocs = groupIds.length
 //       ? await aadhaarModel
@@ -2587,7 +2587,7 @@
 //       }
 //       groupInfo.set(d.groupId, g);
 //     }
- 
+
 //     const tnrs = [
 //       ...new Set(
 //         payments
@@ -2599,7 +2599,7 @@
 //       ? await tourBookingModel.find({ tnr: { $in: tnrs } }).select("tnr tourId travellers createdBy").lean()
 //       : [];
 //     const realByTnr = new Map(realDocs.map((b) => [b.tnr, b]));
- 
+
 //     const tourIds = [
 //       ...new Set(
 //         [...groupInfo.values()].map((g) => g.tourId)
@@ -2609,7 +2609,7 @@
 //     ];
 //     const tourDocs = tourIds.length ? await tourModel.find({ _id: { $in: tourIds } }).select("title").lean() : [];
 //     const tourTitleById = new Map(tourDocs.map((t) => [String(t._id), t.title || ""]));
- 
+
 //     const records = payments.map((p) => {
 //       const g = p.groupId ? groupInfo.get(p.groupId) : null;
 //       const tnr = p.tnr || g?.tnr || "";
@@ -2635,7 +2635,7 @@
 //         taskCleared: !!p.taskCleared,
 //       };
 //     });
- 
+
 //     return res.status(200).json({ success: true, records });
 //   } catch (error) {
 //     console.error("getPaymentRecords error:", error);
@@ -2673,7 +2673,7 @@ import tourBookingModel from "../models/tourBookingmodel.js";
 import tourModel from "../models/tourModel.js";
 // Read-only — Cancellation Requested / Rejected / Cancelled badges.
 import cancellationModel from "../models/cancellationModel.js";
- 
+
 let workerPromise;
 function getWorker() {
   if (!workerPromise) {
@@ -2834,8 +2834,8 @@ async function readPaddleText(filePath) {
     console.error("[aadhaarOcr] PaddleOCR read failed:", String(err?.message || err).slice(0, 200));
     return "";
   } finally {
-    fs.unlink(out, () => {});
-    if (pdfPng) fs.unlink(pdfPng, () => {});
+    fs.unlink(out, () => { });
+    if (pdfPng) fs.unlink(pdfPng, () => { });
   }
 }
 
@@ -2900,7 +2900,7 @@ function pdfTextLayer(pdfPath) {
     try { doc?.destroy(); } catch { /* ignore */ }
   }
 }
- 
+
 // Upscale + grayscale + normalize + sharpen before OCR. Falls back to the
 // original file if preprocessing fails.
 // Where the card sits in a photo: the area with text/edges, ignoring the
@@ -2968,7 +2968,7 @@ async function preprocessForOcr(filePath, { cardCrop = false } = {}) {
     .toFile(outPath);
   return outPath;
 }
- 
+
 // A PDF always starts with "%PDF-" — check content, not extension.
 function isPdfFile(filePath) {
   const fd = fs.openSync(filePath, "r");
@@ -2980,7 +2980,7 @@ function isPdfFile(filePath) {
     fs.closeSync(fd);
   }
 }
- 
+
 // Renders page 1 of a PDF to a PNG (~300 DPI) with mupdf. Throws on a
 // corrupt/password-protected PDF — caller must NOT fall back to OCR-ing
 // the raw PDF.
@@ -3034,7 +3034,7 @@ function pdfFirstPageToPngFile(pdfPath, dpi = 300) {
     doc.destroy();
   }
 }
- 
+
 function removeTempUploads(req) {
   const files = [];
   if (req.file) files.push(req.file);
@@ -3053,11 +3053,11 @@ const withTempCleanup = (handler) => async (req, res) => {
     removeTempUploads(req);
   }
 };
- 
- 
+
+
 async function readImageText(filePath, workerPromiseOverride, ocrOpts = {}) {
   const worker = await (workerPromiseOverride || getWorker());
- 
+
   // PDF → PNG FIRST, unconditionally.
   let sourcePath = filePath;
   let pdfPngPath = null;
@@ -3070,7 +3070,7 @@ async function readImageText(filePath, workerPromiseOverride, ocrOpts = {}) {
       throw new Error("Could not read this PDF — it may be corrupted or password-protected. Try a clear photo instead.");
     }
   }
- 
+
   let ocrPath = sourcePath;
   let preprocessed = false;
   try {
@@ -3092,7 +3092,7 @@ async function readImageText(filePath, workerPromiseOverride, ocrOpts = {}) {
     }
   }
 }
- 
+
 // Backfill helper — re-OCR an already-uploaded Aadhaar image just for its
 // number. Used only by exportActiveTravellersPdfData.
 async function ocrAadhaarNumberFromUrl(url) {
@@ -3108,7 +3108,7 @@ async function ocrAadhaarNumberFromUrl(url) {
     fs.unlink(tmpPath, () => { });
   }
 }
- 
+
 // Plain edit-distance (gender word only).
 function levenshtein(a, b) {
   const m = a.length, n = b.length;
@@ -3125,14 +3125,14 @@ function levenshtein(a, b) {
   }
   return dp[m][n];
 }
- 
+
 // Exact match first; otherwise fuzzy-match tokens against FEMALE/MALE/
 // TRANSGENDER (OCR often reads "FEMALZ", "FEMAIE", etc).
 function detectGender(text) {
   if (/female/i.test(text)) return "Female";
   if (/\bmale\b/i.test(text)) return "Male";
   if (/transgender/i.test(text)) return "Other";
- 
+
   const words = text.match(/[A-Za-z]{3,}/g) || [];
   let best = { gender: "", dist: Infinity };
   for (const raw of words) {
@@ -3154,7 +3154,7 @@ function calcAge(dob) {
   if (today < new Date(today.getFullYear(), m - 1, d)) age--;
   return age;
 }
- 
+
 // e-Aadhaar PDF detection — the postal "To" line is e-PDF-only, so it's
 // required alongside the letterhead/enrolment text; VTC:+PIN Code: labels
 // are self-sufficient.
@@ -3166,7 +3166,7 @@ function isEAadhaarPdfText(text) {
     (/VTC\s*[:\-]/i.test(text) && /PIN\s*Code\s*[:\-]/i.test(text))
   );
 }
- 
+
 // UIDAI boilerplate vocabulary that gets interleaved with the real
 // name/address on e-Aadhaar PDF OCR.
 const UIDAI_BOILERPLATE_WORDS = new Set([
@@ -3188,7 +3188,7 @@ const UIDAI_BOILERPLATE_WORDS = new Set([
   "no", "on", "by", "for", "with", "benefits", "ensure", "security",
   "when", "lock", "unlock", "biometrics", "feature", "digitally", "signed",
 ]);
- 
+
 // Rejects regional-script OCR noise misread as Latin letters.
 function looksLikeRealWord(token) {
   const lower = token.toLowerCase();
@@ -3197,7 +3197,7 @@ function looksLikeRealWord(token) {
   if (/[^aeiou]{3,}/.test(lower)) return false;
   return true;
 }
- 
+
 function classifyNameToken(token) {
   if (/^[a-z]/.test(token)) return "noise";
   if (UIDAI_BOILERPLATE_WORDS.has(token.toLowerCase())) return "noise";
@@ -3205,7 +3205,7 @@ function classifyNameToken(token) {
   if (!looksLikeRealWord(token)) return "noise";
   return "word";
 }
- 
+
 // Longest unbroken run of name-like tokens in one OCR line.
 function bestNameSegmentInLine(line) {
   const tokens = line.match(/[A-Za-z]+/g) || [];
@@ -3224,7 +3224,7 @@ function bestNameSegmentInLine(line) {
   if (current.length && isBetter(current, best)) best = current;
   return best;
 }
- 
+
 // e-Aadhaar letter name. The letter prints:
 //     To
 //     Gomathi K R            ← holder's name
@@ -3326,7 +3326,7 @@ function addressLineLeadingRun(line) {
   }
   return kept.join(" ").trim();
 }
- 
+
 // Unlabeled e-Aadhaar layout: "To" block up to the 6-digit PIN line.
 function extractAddressFallbackFromToBlock(lines, toIdx, name) {
   if (toIdx === -1) return "";
@@ -3355,7 +3355,7 @@ function extractAddressFallbackFromToBlock(lines, toIdx, name) {
   }
   return cleanAddressNoise(joined.replace(/,\s*,/g, ",").replace(/^[\s,]+|[\s,]+$/g, ""));
 }
- 
+
 function parseEAadhaarPdf(text) {
   text = fixStateTypos(text);
   const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
@@ -3670,7 +3670,7 @@ function parseAadhaarText(text = "") {
   if (dob) { age = calcAge(dob); }
   else if (yobMatch) { age = new Date().getFullYear() - Number(yobMatch[1]); }
   const gender = detectGender(text);
- 
+
   if (isEAadhaarPdfText(text)) {
     const e = parseEAadhaarPdf(text);
     const phone = e.phone || extractPhone(text);
@@ -3687,7 +3687,7 @@ function parseAadhaarText(text = "") {
       ...e.addressParts,
     };
   }
- 
+
   const dobIdx = lines.findIndex((l) => /DOB|D\.O\.B|Year of Birth|YOB|Date of Birth/i.test(l));
   // DOB line itself sometimes loses the "DOB" word; fall back to the date line.
   let anchorIdx = dobIdx !== -1 ? dobIdx : lines.findIndex((l) => dob && l.includes(dob));
@@ -3710,7 +3710,7 @@ function parseAadhaarText(text = "") {
   const aadhaarNumber = extractAadhaarNumber(text);
   return { firstName, lastName, age, dob, gender, address, phone, aadhaarNumber, ...addressParts };
 }
- 
+
 // Mobile number — tolerates an internal space/hyphen.
 function extractPhone(text = "") {
   // Only a number printed with a label ("Mobile: 99801 61550"). Cards don't
@@ -3719,7 +3719,7 @@ function extractPhone(text = "") {
   const match = text.match(/\b(?:mobile|mob|phone|ph|cell)\b\s*(?:no\.?|number)?\s*[:.\-]?\s*(?:\+?91[\s-]?)?([6-9]\d{4})[\s-]?(\d{5})\b/i);
   return match ? `${match[1]}${match[2]}` : "";
 }
- 
+
 // 12-digit Aadhaar number (never starts with 0/1), returned as "XXXX XXXX XXXX".
 function extractAadhaarNumber(text = "") {
   // Skip the 16-digit VID ("VID : 9100 8113 0273 0000") — its first 12
@@ -3737,7 +3737,7 @@ function extractAadhaarNumber(text = "") {
   }
   return "";
 }
- 
+
 // Strips background-pattern OCR noise from the address block.
 function cleanAddressNoise(addr = "") {
   if (!addr) return addr;
@@ -3761,7 +3761,7 @@ function cleanAddressNoise(addr = "") {
     .replace(/[\s,]+$/, "")
     .trim();
 }
- 
+
 const INDIAN_STATES_UTS = [
   "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh",
   "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka",
@@ -3836,8 +3836,10 @@ function splitAddressComponents(addr = "") {
   // Second line of the state lost ("Kancheepuram, Tamil" + PIN line
   // unreadable): a distinctive first word is enough.
   if (stateAt === -1) {
-    const PARTIAL = { tamil: "Tamil Nadu", andhra: "Andhra Pradesh", arunachal: "Arunachal Pradesh",
-      himachal: "Himachal Pradesh", madhya: "Madhya Pradesh", jammu: "Jammu And Kashmir" };
+    const PARTIAL = {
+      tamil: "Tamil Nadu", andhra: "Andhra Pradesh", arunachal: "Arunachal Pradesh",
+      himachal: "Himachal Pradesh", madhya: "Madhya Pradesh", jammu: "Jammu And Kashmir"
+    };
     const hits = [...text.matchAll(/\b(Tamil|Andhra|Arunachal|Himachal|Madhya|Jammu)\b/gi)];
     if (hits.length) {
       const h = hits[hits.length - 1];
@@ -3917,7 +3919,7 @@ function splitAddressComponents(addr = "") {
   out.addressLine1 = segments.join(", ");
   return out;
 }
- 
+
 // Address — progressively looser fallbacks, all anchored on the 6-digit PIN.
 function extractAddress(text = "") {
   // Front side has no address — only read one when the card says so, else a
@@ -3925,10 +3927,10 @@ function extractAddress(text = "") {
   if (!/Address|\b[SDWC]\s*\/\s*O\b/i.test(text)) return "";
   let match = text.match(/Address[:\s]*([\s\S]*?\b\d{6}\b)/i);
   if (match) return cleanAddressNoise(match[1].replace(/\s*\n\s*/g, ", ").trim());
- 
+
   match = text.match(/\b[SDWC]\/O[:\s]*([\s\S]*?\b\d{6}\b)/i);
   if (match) return cleanAddressNoise(match[1].replace(/\s*\n\s*/g, ", ").trim());
- 
+
   match = text.match(/\b\d{6}\b/);
   if (match) {
     const idx = text.indexOf(match[0]);
@@ -3978,7 +3980,7 @@ function mergeSides(front, back) {
     pincode: addrSource.pincode || "",
   };
 }
- 
+
 // ── Aadhaar QR code ───────────────────────────────────────────────────
 // The QR printed on the card is exact data signed by UIDAI, so when it can
 // be read it beats OCR. Two formats exist:
@@ -4059,7 +4061,7 @@ async function scanQrFromImage(filePath) {
     // which confuses the whole-image scan. Scan overlapping tiles instead.
     return await scanQrTiles(source, meta);
   } finally {
-    if (tmpPng) fs.unlink(tmpPng, () => {});
+    if (tmpPng) fs.unlink(tmpPng, () => { });
   }
 }
 
@@ -4289,7 +4291,7 @@ export async function extractAadhaarFromFiles(frontPath, backPath = null, opts =
   try {
     return await extractAadhaarFromFilesInner(frontPath, backPath, opts);
   } finally {
-    if (pdfBackTmp) fs.unlink(pdfBackTmp, () => {});
+    if (pdfBackTmp) fs.unlink(pdfBackTmp, () => { });
   }
 }
 
@@ -4479,7 +4481,7 @@ export const extractAadhaar = withTempCleanup(async (req, res) => {
     return res.status(500).json({ success: false, message: "Could not read the Aadhaar image.", error: error.message });
   }
 });
- 
+
 // POST /ocr/payment-screenshot — OCR amount first, typed amount as fallback.
 export const uploadPaymentScreenshot = withTempCleanup(async (req, res) => {
   try {
@@ -4493,7 +4495,7 @@ export const uploadPaymentScreenshot = withTempCleanup(async (req, res) => {
       return res.status(400).json({ success: false, message: "Amount, if entered, must be a positive number." });
     }
     const upload = await cloudinary.uploader.upload(file.path, { folder: "payment-screenshots", resource_type: "image" });
- 
+
     // let ocrAmount = null;
     // try {
     //   const text = await readImageText(file.path);
@@ -4502,7 +4504,7 @@ export const uploadPaymentScreenshot = withTempCleanup(async (req, res) => {
     //   console.error("Payment screenshot OCR failed, falling back to typed amount:", err.message);
     // }
     // const finalAmount = ocrAmount ?? (amount ? Number(amount) : null);
- 
+
     // The amount the admin typed always wins. OCR is only a fallback when
     // the box was left empty (it can misread "₹10,000" as "310000").
     const typedAmount = amount !== undefined && amount !== "" ? Number(amount) : null;
@@ -4516,7 +4518,7 @@ export const uploadPaymentScreenshot = withTempCleanup(async (req, res) => {
       }
     }
     const finalAmount = typedAmount ?? ocrAmount;
- 
+
     return res.status(200).json({
       success: true,
       type,
@@ -4530,15 +4532,15 @@ export const uploadPaymentScreenshot = withTempCleanup(async (req, res) => {
     return res.status(500).json({ success: false, message: "Upload failed.", error: error.message });
   }
 });
- 
+
 export const saveBookingNotes = async (req, res) => {
   try {
     const { tourId, packageType, packageKind, variantPackageIndex, boardingPoint, deboardingPoint, addons, remarks, raisedBy } = req.body;
- 
+
     if (!tourId) {
       return res.status(400).json({ success: false, message: "tourId is required" });
     }
- 
+
     const doc = await aadhaarModel.create({
       type: "bookingNotes",
       tourId,
@@ -4557,14 +4559,14 @@ export const saveBookingNotes = async (req, res) => {
         ? { name: raisedBy.name || "", employeeId: raisedBy.employeeId || "" }
         : undefined,
     });
- 
+
     return res.status(201).json({ success: true, note: doc });
   } catch (error) {
     console.error("saveBookingNotes error:", error);
     return res.status(500).json({ success: false, message: "Could not save booking notes.", error: error.message });
   }
 };
- 
+
 // POST /ocr/save-aadhaar-upload — "Save Booking" on the Aadhaar Upload page.
 // Creates every aadhaarModel doc for one walk-in capture, all sharing one
 // groupId. Only an Advance Payment screenshot is hard-required.
@@ -4586,7 +4588,7 @@ export const saveAadhaarUpload = async (req, res) => {
       advanceScreenshot, // legacy single-object shape
       advanceScreenshots, // current shape
     } = req.body;
- 
+
     const hasAdvanceScreenshot =
       (Array.isArray(advanceScreenshots) && advanceScreenshots.some((s) => s?.url)) ||
       !!advanceScreenshot?.url;
@@ -4596,7 +4598,7 @@ export const saveAadhaarUpload = async (req, res) => {
         message: "Attach the Advance Payment screenshot before creating this booking",
       });
     }
- 
+
     const groupId = new mongoose.Types.ObjectId().toString();
     const parsed = {
       firstName: traveller.firstName || "",
@@ -4615,7 +4617,7 @@ export const saveAadhaarUpload = async (req, res) => {
       title: traveller.title || "",
       sharingType: traveller.sharingType || "",
     };
- 
+
     const docs = [
       {
         groupId,
@@ -4627,7 +4629,7 @@ export const saveAadhaarUpload = async (req, res) => {
         uploadedBy: "admin",
       },
     ];
- 
+
     if (traveller.back?.url) {
       docs.push({
         groupId,
@@ -4639,7 +4641,7 @@ export const saveAadhaarUpload = async (req, res) => {
         uploadedBy: "admin",
       });
     }
- 
+
     if (Array.isArray(coTravellers)) {
       for (const ct of coTravellers) {
         // Skip only a totally blank row.
@@ -4682,7 +4684,7 @@ export const saveAadhaarUpload = async (req, res) => {
         }
       }
     }
- 
+
     const advanceList = Array.isArray(advanceScreenshots)
       ? advanceScreenshots
       : advanceScreenshot?.url
@@ -4699,7 +4701,7 @@ export const saveAadhaarUpload = async (req, res) => {
         uploadedBy: "admin",
       });
     }
- 
+
     docs.push({
       groupId,
       type: "bookingNotes",
@@ -4718,20 +4720,20 @@ export const saveAadhaarUpload = async (req, res) => {
       uploadedBy: "admin",
       raisedBy: { name: raisedBy?.name || "", employeeId: raisedBy?.employeeId || "" },
     });
- 
+
     const created = await aadhaarModel.insertMany(docs);
- 
+
     return res.status(201).json({ success: true, groupId, docs: created });
   } catch (error) {
     console.error("saveAadhaarUpload error:", error);
     return res.status(500).json({ success: false, message: "Could not save this booking.", error: error.message });
   }
 };
- 
+
 // Compare phones by last 10 digits so formatting differences don't block
 // the auto-match.
 const normalizePhone = (p) => String(p || "").replace(/\D/g, "").slice(-10);
- 
+
 // Auto-links a walk-in group to the real booking Create Booking produced
 // for it: same tour, same contact mobile, booked at/after the group.
 async function autoMatchTnrForGroup(group) {
@@ -4741,11 +4743,11 @@ async function autoMatchTnrForGroup(group) {
     );
     return null;
   }
- 
+
   try {
     const claimedTnrs = await aadhaarModel.distinct("tnr", { tnr: { $nin: [null, ""] } });
     const wantPhone = normalizePhone(group.main.phone);
- 
+
     const candidates = await tourBookingModel
       .find({
         tourId: group.tourId,
@@ -4755,9 +4757,9 @@ async function autoMatchTnrForGroup(group) {
       .sort({ bookingDate: 1 })
       .select("tnr contact.mobile")
       .lean();
- 
+
     const candidate = candidates.find((c) => normalizePhone(c.contact?.mobile) === wantPhone);
- 
+
     if (!candidate?.tnr) {
       console.log(
         `[autoMatchTnr] no match for group ${group.groupId} (looking for phone ending ${wantPhone}); checked ${candidates.length} same-tour booking(s): ${candidates.map((c) => normalizePhone(c.contact?.mobile)).join(", ") || "none"}`,
@@ -4765,7 +4767,7 @@ async function autoMatchTnrForGroup(group) {
       return null;
     }
     console.log(`[autoMatchTnr] linked tnr ${candidate.tnr} to group ${group.groupId}`);
- 
+
     await aadhaarModel.updateMany({ groupId: group.groupId }, { $set: { tnr: candidate.tnr } });
     return candidate.tnr;
   } catch (err) {
@@ -4773,7 +4775,7 @@ async function autoMatchTnrForGroup(group) {
     return null;
   }
 }
- 
+
 // What a walk-in group's package SHOULD cost (same age-bracket +
 // sharingType formula as adminAddBooking, + addons). null when it can't be
 // priced reliably.
@@ -4856,7 +4858,7 @@ function tourTotalFromBooking(tourDoc, travellers = []) {
 
 function computePackageAmount(tourDoc, mainTraveller, coTravellers, bookingNotes) {
   if (!tourDoc || !mainTraveller) return null;
- 
+
   let selectedPackage = tourDoc;
   if (bookingNotes?.packageKind === "variant") {
     if (bookingNotes.variantPackageIndex === null || bookingNotes.variantPackageIndex === undefined) {
@@ -4867,7 +4869,7 @@ function computePackageAmount(tourDoc, mainTraveller, coTravellers, bookingNotes
   } else if (bookingNotes?.packageKind !== "main") {
     return null;
   }
- 
+
   const travellers = [mainTraveller, ...(coTravellers || [])];
   let total = 0;
   let pricedTravellers = 0; // travellers who pay the package (and so the add-ons)
@@ -4889,15 +4891,15 @@ function computePackageAmount(tourDoc, mainTraveller, coTravellers, bookingNotes
       else total += Number(selectedPackage.balanceChildWithBerth) || 0;
     }
   }
- 
+
   // Add-ons are per person — every co-traveller takes the same add-ons as
   // the main traveller, so the add-on amount counts once per traveller.
   const addonsPerPerson = (bookingNotes?.addonsDetail || []).reduce((s, a) => s + (Number(a.amount) || 0), 0);
   total += addonsPerPerson * pricedTravellers;
- 
+
   return total;
 }
- 
+
 // GET /ocr/bookings — All Bookings tab.
 export const getAadhaarBookings = async (req, res) => {
   try {
@@ -4906,7 +4908,7 @@ export const getAadhaarBookings = async (req, res) => {
       .sort({ createdAt: 1 })
       .populate("tourId", "title")
       .lean();
- 
+
     const groups = {};
     for (const d of docs) {
       const gid = d.groupId;
@@ -4926,7 +4928,7 @@ export const getAadhaarBookings = async (req, res) => {
       }
       const g = groups[gid];
       if (d.tnr) g.tnr = d.tnr;
- 
+
       if (d.type === "bookingNotes") {
         g.tourId = d.tourId?._id || d.tourId || null;
         g.tourTitle = d.tourId?.title || "";
@@ -4977,9 +4979,9 @@ export const getAadhaarBookings = async (req, res) => {
         g.payments.partial.push({ _id: d._id, url: d.url, amount: d.amount, createdAt: d.createdAt, remarks: d.remarks || "" });
       }
     }
- 
+
     let bookings = Object.values(groups);
- 
+
     // Auto-link tnr for groups that don't have one yet.
     for (const b of bookings) {
       if (!b.tnr) {
@@ -4987,7 +4989,7 @@ export const getAadhaarBookings = async (req, res) => {
         if (matched) b.tnr = matched;
       }
     }
- 
+
     // Fold orphaned groupId:null payment docs back into their group by tnr.
     const tnrsForOrphanSweep = [...new Set(bookings.map((b) => b.tnr).filter(Boolean))];
     if (tnrsForOrphanSweep.length) {
@@ -5010,7 +5012,7 @@ export const getAadhaarBookings = async (req, res) => {
         }
       }
     }
- 
+
     // ── Every other real booking (USER online / Create-Booking-page ADMIN) ──
     const groupedTnrs = new Set(bookings.map((b) => b.tnr).filter(Boolean));
     const ungroupedRealDocs = await tourBookingModel
@@ -5018,7 +5020,7 @@ export const getAadhaarBookings = async (req, res) => {
       .select("tnr tourId createdBy contact travellers payment bookingDate")
       .populate("tourId", "title")
       .lean();
- 
+
     const ungroupedRealTnrs = ungroupedRealDocs.map((d) => d.tnr).filter(Boolean);
     const ungroupedProofDocs = ungroupedRealTnrs.length
       ? await aadhaarModel.find({ tnr: { $in: ungroupedRealTnrs }, groupId: null }).lean()
@@ -5028,10 +5030,10 @@ export const getAadhaarBookings = async (req, res) => {
       if (!proofsByTnr.has(d.tnr)) proofsByTnr.set(d.tnr, []);
       proofsByTnr.get(d.tnr).push(d);
     }
- 
+
     // Letters only — "Senthil " + "Kumar" (stray space) still matches "Senthil Kumar".
     const nameKey = (x) => [x?.firstName, x?.lastName].filter(Boolean).join("").toLowerCase().replace(/[^a-z]/g, "");
- 
+
     for (const rb of ungroupedRealDocs) {
       if (!rb.tnr) continue;
       const proofs = proofsByTnr.get(rb.tnr) || [];
@@ -5063,16 +5065,16 @@ export const getAadhaarBookings = async (req, res) => {
           payments.partial.push({ _id: d._id, url: d.url, amount: d.amount, createdAt: d.createdAt, remarks: d.remarks || "" });
         }
       }
- 
+
       // travellers[0] is the main traveller, everyone after is a co-traveller.
       const mainT = (rb.travellers || [])[0] || null;
       const coTs = (rb.travellers || []).slice(1);
       const proofFor = (t) => aadhaarByTraveller.get(String(t._id)) || { front: null, back: null };
- 
+
       // Any (non-pending) aadhaarFront doc under this tnr as the group-delete key.
       const anyFrontDocId =
         proofs.find((d) => d.type === "aadhaarFront" && !(d.postBooking && !d.travellerId))?._id || null;
- 
+
       const main = mainT
         ? {
           _id: mainT._id,
@@ -5089,7 +5091,7 @@ export const getAadhaarBookings = async (req, res) => {
           back: proofFor(mainT).back,
         }
         : null;
- 
+
       const coTravellers = coTs.map((t) => {
         const proof = proofFor(t);
         return {
@@ -5108,7 +5110,7 @@ export const getAadhaarBookings = async (req, res) => {
           postBooking: !!t.addedPostBooking,
         };
       });
- 
+
       // Pending co-travellers → shown with the Raise Manage Booking button.
       // Once approved, Manage Booking puts them in rb.travellers — then the
       // same-name real entry is shown instead ("Added to booking" via
@@ -5141,11 +5143,11 @@ export const getAadhaarBookings = async (req, res) => {
           postBooking: true,
         });
       }
- 
+
       // Real bookings already know their exact price.
       const directPackageAmount =
         (Number(rb.payment?.advance?.amount) || 0) + (Number(rb.payment?.balance?.amount) || 0);
- 
+
       bookings.push({
         groupId: `real-${rb._id}`,
         tnr: rb.tnr,
@@ -5160,9 +5162,9 @@ export const getAadhaarBookings = async (req, res) => {
         _directPackageAmount: directPackageAmount,
       });
     }
- 
+
     bookings = bookings.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
- 
+
     // Guest-group info ("same guest, different TNR").
     const tnrs = bookings.map((b) => b.tnr).filter(Boolean);
     const guestGroups = tnrs.length
@@ -5179,7 +5181,7 @@ export const getAadhaarBookings = async (req, res) => {
         }
         : null;
     }
- 
+
     // Payment summary — package amount vs every uploaded screenshot.
     const tourIds = [...new Set(bookings.map((b) => b.tourId).filter(Boolean).map(String))];
     const tourDocs = tourIds.length
@@ -5189,7 +5191,7 @@ export const getAadhaarBookings = async (req, res) => {
         .lean()
       : [];
     const tourById = new Map(tourDocs.map((t) => [String(t._id), t]));
- 
+
     // Once a walk-in group has a TNR, its real tourBookingModel booking is
     // the source of truth for the price (advance + balance, which already
     // include add-ons/changes made at Create Booking or Manage Booking) —
@@ -5215,7 +5217,7 @@ export const getAadhaarBookings = async (req, res) => {
         (d.payment?.balance?.paid ? Number(d.payment?.balance?.amount) || 0 : 0),
       ]),
     );
- 
+
     // Once a TNR exists, Balance Due follows Tour Bookings (dueAfterTnr).
     const realDocByTnr = new Map(pricedDocs.map((d) => [d.tnr, d]));
     const pricedCancelDocs = pricedTnrs.length
@@ -5239,12 +5241,12 @@ export const getAadhaarBookings = async (req, res) => {
         const tourDoc = b.tourId ? tourById.get(String(b.tourId)) : null;
         packageAmount = computePackageAmount(tourDoc, b.main, b.coTravellers, b.bookingNotes);
       }
- 
+
       if (packageAmount === null) {
         b.paymentSummary = null;
         continue;
       }
- 
+
       const screenshotsPaid =
         (b.payments.advance || []).reduce((s, p) => s + (Number(p.amount) || 0), 0) +
         b.payments.balance.reduce((s, p) => s + (Number(p.amount) || 0), 0) +
@@ -5274,7 +5276,7 @@ export const getAadhaarBookings = async (req, res) => {
         fullyPaid: balanceRemaining <= 0,
       };
     }
- 
+
     // Admin/User badge + cancellation status + "Added to booking" flag,
     // all read from the REAL tourBookingModel booking.
     const linkedTnrs = bookings.map((b) => b.tnr).filter(Boolean);
@@ -5282,11 +5284,11 @@ export const getAadhaarBookings = async (req, res) => {
       ? await tourBookingModel.find({ tnr: { $in: linkedTnrs } }).select("tnr createdBy cancelled travellers").lean()
       : [];
     const realBookingByTnr = new Map(realBookingDocs.map((d) => [d.tnr, d]));
- 
+
     // Letters only — extra/trailing spaces or dots in a saved name ("Senthil "
     // + "Kumar") must not stop the match with Tour Bookings ("Senthil Kumar").
     const normName = (t) => [t?.firstName, t?.lastName].filter(Boolean).join("").toLowerCase().replace(/[^a-z]/g, "");
- 
+
     const cancellationDocs = linkedTnrs.length
       ? await cancellationModel
         .find({ tnr: { $in: linkedTnrs } })
@@ -5301,20 +5303,20 @@ export const getAadhaarBookings = async (req, res) => {
         cancelDocByTnrTraveller.set(`${doc.tnr}::${tid}`, doc);
       }
     }
- 
+
     for (const b of bookings) {
       const real = b.tnr ? realBookingByTnr.get(b.tnr) : null;
       b.createdBy = real?.createdBy || "admin";
- 
+
       if (!real) continue;
       const wholeCancelled = !!(real.cancelled?.byAdmin || real.cancelled?.byTraveller);
       const realTravellerByName = new Map((real.travellers || []).map((t) => [normName(t), t]));
- 
+
       const markCancelled = (t) => {
         if (!t) return t;
         const realT = realTravellerByName.get(normName(t));
         const cancelDoc = realT ? cancelDocByTnrTraveller.get(`${b.tnr}::${realT._id}`) : null;
- 
+
         let status = null;
         if (cancelDoc) {
           status = cancelDoc.approvedBy ? "cancelled" : cancelDoc.raisedBy ? "request" : "rejected";
@@ -5330,12 +5332,12 @@ export const getAadhaarBookings = async (req, res) => {
           // byTraveller alone = pending cancellation request.
           status = "request";
         }
- 
+
         // Already in the REAL booking (Tour Bookings)? → Raise Manage
         // Booking was approved → frontend hides Edit/Remove/Raise and shows
         // "Added to booking". Not there yet (or rejected) → button visible.
         t.inRealBooking = !!realT;
- 
+
         t.cancelStatus = status; // null | "request" | "rejected" | "cancelled"
         // Aadhaar ZIP: only ACTIVE travellers — anyone with a cancellation
         // request, an approved cancellation or rejected by admin is left out.
@@ -5345,14 +5347,14 @@ export const getAadhaarBookings = async (req, res) => {
       if (b.main) markCancelled(b.main);
       b.coTravellers = (b.coTravellers || []).map(markCancelled);
     }
- 
+
     return res.status(200).json({ success: true, bookings });
   } catch (error) {
     console.error("getAadhaarBookings error:", error);
     return res.status(500).json({ success: false, message: "Could not fetch bookings.", error: error.message });
   }
 };
- 
+
 // POST /api/tour/guest/link — body: { tnr, linkToTnr, label? }. Overlapping
 // guest groups always merge into ONE.
 export const linkGuestTnr = async (req, res) => {
@@ -5371,49 +5373,49 @@ export const linkGuestTnr = async (req, res) => {
     if (!(await tourBookingModel.exists({ tnr: linkToTnr }))) {
       return res.status(404).json({ success: false, message: `No booking found with TNR ${linkToTnr}` });
     }
- 
+
     const existingGroups = await aadhaarModel.find({
       type: "guestLink",
       guestTnrs: { $in: [tnr, linkToTnr] },
     });
- 
+
     const mergedTnrs = new Set([tnr, linkToTnr]);
     existingGroups.forEach((g) => (g.guestTnrs || []).forEach((t) => mergedTnrs.add(t)));
- 
+
     let label = (req.body.label || "").trim();
     if (!label) {
       label = existingGroups.find((g) => g.remarks)?.remarks || "";
     }
- 
+
     if (existingGroups.length) {
       await aadhaarModel.deleteMany({ _id: { $in: existingGroups.map((g) => g._id) } });
     }
- 
+
     const saved = await aadhaarModel.create({
       type: "guestLink",
       tnr,
       guestTnrs: Array.from(mergedTnrs),
       remarks: label,
     });
- 
+
     return res.status(200).json({ success: true, guestGroup: saved });
   } catch (error) {
     console.error("linkGuestTnr error:", error);
     return res.status(500).json({ success: false, message: "Could not link guest.", error: error.message });
   }
 };
- 
+
 // POST /api/tour/guest/unlink — body: { tnr }.
 export const unlinkGuestTnr = async (req, res) => {
   try {
     const tnr = (req.body.tnr || "").trim().toUpperCase();
     if (!tnr) return res.status(400).json({ success: false, message: "tnr is required" });
- 
+
     const group = await aadhaarModel.findOne({ type: "guestLink", guestTnrs: tnr });
     if (!group) {
       return res.status(404).json({ success: false, message: "This booking isn't linked to any guest group." });
     }
- 
+
     const remaining = group.guestTnrs.filter((t) => t !== tnr);
     if (remaining.length < 2) {
       await aadhaarModel.deleteOne({ _id: group._id });
@@ -5422,14 +5424,14 @@ export const unlinkGuestTnr = async (req, res) => {
       if (group.tnr === tnr) group.tnr = remaining[0];
       await group.save();
     }
- 
+
     return res.status(200).json({ success: true });
   } catch (error) {
     console.error("unlinkGuestTnr error:", error);
     return res.status(500).json({ success: false, message: "Could not unlink guest.", error: error.message });
   }
 };
- 
+
 // POST /ocr/add-co-traveller — adds ONE more traveller (Aadhaar front only).
 // NEVER writes to tourBookingModel: the traveller reaches Tour Bookings only
 // via Raise Manage Booking → approval.
@@ -5439,11 +5441,11 @@ export const addCoTraveller = async (req, res) => {
       groupId, tnr, title, firstName, lastName, age, dob, gender, sharingType, phone,
       address, addressLine1, addressLine2, city, state, pincode, front, back, aadhaarNumber,
     } = req.body;
- 
+
     if (!groupId && !tnr) {
       return res.status(400).json({ success: false, message: "groupId or tnr is required" });
     }
- 
+
     const parsedFields = {
       firstName: firstName || "",
       lastName: lastName || "",
@@ -5461,7 +5463,7 @@ export const addCoTraveller = async (req, res) => {
       title: title || "",
       sharingType: sharingType || "",
     };
- 
+
     // ── Real booking (tnr path — USER online / Create-Booking-page ADMIN) ──
     // Saved ONLY as a pending aadhaarModel doc (tnr set, no travellerId,
     // postBooking: true). getAadhaarBookings shows it on the card with the
@@ -5472,7 +5474,7 @@ export const addCoTraveller = async (req, res) => {
       if (!booking) {
         return res.status(404).json({ success: false, message: "Booking not found for this tnr." });
       }
- 
+
       const frontDoc = await aadhaarModel.create({
         tnr: booking.tnr,
         type: "aadhaarFront",
@@ -5483,13 +5485,13 @@ export const addCoTraveller = async (req, res) => {
         parsed: parsedFields,
         uploadedBy: "admin",
       });
- 
+
       return res.status(201).json({ success: true, traveller: frontDoc });
     }
- 
+
     // ── Walk-in group (groupId path) ──
     const existing = await aadhaarModel.findOne({ groupId }).select("tnr");
- 
+
     const doc = await aadhaarModel.create({
       groupId,
       tnr: existing?.tnr || "",
@@ -5517,14 +5519,14 @@ export const addCoTraveller = async (req, res) => {
         uploadedBy: "admin",
       });
     }
- 
+
     return res.status(201).json({ success: true, traveller: doc });
   } catch (error) {
     console.error("addCoTraveller error:", error);
     return res.status(500).json({ success: false, message: "Could not add co-traveller.", error: error.message });
   }
 };
- 
+
 // POST /api/tour/edit-traveller — body: { docId, ...fields }. Blocked once
 // the booking has a tnr, EXCEPT for a post-booking added traveller.
 export const editAadhaarTraveller = async (req, res) => {
@@ -5549,7 +5551,7 @@ export const editAadhaarTraveller = async (req, res) => {
         message: "This booking already has a TNR — edit it through Raise Manage Booking instead.",
       });
     }
- 
+
     const editable = [
       "title", "firstName", "lastName", "age", "gender", "sharingType", "phone",
       "address", "addressLine1", "addressLine2", "city", "state", "pincode",
@@ -5561,7 +5563,7 @@ export const editAadhaarTraveller = async (req, res) => {
     });
     doc.parsed = parsed;
     await doc.save();
- 
+
     // Older post-booking travellers that were pushed straight into the real
     // booking — mirror the edit onto that subdocument too.
     if (doc.travellerId) {
@@ -5574,20 +5576,20 @@ export const editAadhaarTraveller = async (req, res) => {
         await tourBookingModel.updateOne({ tnr: doc.tnr, "travellers._id": doc.travellerId }, { $set });
       }
     }
- 
+
     return res.status(200).json({ success: true, traveller: { _id: doc._id, ...parsed } });
   } catch (error) {
     console.error("editAadhaarTraveller error:", error);
     return res.status(500).json({ success: false, message: "Could not update traveller.", error: error.message });
   }
 };
- 
+
 // Cloudinary public_id from a secure_url (best-effort).
 function extractCloudinaryPublicId(url = "") {
   const match = url.match(/\/upload\/(?:v\d+\/)?(.+?)(?:\.[a-zA-Z0-9]+)?$/);
   return match ? match[1] : null;
 }
- 
+
 async function destroyCloudinaryFile(url) {
   const publicId = extractCloudinaryPublicId(url);
   if (!publicId) return;
@@ -5597,7 +5599,7 @@ async function destroyCloudinaryFile(url) {
     console.error(`destroyCloudinaryFile: could not destroy ${publicId}:`, err.message);
   }
 }
- 
+
 // POST /api/tour/delete-traveller — body: { docId }.
 //   Co-traveller → removes that one traveller's doc(s) + files.
 //   Main traveller → clears files for every traveller in the booking
@@ -5610,7 +5612,7 @@ export const deleteAadhaarTraveller = async (req, res) => {
     if (!doc) {
       return res.status(404).json({ success: false, message: "Traveller not found." });
     }
- 
+
     // Older post-booking co-traveller that was pushed straight into the real
     // booking — pull them back out of travellers[] too.
     if (doc.travellerId && doc.tnr) {
@@ -5620,7 +5622,7 @@ export const deleteAadhaarTraveller = async (req, res) => {
       );
       const travellerRecord = parentBooking?.travellers?.[0];
       const isPostBookingAdd = !!(doc.postBooking || travellerRecord?.addedPostBooking);
- 
+
       if (isPostBookingAdd) {
         const pullResult = await tourBookingModel.updateOne(
           { tnr: doc.tnr },
@@ -5642,7 +5644,7 @@ export const deleteAadhaarTraveller = async (req, res) => {
         });
       }
     }
- 
+
     if (doc.isCoTraveller) {
       // No travellerId (walk-in co-traveller / pending co-traveller) →
       // scope to this exact doc, never the whole group.
@@ -5652,39 +5654,39 @@ export const deleteAadhaarTraveller = async (req, res) => {
           : { tnr: doc.tnr, travellerId: doc.travellerId })
         : { _id: doc._id };
       const docs = await aadhaarModel.find({ ...scopeMatch, type: { $in: ["aadhaarFront", "aadhaarBack"] } });
- 
+
       for (const d of docs) {
         if (d.url) await destroyCloudinaryFile(d.url);
         if (d.front?.url) await destroyCloudinaryFile(d.front.url);
         if (d.back?.url) await destroyCloudinaryFile(d.back.url);
       }
       await aadhaarModel.deleteMany({ _id: { $in: docs.map((d) => d._id) } });
- 
+
       return res.status(200).json({ success: true, clearedCount: docs.length, removedTraveller: docs.length > 0 });
     }
- 
+
     // MAIN traveller — clear (not delete) every traveller's files.
     const groupMatch = doc.tnr
       ? (doc.groupId ? { groupId: doc.groupId } : { tnr: doc.tnr })
       : { groupId: doc.groupId };
     const docs = await aadhaarModel.find({ ...groupMatch, type: { $in: ["aadhaarFront", "aadhaarBack"] } });
- 
+
     for (const d of docs) {
       if (d.url) await destroyCloudinaryFile(d.url);
       if (d.front?.url) await destroyCloudinaryFile(d.front.url);
       if (d.back?.url) await destroyCloudinaryFile(d.back.url);
     }
- 
+
     const ids = docs.map((d) => d._id);
     await aadhaarModel.updateMany({ _id: { $in: ids } }, { $set: { url: null, front: null, back: null } });
- 
+
     return res.status(200).json({ success: true, clearedCount: ids.length, deletedGroup: true });
   } catch (error) {
     console.error("deleteAadhaarTraveller error:", error);
     return res.status(500).json({ success: false, message: "Could not delete Aadhaar files.", error: error.message });
   }
 };
- 
+
 // GET /api/tour/download-all-aadhaar?docId=<docId> — ZIP of the raw files.
 export const downloadAllAadhaarZip = async (req, res) => {
   try {
@@ -5692,7 +5694,7 @@ export const downloadAllAadhaarZip = async (req, res) => {
     if (!docId) return res.status(400).json({ success: false, message: "docId is required" });
     const doc = await aadhaarModel.findOne({ _id: docId, type: "aadhaarFront" });
     if (!doc) return res.status(404).json({ success: false, message: "Traveller not found." });
- 
+
     let docs;
     if (doc.isCoTraveller) {
       docs = [doc];
@@ -5702,7 +5704,7 @@ export const downloadAllAadhaarZip = async (req, res) => {
         : { groupId: doc.groupId };
       docs = await aadhaarModel.find({ ...groupMatch, type: "aadhaarFront" });
     }
- 
+
     const filesToZip = [];
     docs.forEach((d, idx) => {
       const parsed = d.parsed || {};
@@ -5719,22 +5721,22 @@ export const downloadAllAadhaarZip = async (req, res) => {
         filesToZip.push({ url: d.back.url, filename: `${idx + 1}-${safeLabel}-Back.${extFromUrl(d.back.url)}` });
       }
     });
- 
+
     if (filesToZip.length === 0) {
       return res.status(404).json({ success: false, message: "No Aadhaar files uploaded for this booking yet." });
     }
- 
+
     const zipName = doc.tnr ? `Aadhaar-${doc.tnr}.zip` : `Aadhaar-Draft-${doc.groupId}.zip`;
     res.setHeader("Content-Type", "application/zip");
     res.setHeader("Content-Disposition", `attachment; filename="${zipName}"`);
- 
+
     const archive = archiver("zip", { zlib: { level: 9 } });
     archive.on("error", (err) => {
       console.error("downloadAllAadhaarZip archive error:", err);
       if (!res.headersSent) res.status(500).end();
     });
     archive.pipe(res);
- 
+
     for (const f of filesToZip) {
       try {
         const response = await fetch(f.url);
@@ -5748,7 +5750,7 @@ export const downloadAllAadhaarZip = async (req, res) => {
         console.error(`downloadAllAadhaarZip: failed to fetch ${f.url}:`, err.message);
       }
     }
- 
+
     await archive.finalize();
   } catch (error) {
     console.error("downloadAllAadhaarZip error:", error);
@@ -5757,7 +5759,7 @@ export const downloadAllAadhaarZip = async (req, res) => {
     }
   }
 };
- 
+
 // Payment amount from a UPI/bank screenshot: spaced "hero" digit line first
 // (immune to the ₹-glyph misread), then ₹/Rs/INR marker, then bare
 // comma-grouped numbers.
@@ -5775,7 +5777,7 @@ function extractPaymentAmount(text = "") {
       return heroAmount;
     }
   }
- 
+
   const markedMatches = [
     ...text.matchAll(/(?:₹|Rs\.?|INR)\s*([\d,]+(?:\.\d{1,2})?)/gi),
   ].map((m) => Number(m[1].replace(/,/g, "")));
@@ -5786,7 +5788,7 @@ function extractPaymentAmount(text = "") {
     );
     return result;
   }
- 
+
   // const bareNumbers = [...text.matchAll(/\b\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?\b/g)]
   //   .map((m) => Number(m[0].replace(/,/g, "")))
   //   .filter((n) => !Number.isNaN(n) && n > 0);
@@ -5812,14 +5814,14 @@ function extractPaymentAmount(text = "") {
   );
   return result;
 }
- 
+
 // POST /ocr/upload-group-payment — saves a payment screenshot straight into
 // aadhaarModel against the group (or tnr for a real booking).
 export const uploadGroupPayment = withTempCleanup(async (req, res) => {
   try {
     const file = req.file;
     const { groupId, tnr, type, amount, remarks } = req.body;
- 
+
     if (!file) return res.status(400).json({ success: false, message: "Screenshot image is required" });
     if (!groupId && !tnr) return res.status(400).json({ success: false, message: "groupId or tnr is required" });
     if (!["advance", "balance", "partial"].includes(type)) {
@@ -5828,7 +5830,7 @@ export const uploadGroupPayment = withTempCleanup(async (req, res) => {
     if (amount !== undefined && amount !== "" && (isNaN(Number(amount)) || Number(amount) <= 0)) {
       return res.status(400).json({ success: false, message: "Amount, if entered, must be a positive number." });
     }
- 
+
     const upload = await cloudinary.uploader.upload(file.path, { folder: "payment-screenshots", resource_type: "image" });
     let resolvedGroupId = null;
     let resolvedTnr = tnr ? tnr.trim().toUpperCase() : "";
@@ -5843,7 +5845,7 @@ export const uploadGroupPayment = withTempCleanup(async (req, res) => {
         if (byTnr?.groupId) resolvedGroupId = byTnr.groupId;
       }
     }
- 
+
     // let ocrAmount = null;
     // try {
     //   const text = await readImageText(file.path);
@@ -5865,11 +5867,11 @@ export const uploadGroupPayment = withTempCleanup(async (req, res) => {
     }
     const finalAmount = typedAmount ?? ocrAmount;
     const docType = type === "advance" ? "paymentAdvance" : type === "balance" ? "paymentBalance" : "paymentPartial";
- 
- 
+
+
     // No duplicate guard here: two different screenshots can share the same
     // amount (e.g. two ₹10,000 instalments) and both must be saved.
- 
+
     const doc = await aadhaarModel.create({
       groupId: resolvedGroupId,
       tnr: resolvedTnr,
@@ -5879,7 +5881,7 @@ export const uploadGroupPayment = withTempCleanup(async (req, res) => {
       remarks: remarks?.trim() || "",
       uploadedBy: "admin",
     });
- 
+
     return res.status(201).json({
       success: true,
       payment: doc,
@@ -5891,14 +5893,14 @@ export const uploadGroupPayment = withTempCleanup(async (req, res) => {
     return res.status(500).json({ success: false, message: "Upload failed.", error: error.message });
   }
 });
- 
+
 // POST /delete-group-payment — body: { docId }. Never touches
 // tourBookingModel.payment or invoices.
 export const deleteGroupPayment = async (req, res) => {
   try {
     const { docId } = req.body;
     if (!docId) return res.status(400).json({ success: false, message: "docId is required" });
- 
+
     const doc = await aadhaarModel.findOne({
       _id: docId,
       type: { $in: ["paymentAdvance", "paymentBalance", "paymentPartial"] },
@@ -5906,16 +5908,16 @@ export const deleteGroupPayment = async (req, res) => {
     if (!doc) {
       return res.status(404).json({ success: false, message: "Payment screenshot not found." });
     }
- 
+
     await aadhaarModel.deleteOne({ _id: doc._id });
- 
+
     return res.status(200).json({ success: true });
   } catch (error) {
     console.error("deleteGroupPayment error:", error);
     return res.status(500).json({ success: false, message: "Could not delete payment screenshot.", error: error.message });
   }
 };
- 
+
 // ─────────────── Payment Tasks dashboard ───────────────
 const buildBookingDetails = (b, extra = {}) => {
   if (!b) return null;
@@ -5940,12 +5942,12 @@ const buildBookingDetails = (b, extra = {}) => {
     paymentTotals: extra.paymentTotals || { advancePaid: 0, partialPaid: 0, balancePaid: 0 },
   };
 };
- 
+
 const BOOKING_DETAIL_SELECT =
   "tnr tourId travellers payment bookingDate contact bookingType " +
   "isTripCompleted isBookingCompleted manageBooking gvCancellationPool " +
   "irctcCancellationPool billingAddress receipts advanceAdminRemarks adminRemarks";
- 
+
 const computePaymentTotals = (history) => {
   const sum = (type) =>
     history
@@ -5957,7 +5959,7 @@ const computePaymentTotals = (history) => {
     balancePaid: sum("paymentBalance"),
   };
 };
- 
+
 export const getPaymentTasks = async (req, res) => {
   try {
     const allBookingsNeedingAdvance = await tourBookingModel
@@ -5966,7 +5968,7 @@ export const getPaymentTasks = async (req, res) => {
       .select(BOOKING_DETAIL_SELECT)
       .sort({ bookingDate: -1 })
       .lean();
- 
+
     const advanceTnrs = allBookingsNeedingAdvance.map((b) => b.tnr).filter(Boolean);
     const advanceClearedDocs = advanceTnrs.length
       ? await aadhaarModel
@@ -5975,7 +5977,7 @@ export const getPaymentTasks = async (req, res) => {
         .lean()
       : [];
     const advanceClearedTnrs = new Set(advanceClearedDocs.map((d) => d.tnr));
- 
+
     const advanceScreenshotDocs = advanceTnrs.length
       ? await aadhaarModel
         .find({ type: "paymentAdvance", tnr: { $in: advanceTnrs } })
@@ -5983,16 +5985,16 @@ export const getPaymentTasks = async (req, res) => {
         .lean()
       : [];
     const tnrsWithAdvanceScreenshot = new Set(advanceScreenshotDocs.map((d) => d.tnr));
- 
+
     const bookingsNeedingAdvance = allBookingsNeedingAdvance.filter(
       (b) => !advanceClearedTnrs.has(b.tnr) && tnrsWithAdvanceScreenshot.has(b.tnr),
     );
- 
+
     const screenshotDocs = await aadhaarModel
       .find({ type: { $in: ["paymentPartial", "paymentBalance"] }, taskCleared: { $ne: true } })
       .sort({ createdAt: -1 })
       .lean();
- 
+
     const groupIds = [...new Set(screenshotDocs.map((d) => d.groupId).filter(Boolean))];
     const mainDocs = groupIds.length
       ? await aadhaarModel
@@ -6007,7 +6009,7 @@ export const getPaymentTasks = async (req, res) => {
       : [];
     const mainByGroup = new Map(mainDocs.map((d) => [d.groupId, d]));
     const notesByGroup = new Map(bookingNotesDocs.map((d) => [d.groupId, d]));
- 
+
     const screenshotTnrs = [
       ...new Set(screenshotDocs.map((d) => d.tnr).filter(Boolean)),
     ];
@@ -6019,7 +6021,7 @@ export const getPaymentTasks = async (req, res) => {
         .lean()
       : [];
     const bookingByTnr = new Map(linkedBookings.map((b) => [b.tnr, b]));
- 
+
     const allTnrs = [
       ...new Set([
         ...bookingsNeedingAdvance.map((b) => b.tnr).filter(Boolean),
@@ -6066,7 +6068,7 @@ export const getPaymentTasks = async (req, res) => {
         paymentTotals: computePaymentTotals(history),
       };
     };
- 
+
     const advanceTasks = bookingsNeedingAdvance.map((b) => {
       const main = (b.travellers || []).find((t) => !t.isCoTraveller) || b.travellers?.[0];
       return {
@@ -6078,14 +6080,22 @@ export const getPaymentTasks = async (req, res) => {
         booking: buildBookingDetails(b, extraForTnr(b.tnr)),
       };
     });
- 
+
     const screenshotToTask = (d) => {
       const main = mainByGroup.get(d.groupId);
       const notes = notesByGroup.get(d.groupId);
-      const mainName = main
-        ? [main.parsed?.title, main.parsed?.firstName, main.parsed?.lastName].filter(Boolean).join(" ") || "Unnamed traveller"
-        : "Unnamed traveller";
       const linkedBooking = d.tnr ? bookingByTnr.get(d.tnr) : null;
+      // Name from the walk-in Aadhaar group; for a screenshot uploaded on a
+      // booking (TNR only, no group) use that booking's main traveller.
+      const fromGroup = main
+        ? [main.parsed?.title, main.parsed?.firstName, main.parsed?.lastName].filter(Boolean).join(" ")
+        : "";
+      const bookingMain =
+        (linkedBooking?.travellers || []).find((t) => !t.isCoTraveller) || linkedBooking?.travellers?.[0];
+      const fromBooking = bookingMain
+        ? [bookingMain.title, bookingMain.firstName, bookingMain.lastName].filter(Boolean).join(" ")
+        : "";
+      const mainName = fromGroup || fromBooking || "Unnamed traveller";
       return {
         docId: d._id,
         tnr: d.tnr || "",
@@ -6097,23 +6107,23 @@ export const getPaymentTasks = async (req, res) => {
         booking: buildBookingDetails(linkedBooking, extraForTnr(d.tnr)),
       };
     };
- 
+
     const partialTasks = screenshotDocs.filter((d) => d.type === "paymentPartial").map(screenshotToTask);
     const balanceTasks = screenshotDocs.filter((d) => d.type === "paymentBalance").map(screenshotToTask);
- 
+
     return res.status(200).json({ success: true, advanceTasks, partialTasks, balanceTasks });
   } catch (error) {
     console.error("getPaymentTasks error:", error);
     return res.status(500).json({ success: false, message: "Could not fetch payment tasks.", error: error.message });
   }
 };
- 
+
 // POST /payment-tasks/mark-done — body: { docId }. Purely a to-do checkbox.
 export const markPaymentTaskDone = async (req, res) => {
   try {
     const { docId } = req.body;
     if (!docId) return res.status(400).json({ success: false, message: "docId is required" });
- 
+
     const doc = await aadhaarModel.findOneAndUpdate(
       { _id: docId, type: { $in: ["paymentPartial", "paymentBalance"] } },
       { $set: { taskCleared: true } },
@@ -6122,42 +6132,42 @@ export const markPaymentTaskDone = async (req, res) => {
     if (!doc) {
       return res.status(404).json({ success: false, message: "Payment task not found." });
     }
- 
+
     return res.status(200).json({ success: true });
   } catch (error) {
     console.error("markPaymentTaskDone error:", error);
     return res.status(500).json({ success: false, message: "Could not mark this task done.", error: error.message });
   }
 };
- 
+
 // POST /payment-tasks/mark-advance-done — body: { tnr }. Purely a to-do
 // checkbox; never touches payment.advance.
 export const markAdvanceTaskDone = async (req, res) => {
   try {
     const { tnr } = req.body;
     if (!tnr) return res.status(400).json({ success: false, message: "tnr is required" });
- 
+
     await aadhaarModel.findOneAndUpdate(
       { type: "advanceTaskCleared", tnr },
       { $setOnInsert: { type: "advanceTaskCleared", tnr, uploadedBy: "admin" } },
       { upsert: true, new: true },
     );
- 
+
     return res.status(200).json({ success: true });
   } catch (error) {
     console.error("markAdvanceTaskDone error:", error);
     return res.status(500).json({ success: false, message: "Could not mark this task done.", error: error.message });
   }
 };
- 
+
 // ═══════════════════════ "User Bookings" tab ═══════════════════════
- 
+
 // GET /ocr/user-bookings?tourId=...&email= (email optional)
 export const searchUserBookings = async (req, res) => {
   try {
     const { tourId, email } = req.query;
     if (!tourId) return res.status(400).json({ success: false, message: "tourId is required" });
- 
+
     const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const query = { tourId, createdBy: "user" };
     if (email && email.trim()) {
@@ -6173,7 +6183,7 @@ export const searchUserBookings = async (req, res) => {
       .select("price advanceAmount balanceDouble balanceTriple balanceChildWithBerth balanceChildWithoutBerth variantPackage")
       .lean()
       .catch(() => null);
- 
+
     const tnrs = bookings.map((b) => b.tnr).filter(Boolean);
     const proofDocs = tnrs.length
       ? await aadhaarModel.find({ tnr: { $in: tnrs } }).lean()
@@ -6183,7 +6193,7 @@ export const searchUserBookings = async (req, res) => {
       if (!docsByTnr.has(d.tnr)) docsByTnr.set(d.tnr, []);
       docsByTnr.get(d.tnr).push(d);
     }
- 
+
     const cancellationDocs = tnrs.length
       ? await cancellationModel
         .find({ tnr: { $in: tnrs } })
@@ -6209,7 +6219,7 @@ export const searchUserBookings = async (req, res) => {
       }
       return null;
     };
- 
+
     return res.status(200).json({
       success: true,
       bookings: bookings.map((b) => {
@@ -6231,7 +6241,7 @@ export const searchUserBookings = async (req, res) => {
             payments.partial.push({ _id: d._id, url: d.url, amount: d.amount, uploadedAt: d.createdAt, remarks: d.remarks || "" });
           }
         }
- 
+
         // Total = tour package + add-ons (from the tour); falls back to the
         // booking's advance + balance if the tour can't price it.
         const tourTotal = tourTotalFromBooking(searchTourDoc, b.travellers);
@@ -6253,7 +6263,7 @@ export const searchUserBookings = async (req, res) => {
           tourBookingChangedAt(b, cancellationDocs.filter((c) => c.tnr === b.tnr)),
         );
         const amountPaid = Math.max(0, packageAmount - balanceRemaining);
- 
+
         return {
           tnr: b.tnr,
           bookingDate: b.bookingDate,
@@ -6285,7 +6295,7 @@ export const searchUserBookings = async (req, res) => {
     return res.status(500).json({ success: false, message: "Could not search online bookings.", error: error.message });
   }
 };
- 
+
 // POST /ocr/user-bookings/upload-aadhaar — attaches Aadhaar to ONE existing
 // traveller (real booking), or to an existing walk-in / pending
 // co-traveller aadhaarModel doc (fallback).
@@ -6294,12 +6304,12 @@ export const uploadUserTravellerAadhaar = async (req, res) => {
     const { tnr, travellerId, front, back, parsed } = req.body;
     if (!tnr) return res.status(400).json({ success: false, message: "tnr is required" });
     if (!travellerId) return res.status(400).json({ success: false, message: "travellerId is required" });
- 
+
     const booking = await tourBookingModel.findOne({
       tnr: tnr.trim().toUpperCase(),
       "travellers._id": travellerId,
     });
- 
+
     if (!booking) {
       // FALLBACK — travellerId is an existing aadhaarModel doc's own _id.
       const existingDoc = await aadhaarModel.findOne({
@@ -6309,12 +6319,12 @@ export const uploadUserTravellerAadhaar = async (req, res) => {
       if (!existingDoc) {
         return res.status(404).json({ success: false, message: "Booking/traveller not found for this tnr." });
       }
- 
+
       existingDoc.url = front?.url || existingDoc.url || "";
       existingDoc.ocrText = front?.ocrText || existingDoc.ocrText || "";
       existingDoc.parsed = { ...(existingDoc.parsed || {}), ...(parsed || {}) };
       await existingDoc.save();
- 
+
       if (back?.url) {
         await aadhaarModel.create({
           groupId: existingDoc.groupId,
@@ -6328,11 +6338,11 @@ export const uploadUserTravellerAadhaar = async (req, res) => {
           uploadedBy: "admin",
         });
       }
- 
+
       return res.status(201).json({ success: true, traveller: existingDoc });
     }
     const traveller = booking.travellers.id(travellerId);
- 
+
     const frontDoc = await aadhaarModel.create({
       tnr: booking.tnr,
       travellerId,
@@ -6343,7 +6353,7 @@ export const uploadUserTravellerAadhaar = async (req, res) => {
       parsed: parsed || {},
       uploadedBy: "admin",
     });
- 
+
     if (back?.url) {
       await aadhaarModel.create({
         tnr: booking.tnr,
@@ -6356,7 +6366,7 @@ export const uploadUserTravellerAadhaar = async (req, res) => {
         uploadedBy: "admin",
       });
     }
- 
+
     await tourBookingModel.updateOne(
       { _id: booking._id, "travellers._id": travellerId },
       {
@@ -6366,14 +6376,14 @@ export const uploadUserTravellerAadhaar = async (req, res) => {
         },
       },
     );
- 
+
     return res.status(201).json({ success: true, traveller: frontDoc });
   } catch (error) {
     console.error("uploadUserTravellerAadhaar error:", error);
     return res.status(500).json({ success: false, message: "Could not save Aadhaar for this traveller.", error: error.message });
   }
 };
- 
+
 // POST /bookings/export-active-travellers — body: { tnrs?: string[] }.
 export const exportActiveTravellersPdfData = async (req, res) => {
   try {
@@ -6382,13 +6392,13 @@ export const exportActiveTravellersPdfData = async (req, res) => {
       Array.isArray(tnrs) && tnrs.length > 0
         ? { tnr: { $in: tnrs.map((t) => String(t).trim().toUpperCase()) } }
         : {};
- 
+
     const bookings = await tourBookingModel.find(filter);
     const rows = [];
- 
+
     for (const booking of bookings) {
       let bookingChanged = false;
- 
+
       const aadhaarDocs = await aadhaarModel
         .find({ tnr: booking.tnr, type: "aadhaarFront" })
         .sort({ createdAt: 1 });
@@ -6400,7 +6410,7 @@ export const exportActiveTravellersPdfData = async (req, res) => {
         else if (d.isCoTraveller) coDocs.push(d);
         else mainDocs.push(d);
       }
- 
+
       let coIndex = 0;
       for (let i = 0; i < (booking.travellers || []).length; i++) {
         const t = booking.travellers[i];
@@ -6408,10 +6418,10 @@ export const exportActiveTravellersPdfData = async (req, res) => {
         const matchedById = byTravellerId.get(String(t._id));
         const positionalDoc = isMain ? mainDocs[0] : coDocs[coIndex];
         if (!isMain && !matchedById) coIndex++;
- 
+
         const isCancelled = t.cancelled?.byAdmin || t.cancelled?.byTraveller;
         if (isCancelled) continue;
- 
+
         let aadhaarNumber = t.aadhaarNumber || "";
         let aDoc = null;
         if (!aadhaarNumber && t.aadhaarId) {
@@ -6428,10 +6438,10 @@ export const exportActiveTravellersPdfData = async (req, res) => {
         if (!aadhaarNumber && !aDoc) {
           aDoc = matchedById || positionalDoc || null;
         }
- 
+
         if (!aadhaarNumber && aDoc) {
           aadhaarNumber = aDoc.parsed?.aadhaarNumber || "";
- 
+
           if (!aadhaarNumber && aDoc.url) {
             try {
               aadhaarNumber = await ocrAadhaarNumberFromUrl(aDoc.url);
@@ -6443,18 +6453,18 @@ export const exportActiveTravellersPdfData = async (req, res) => {
               );
             }
           }
- 
+
           if (aadhaarNumber && aDoc.parsed?.aadhaarNumber !== aadhaarNumber) {
             aDoc.parsed = { ...(aDoc.parsed || {}), aadhaarNumber };
             await aDoc.save();
           }
         }
- 
+
         if (aadhaarNumber) {
           t.aadhaarNumber = aadhaarNumber;
           bookingChanged = true;
         }
- 
+
         rows.push({
           tnr: booking.tnr,
           name: `${t.firstName || ""} ${t.lastName || ""}`.trim() || "Unknown",
@@ -6463,12 +6473,12 @@ export const exportActiveTravellersPdfData = async (req, res) => {
           aadhaarNumber: aadhaarNumber || "Not Available",
         });
       }
- 
+
       if (bookingChanged) {
         await booking.save();
       }
     }
- 
+
     return res.status(200).json({ success: true, travellers: rows });
   } catch (error) {
     console.error("exportActiveTravellersPdfData error:", error);
@@ -6479,7 +6489,7 @@ export const exportActiveTravellersPdfData = async (req, res) => {
     });
   }
 };
- 
+
 // POST /ocr/user-bookings/upload-payment — multipart: screenshot; body:
 // { tnr, type, amount }. Never touches payment.advance/balance.paid.
 export const uploadUserBookingPayment = withTempCleanup(async (req, res) => {
@@ -6494,14 +6504,14 @@ export const uploadUserBookingPayment = withTempCleanup(async (req, res) => {
     if (amount !== undefined && amount !== "" && (isNaN(Number(amount)) || Number(amount) <= 0)) {
       return res.status(400).json({ success: false, message: "Amount, if entered, must be a positive number." });
     }
- 
+
     const booking = await tourBookingModel.findOne({ tnr: tnr.trim().toUpperCase(), createdBy: "user" }).select("tnr");
     if (!booking) {
       return res.status(404).json({ success: false, message: "Online booking not found for this tnr." });
     }
- 
+
     const upload = await cloudinary.uploader.upload(file.path, { folder: "payment-screenshots", resource_type: "image" });
- 
+
     // let ocrAmount = null;
     // try {
     //   const text = await readImageText(file.path);
@@ -6521,8 +6531,8 @@ export const uploadUserBookingPayment = withTempCleanup(async (req, res) => {
       }
     }
     const finalAmount = typedAmount ?? ocrAmount;
- 
- 
+
+
     const doc = await aadhaarModel.create({
       tnr: booking.tnr,
       type: type === "advance" ? "paymentAdvance" : type === "balance" ? "paymentBalance" : "paymentPartial",
@@ -6531,7 +6541,7 @@ export const uploadUserBookingPayment = withTempCleanup(async (req, res) => {
       remarks: remarks?.trim() || "",
       uploadedBy: "admin",
     });
- 
+
     return res.status(201).json({
       success: true,
       payment: doc,
@@ -6543,7 +6553,7 @@ export const uploadUserBookingPayment = withTempCleanup(async (req, res) => {
     return res.status(500).json({ success: false, message: "Upload failed.", error: error.message });
   }
 });
- 
+
 // POST /ocr/link-tnr — manual fallback when auto-match can't find the tnr.
 export const linkGroupTnr = async (req, res) => {
   try {
@@ -6558,13 +6568,13 @@ export const linkGroupTnr = async (req, res) => {
     return res.status(500).json({ success: false, message: "Could not link TNR.", error: error.message });
   }
 };
- 
+
 // GET /ocr/payment-records?from=YYYY-MM-DD&to=YYYY-MM-DD&type=advance|balance|partial
 // Every payment screenshot saved from the Aadhaar Upload page, newest first.
 export const getPaymentRecords = async (req, res) => {
   try {
     const { from, to, type } = req.query;
- 
+
     const typeMap = { advance: "paymentAdvance", balance: "paymentBalance", partial: "paymentPartial" };
     const query = {
       type: typeMap[type] ? typeMap[type] : { $in: ["paymentAdvance", "paymentBalance", "paymentPartial"] },
@@ -6574,14 +6584,14 @@ export const getPaymentRecords = async (req, res) => {
       if (from) query.createdAt.$gte = new Date(`${from}T00:00:00+05:30`);
       if (to) query.createdAt.$lte = new Date(`${to}T23:59:59.999+05:30`);
     }
- 
+
     const payments = await aadhaarModel
       .find(query)
       .select("type amount remarks url createdAt tnr groupId taskCleared uploadedBy")
       .sort({ createdAt: -1 })
       .limit(2000)
       .lean();
- 
+
     const groupIds = [...new Set(payments.map((p) => p.groupId).filter(Boolean))];
     const groupDocs = groupIds.length
       ? await aadhaarModel
@@ -6600,7 +6610,7 @@ export const getPaymentRecords = async (req, res) => {
       }
       groupInfo.set(d.groupId, g);
     }
- 
+
     const tnrs = [
       ...new Set(
         payments
@@ -6612,7 +6622,7 @@ export const getPaymentRecords = async (req, res) => {
       ? await tourBookingModel.find({ tnr: { $in: tnrs } }).select("tnr tourId travellers createdBy").lean()
       : [];
     const realByTnr = new Map(realDocs.map((b) => [b.tnr, b]));
- 
+
     const tourIds = [
       ...new Set(
         [...groupInfo.values()].map((g) => g.tourId)
@@ -6622,7 +6632,7 @@ export const getPaymentRecords = async (req, res) => {
     ];
     const tourDocs = tourIds.length ? await tourModel.find({ _id: { $in: tourIds } }).select("title").lean() : [];
     const tourTitleById = new Map(tourDocs.map((t) => [String(t._id), t.title || ""]));
- 
+
     const records = payments.map((p) => {
       const g = p.groupId ? groupInfo.get(p.groupId) : null;
       const tnr = p.tnr || g?.tnr || "";
@@ -6648,7 +6658,7 @@ export const getPaymentRecords = async (req, res) => {
         taskCleared: !!p.taskCleared,
       };
     });
- 
+
     return res.status(200).json({ success: true, records });
   } catch (error) {
     console.error("getPaymentRecords error:", error);

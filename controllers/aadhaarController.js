@@ -1,11 +1,9 @@
-
 // import mongoose from "mongoose";
 // import { v2 as cloudinary } from "cloudinary";
 // import { createWorker } from "tesseract.js";
 // import sharp from "sharp";
 // import fs from "fs";
 // import os from "os";
-// import zlib from "zlib";
 // // Pure-WASM PDF renderer — turns a PDF Aadhaar upload's first page into a
 // // PNG before sharp/Tesseract touch it. A raw PDF must NEVER reach
 // // worker.recognize() (crashes the whole Node process).
@@ -15,8 +13,6 @@
 // import { createRequire } from "module";
 // const require = createRequire(import.meta.url);
 // const archiver = require("archiver");
-// // Pure-JS QR reader for the Aadhaar Secure QR / old XML QR.
-// const jsQR = require("jsqr");
 // import aadhaarModel from "../models/aadhaarModel.js";
 // // Read-only use for pricing/cancellation lookups (plus the narrowly scoped
 // // writes noted at each call site).
@@ -38,280 +34,14 @@
 //   }
 //   return workerPromise;
 // }
-
-// // ── Card language ──────────────────────────────────────────────────────
-// // The OCR must know the card's regional script to recognise it as that
-// // script (and then delete it). Loading every language at once is very slow,
-// // so each extraction loads English + ONE language, chosen from the
-// // pincode (main traveller's back side) or the main traveller's state
-// // (co-traveller, front only). Default: Tamil.
-// const SUPPORTED_CARD_LANGS = ["tam", "tel", "kan", "mal", "hin"];
-// const DEFAULT_CARD_LANG = "tam";
-
-// // First two digits of an Indian PIN → state → card language.
-// function langFromPincode(pin = "") {
-//   const p = String(pin).match(/\b([1-9]\d)\d{4}\b/);
-//   if (!p) return "";
-//   const n = Number(p[1]);
-//   if (n >= 60 && n <= 64) return "tam"; // Tamil Nadu, Puducherry
-//   if (n >= 67 && n <= 69) return "mal"; // Kerala
-//   if (n >= 56 && n <= 59) return "kan"; // Karnataka
-//   if (n >= 50 && n <= 53) return "tel"; // Telangana, Andhra Pradesh
-//   // Hindi-belt states (Delhi, UP, Bihar, MP, Rajasthan, Haryana, …) and
-//   // Maharashtra (Devanagari script).
-//   if ((n >= 11 && n <= 13) || (n >= 17 && n <= 34) || (n >= 40 && n <= 49) || (n >= 80 && n <= 85)) return "hin";
-//   return "";
-// }
-
-// const STATE_LANG = {
-//   "tamil nadu": "tam", puducherry: "tam", pondicherry: "tam",
-//   kerala: "mal", lakshadweep: "mal",
-//   karnataka: "kan",
-//   telangana: "tel", "andhra pradesh": "tel",
-//   delhi: "hin", "uttar pradesh": "hin", bihar: "hin", "madhya pradesh": "hin",
-//   rajasthan: "hin", haryana: "hin", jharkhand: "hin", chhattisgarh: "hin",
-//   uttarakhand: "hin", "himachal pradesh": "hin", maharashtra: "hin", chandigarh: "hin",
-// };
-// function langFromState(state = "") {
-//   const key = String(state).toLowerCase().replace(/\s+/g, " ").trim();
-//   if (!key) return "";
-//   if (STATE_LANG[key]) return STATE_LANG[key];
-//   const hit = Object.keys(STATE_LANG).find((k) => key.includes(k));
-//   return hit ? STATE_LANG[hit] : "";
-// }
-
-// // A name we trust: every non-initial word is Title Case ("Shanthi
-// // Ranganathan", "S K Brindha"). OCR junk from a wrong-language read is
-// // usually ALL CAPS or mixed ("EMHE JHIGEOIT", "THe").
-// function nameLooksSolid(p = {}) {
-//   const words = `${p.firstName || ""} ${p.lastName || ""}`.split(/\s+/).filter((w) => w.length > 1);
-//   return words.length > 0 && words.every((w) => /^[A-Z][a-z]{2,}$/.test(w));
-// }
-
-// // One cached OCR worker per language (English + that language).
-// const aadhaarWorkers = {};
-// function getAadhaarWorker(lang = DEFAULT_CARD_LANG) {
-//   const l = SUPPORTED_CARD_LANGS.includes(lang) ? lang : DEFAULT_CARD_LANG;
-//   if (!aadhaarWorkers[l]) {
-//     aadhaarWorkers[l] = createWorker(["eng", l])
-//       .then(async (worker) => {
-//         await worker.setParameters({ tessedit_pageseg_mode: "6" });
-//         return worker;
-//       })
-//       .catch((err) => {
-//         console.error(`[aadhaarOcr] "${l}" OCR unavailable, using English only:`, err.message);
-//         delete aadhaarWorkers[l];
-//         return getWorker();
-//       });
-//   }
-//   return aadhaarWorkers[l];
-// }
-
-// // Keeps only English (ASCII) text: Tamil/Hindi characters are removed,
-// // and lines left with no real letters are dropped.
-// function englishOnly(text = "") {
-//   return text
-//     .split("\n")
-//     .map((l) => l.replace(/[^\x00-\x7F]+/g, " ").replace(/\s{2,}/g, " ").trim())
-//     .filter((l) => /[A-Za-z0-9]/.test(l))
-//     .join("\n");
-// }
-
-// // ── PaddleOCR (second reader) ───────────────────────────────────────────
-// // Runs on this server (ONNX), nothing is sent outside. Reads faded/blurred
-// // English text that Tesseract misses ("Sivaswami M S", "Hinduja Devaraj").
-// // Both readers run and the better value per field is kept
-// // (mergeOcrParses). Optional: if @gutenye/ocr-node or the English model in
-// // data/paddle/ is missing, Tesseract alone is used as before.
-// let paddleReady = null;
-// function getPaddle() {
-//   if (!paddleReady) {
-//     paddleReady = (async () => {
-//       const rec = new URL("../data/paddle/en_PP-OCRv4_rec.onnx", import.meta.url);
-//       const dict = new URL("../data/paddle/en_dict.txt", import.meta.url);
-//       if (!fs.existsSync(rec) || !fs.existsSync(dict)) {
-//         console.error("[aadhaarOcr] PaddleOCR English model missing in data/paddle — Tesseract only");
-//         return null;
-//       }
-//       const mod = await import("@gutenye/ocr-node");
-//       const Ocr = mod.default || mod;
-//       return Ocr.create({
-//         models: { recognitionPath: decodeURIComponent(rec.pathname), dictionaryPath: decodeURIComponent(dict.pathname) },
-//       });
-//     })().catch((err) => {
-//       console.error("[aadhaarOcr] PaddleOCR not available — Tesseract only:", String(err?.message || err).slice(0, 200));
-//       return null;
-//     });
-//   }
-//   return paddleReady;
-// }
-
-// // PaddleOCR prints "," as "." and drops spaces after ":" / "," —
-// // put them back so the same parsers work on its text.
-// function normalizePaddleText(text = "") {
-//   return text
-//     .split("\n")
-//     .map((l) =>
-//       l
-//         .replace(/\bD0B\b/g, "DOB")
-//         .replace(/\bY0B\b/g, "YOB")
-//         // "Sankar.560.VILLAGE" → "Sankar, 560, VILLAGE"; keeps "S.K" initials and "No.15".
-//         .replace(/\b([A-Za-z]{3,}|\d+)\.(?=[A-Z0-9])/g, (m, w) => (/^no$/i.test(w) ? m : `${w}, `))
-//         .replace(/,(?=\S)/g, ", ")
-//         .replace(/:(?=[A-Za-z0-9])/g, ": ")
-//         .replace(/(Birth|DOB|YOB)(?=\d)/gi, "$1 "),
-//     )
-//     .join("\n");
-// }
-
-// async function readPaddleText(filePath) {
-//   if (isPdfFile(filePath) && englishOnly(pdfTextLayer(filePath)).length > 80) return ""; // exact text already
-//   const ocr = await getPaddle();
-//   if (!ocr) return "";
-//   let pdfPng = null;
-//   const out = `${filePath}-paddle.png`;
-//   try {
-//     let src = filePath;
-//     if (isPdfFile(filePath)) {
-//       pdfPng = pdfFirstPageToPngFile(filePath);
-//       src = pdfPng;
-//     }
-//     await sharp(src).rotate().resize({ width: 2000, height: 2000, fit: "inside", withoutEnlargement: true }).png().toFile(out);
-//     const res = await ocr.detect(out);
-//     const items = (Array.isArray(res) ? res : res?.texts || [])
-//       .filter((t) => t && t.text)
-//       .sort((a, b) => (a.box?.[0]?.[1] ?? 0) - (b.box?.[0]?.[1] ?? 0) || (a.box?.[0]?.[0] ?? 0) - (b.box?.[0]?.[0] ?? 0));
-//     return normalizePaddleText(englishOnly(items.map((t) => t.text).join("\n")));
-//   } catch (err) {
-//     console.error("[aadhaarOcr] PaddleOCR read failed:", String(err?.message || err).slice(0, 200));
-//     return "";
-//   } finally {
-//     fs.unlink(out, () => {});
-//     if (pdfPng) fs.unlink(pdfPng, () => {});
-//   }
-// }
-
-// // Best of Tesseract (a) and PaddleOCR (b), field by field.
-// function mergeOcrParses(a = {}, b = {}) {
-//   if (!b || !Object.keys(b).length) return a;
-//   const nameWords = (p) => [...new Set(`${p.firstName || ""} ${p.lastName || ""}`.split(/\s+/).filter(Boolean))];
-//   const nameScore = (p) => {
-//     const w = nameWords(p);
-//     if (!w.length) return 0;
-//     return (nameLooksSolid(p) ? 100 : 0) + w.join("").length + 5 * (w.length - 1);
-//   };
-//   const out = { ...a };
-//   if (nameScore(b) > nameScore(a)) {
-//     out.firstName = b.firstName;
-//     out.lastName = b.lastName;
-//   }
-//   // Digits: PaddleOCR reads them more reliably; Tesseract fills gaps.
-//   if (b.dob) { out.dob = b.dob; out.age = b.age || a.age; } else if (!a.dob && b.age) out.age = b.age;
-//   if (!out.age && b.age) out.age = b.age;
-//   out.gender = a.gender || b.gender || "";
-//   out.aadhaarNumber = b.aadhaarNumber || a.aadhaarNumber || "";
-//   out.phone = a.phone || b.phone || "";
-//   // Address: the read that found more of state / pincode / city.
-//   const addrScore = (p) => (p.state ? 2 : 0) + (/^\d{6}$/.test(p.pincode || "") ? 2 : 0) + (p.city ? 1 : 0) + (p.addressLine1 ? 1 : 0);
-//   if (addrScore(b) > addrScore(a)) {
-//     for (const k of ["address", "addressLine1", "addressLine2", "city", "state", "pincode"]) out[k] = b[k] || "";
-//   }
-//   return out;
-// }
-
-// async function readAadhaarText(filePath, lang = DEFAULT_CARD_LANG) {
-//   // e-Aadhaar PDF downloaded from UIDAI has real text inside — read that
-//   // directly (exact letters, no OCR guessing). Scanned PDFs have no text
-//   // layer, so they still go through OCR.
-//   if (isPdfFile(filePath)) {
-//     const layer = englishOnly(pdfTextLayer(filePath));
-//     if (layer.length > 80 && /aadhaar|address|DOB|VTC|PIN\s*Code/i.test(layer)) {
-//       console.log("[aadhaarOcr] read PDF text layer (no OCR)");
-//       return layer;
-//     }
-//   }
-//   const raw = await readImageText(filePath, getAadhaarWorker(lang), { cardCrop: true });
-//   return englishOnly(raw);
-// }
-
-// // Text printed inside a PDF (page 1), line by line. "" if there is none,
-// // or the PDF can't be opened.
-// function pdfTextLayer(pdfPath) {
-//   let doc = null, page = null, st = null;
-//   try {
-//     doc = mupdf.Document.openDocument(fs.readFileSync(pdfPath), "application/pdf");
-//     page = doc.loadPage(0);
-//     st = page.toStructuredText("preserve-whitespace");
-//     return st.asText() || "";
-//   } catch (err) {
-//     console.error("[aadhaarOcr] PDF text layer read failed:", err.message);
-//     return "";
-//   } finally {
-//     try { st?.destroy(); } catch { /* ignore */ }
-//     try { page?.destroy(); } catch { /* ignore */ }
-//     try { doc?.destroy(); } catch { /* ignore */ }
-//   }
-// }
  
 // // Upscale + grayscale + normalize + sharpen before OCR. Falls back to the
 // // original file if preprocessing fails.
-// // Where the card sits in a photo: the area with text/edges, ignoring the
-// // plain wall/table around it. Returns fractions {x0,x1,y0,y1} or null.
-// async function findCardBox(filePath) {
-//   try {
-//     const { data, info } = await sharp(filePath).rotate()
-//       .resize({ width: 300, height: 300, fit: "inside" })
-//       .grayscale().blur(0.6).raw().toBuffer({ resolveWithObject: true });
-//     const w = info.width, h = info.height;
-//     const rows = new Array(h).fill(0), cols = new Array(w).fill(0);
-//     for (let y = 1; y < h - 1; y++) {
-//       for (let x = 1; x < w - 1; x++) {
-//         const i = y * w + x;
-//         const g = Math.abs(data[i + 1] - data[i - 1]) + Math.abs(data[i + w] - data[i - w]);
-//         if (g > 40) { rows[y]++; cols[x]++; }
-//       }
-//     }
-//     const span = (arr) => {
-//       const tot = arr.reduce((a, b) => a + b, 0);
-//       if (tot < 50) return null;
-//       let acc = 0, lo = 0, hi = arr.length - 1;
-//       for (let i = 0; i < arr.length; i++) { acc += arr[i]; if (acc >= tot * 0.01) { lo = i; break; } }
-//       acc = 0;
-//       for (let i = arr.length - 1; i >= 0; i--) { acc += arr[i]; if (acc >= tot * 0.01) { hi = i; break; } }
-//       return [lo / arr.length, (hi + 1) / arr.length];
-//     };
-//     const r = span(rows), c = span(cols);
-//     return r && c ? { x0: c[0], x1: c[1], y0: r[0], y1: r[1] } : null;
-//   } catch {
-//     return null;
-//   }
-// }
-
-// async function preprocessForOcr(filePath, { cardCrop = false } = {}) {
+// async function preprocessForOcr(filePath) {
 //   const outPath = `${filePath}-ocr.png`;
-//   let image = sharp(filePath, { density: 300 }).rotate(); // auto-orient via EXIF
+//   const image = sharp(filePath, { density: 300 }).rotate(); // auto-orient via EXIF
 //   const metadata = await image.metadata();
-//   let srcWidth = metadata.width || 0;
-//   // Card photographed small in the middle of a big photo (wall/table all
-//   // around)? Crop to the card and enlarge it — tiny text is what makes
-//   // OCR miss the name. Close-up photos and scans are left as they are.
-//   // Aadhaar photos only — payment screenshots keep the old processing.
-//   const box = cardCrop ? await findCardBox(filePath) : null;
-//   if (box && (box.x1 - box.x0) * (box.y1 - box.y0) < 0.5 && metadata.width && metadata.height) {
-//     const pad = 0.05;
-//     const oriented = metadata.orientation >= 5 ? { W: metadata.height, H: metadata.width } : { W: metadata.width, H: metadata.height };
-//     const left = Math.max(0, Math.floor((box.x0 - pad) * oriented.W));
-//     const top = Math.max(0, Math.floor((box.y0 - pad) * oriented.H));
-//     const width = Math.min(oriented.W - left, Math.ceil((box.x1 - box.x0 + 2 * pad) * oriented.W));
-//     const height = Math.min(oriented.H - top, Math.ceil((box.y1 - box.y0 + 2 * pad) * oriented.H));
-//     if (width > 50 && height > 50) {
-//       const cropped = await sharp(filePath, { density: 300 }).rotate().extract({ left, top, width, height }).toBuffer();
-//       image = sharp(cropped);
-//       srcWidth = width;
-//       console.log("[aadhaarOcr] card is small in the photo — cropped to it before reading");
-//     }
-//   }
-//   const targetWidth = cardCrop ? Math.max(srcWidth, srcWidth < 1600 ? 2200 : 1600) : Math.max(srcWidth, 1600);
+//   const targetWidth = Math.max(metadata.width || 0, 1600);
 //   await image
 //     .resize({ width: targetWidth, withoutEnlargement: false })
 //     .grayscale()
@@ -336,41 +66,13 @@
 // // Renders page 1 of a PDF to a PNG (~300 DPI) with mupdf. Throws on a
 // // corrupt/password-protected PDF — caller must NOT fall back to OCR-ing
 // // the raw PDF.
-// // Page 2 of a 2-page Aadhaar PDF (front on page 1, back on page 2) as a
-// // PNG, or null when the PDF has only one page.
-// function pdfSecondPageToPngFile(pdfPath, dpi = 300) {
-//   let doc = null;
-//   try {
-//     doc = mupdf.Document.openDocument(fs.readFileSync(pdfPath), "application/pdf");
-//     if (doc.countPages() < 2) return null;
-//     const page = doc.loadPage(1);
-//     try {
-//       const pixmap = page.toPixmap(mupdf.Matrix.scale(dpi / 72, dpi / 72), mupdf.ColorSpace.DeviceRGB, false, true);
-//       try {
-//         const outPath = `${pdfPath}-page2.png`;
-//         fs.writeFileSync(outPath, pixmap.asPNG());
-//         return outPath;
-//       } finally {
-//         pixmap.destroy();
-//       }
-//     } finally {
-//       page.destroy();
-//     }
-//   } catch (err) {
-//     console.error("[aadhaarOcr] could not read page 2 of PDF:", err.message);
-//     return null;
-//   } finally {
-//     try { doc?.destroy(); } catch { /* ignore */ }
-//   }
-// }
-
-// function pdfFirstPageToPngFile(pdfPath, dpi = 300) {
+// function pdfFirstPageToPngFile(pdfPath) {
 //   const buffer = fs.readFileSync(pdfPath);
 //   const doc = mupdf.Document.openDocument(buffer, "application/pdf");
 //   try {
 //     const page = doc.loadPage(0);
 //     try {
-//       const matrix = mupdf.Matrix.scale(dpi / 72, dpi / 72);
+//       const matrix = mupdf.Matrix.scale(300 / 72, 300 / 72);
 //       const pixmap = page.toPixmap(matrix, mupdf.ColorSpace.DeviceRGB, false, true);
 //       try {
 //         const outPath = `${pdfPath}-page1.png`;
@@ -407,8 +109,8 @@
 // };
  
  
-// async function readImageText(filePath, workerPromiseOverride, ocrOpts = {}) {
-//   const worker = await (workerPromiseOverride || getWorker());
+// async function readImageText(filePath) {
+//   const worker = await getWorker();
  
 //   // PDF → PNG FIRST, unconditionally.
 //   let sourcePath = filePath;
@@ -426,7 +128,7 @@
 //   let ocrPath = sourcePath;
 //   let preprocessed = false;
 //   try {
-//     ocrPath = await preprocessForOcr(sourcePath, ocrOpts);
+//     ocrPath = await preprocessForOcr(sourcePath);
 //     preprocessed = true;
 //   } catch (err) {
 //     console.error("OCR preprocess failed, reading original image instead:", err.message);
@@ -577,91 +279,34 @@
 //   return best;
 // }
  
-// // e-Aadhaar letter name. The letter prints:
-// //     To
-// //     Gomathi K R            ← holder's name
-// //     W/o Nagaraju B,        ← husband/father — NEVER the holder's name
-// //     Vill No 121 ...
-// // and again in the cut-out card above "DOB:". So: (1) the line just above
-// // the first S/O-W/O-D/O-C/O line, (2) the name above DOB / the DOB date,
-// // (3) the lines after "To", always skipping relation lines.
-// const RELATION_LINE_RE = /^\W*[SDWC]\s*\/\s*O\b/i;
-// function extractNameFromEAadhaarPdf(lines, dob = "") {
-//   const relIdx = lines.findIndex((l, i) => i < 40 && RELATION_LINE_RE.test(l));
-//   if (relIdx > 0) {
-//     let best = { words: [], score: 0 };
-//     for (let i = relIdx - 1; i >= Math.max(0, relIdx - 2); i--) {
-//       if (/^to\b|enrol|authority|government/i.test(lines[i])) break;
-//       const run = bestNameRunInLine(lines[i]);
-//       if (run.score > best.score) best = run;
-//     }
-//     if (best.score) return best.words.join(" ");
-//   }
-
-//   let anchor = lines.findIndex((l) => /DOB\s*[:\/]|Date of Birth/i.test(l));
-//   if (anchor === -1 && dob) anchor = lines.findIndex((l) => l.includes(dob));
-//   const aboveDob = pickNameAboveDob(lines, anchor);
-//   if (aboveDob) return aboveDob;
-
+// function extractNameFromEAadhaarPdf(lines) {
+//   const isBetter = (a, b) =>
+//     a.length !== b.length ? a.length > b.length : a.join("").length > b.join("").length;
+//   // Name sits within the first few lines after "To".
 //   const toIdx = lines.findIndex((l, i) => i < 40 && /^to\b/i.test(l));
+//   let winner = [];
 //   if (toIdx !== -1) {
-//     let best = { words: [], score: 0 };
 //     for (let i = toIdx + 1; i <= Math.min(lines.length - 1, toIdx + 3); i++) {
-//       if (RELATION_LINE_RE.test(lines[i])) break;
-//       const run = bestNameRunInLine(lines[i]);
-//       if (run.score > best.score) best = run;
+//       const seg = bestNameSegmentInLine(lines[i]);
+//       if (seg.length && isBetter(seg, winner)) winner = seg;
 //     }
-//     if (best.score) return best.words.join(" ");
 //   }
-//   return "";
-// }
-
-// // OCR misspells state names on the letter ("Kamataka", "Kerla") — snap a
-// // word that's 1–2 letters away from a single-word state to that state.
-// function fixStateTypos(text = "") {
-//   const single = INDIAN_STATES_UTS.filter((x) => !x.includes(" ") && x.length >= 6);
-//   return text.replace(/\b[A-Za-z]{6,}\b/g, (w) => {
-//     const lw = w.toLowerCase();
-//     for (const st of single) {
-//       const ls = st.toLowerCase();
-//       if (lw === ls) return w;
-//       if (Math.abs(lw.length - ls.length) > 2) continue;
-//       if (levenshtein(lw, ls) <= (ls.length >= 8 ? 2 : 1)) return st;
+//   // Fallback: name printed again just above DOB.
+//   if (winner.length === 0) {
+//     const dobIdx = lines.findIndex((l) => /DOB\s*[:\/]/i.test(l));
+//     if (dobIdx !== -1) {
+//       for (let i = Math.max(0, dobIdx - 2); i < dobIdx; i++) {
+//         const seg = bestNameSegmentInLine(lines[i]);
+//         if (seg.length && isBetter(seg, winner)) winner = seg;
+//       }
 //     }
-//     return w;
-//   });
+//   }
+//   const picked = winner.slice(0, 2);
+//   return picked
+//     .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+//     .join(" ");
 // }
-
-// // One printed letter line, minus OCR border junk ("Office, |", "B, 1").
-// // A word worth keeping in a letter address line: "W/O:", "#202",
-// // "No.12", "3rd", Title/CAPS words, or a single capital initial ("G").
-// function isLetterAddressToken(t) {
-//   const core = t.replace(/[,.;:]+$/, "");
-//   if (!core) return false;
-//   if (/^[SDWC]\/O:?$/i.test(core)) return true;
-//   if (/^#?\d+[A-Za-z]?([/\-]\d+[A-Za-z]?)*$/.test(core)) return true;
-//   if (/^No\.?\d+/i.test(core)) return true;
-//   if (/^\d+(st|nd|rd|th)$/i.test(core)) return true;
-//   if (/^[A-Z]$/.test(core)) return true;
-//   if (/^[A-Z][a-z]+$/.test(core) || /^[A-Z]{2,}$/.test(core)) return core.length <= 3 || looksLikeIndianWord(core);
-//   return false;
-// }
-// function cleanLetterLine(line = "") {
-//   // The right-hand column (UIDAI instructions) gets glued onto the same
-//   // OCR line after a " | ", " ! " or " i " — cut there.
-//   line = line.split(/\s[|!i]\s|\s[|!]$|\si$/)[0];
-//   const kept = line.split(/\s+/).filter(isLetterAddressToken);
-//   // Line with no real word or house number = pure junk ("es =) o% Ed").
-//   if (!kept.some((t) => /[A-Za-z]{3,}|\d/.test(t))) return "";
-//   return kept.join(" ")
-//     .replace(/[|!=£§~_^*{}[\]<>]/g, " ")
-//     .replace(/(^|\s)[.:;'"`]+(?=\s|$)/g, " ")
-//     .replace(/,\s*[A-Za-z0-9]\s*$/, ",")
-//     .replace(/\s{2,}/g, " ")
-//     .replace(/^[\s,.]+|[\s,]+$/g, "")
-//     .trim();
-// }
-
+ 
 // // Keeps just the leading real-address words of one OCR line, stopping at
 // // boilerplate merged onto its end.
 // function addressLineLeadingRun(line) {
@@ -709,277 +354,54 @@
 // }
  
 // function parseEAadhaarPdf(text) {
-//   text = fixStateTypos(text);
 //   const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
-//   const name = extractNameFromEAadhaarPdf(lines, findDob(text, lines));
-//   const { firstName, lastName } = splitIndianName(name);
-
+//   const name = extractNameFromEAadhaarPdf(lines);
+//   const nameParts = name.split(/\s+/).filter(Boolean);
+//   const firstName = nameParts[0] || "";
+//   const lastName = nameParts.slice(1).join(" ") || firstName;
+ 
 //   const get = (re) => {
 //     const m = text.match(re);
 //     return m ? m[1].replace(/\s{2,}/g, " ").trim() : "";
 //   };
-//   const vtc = get(/VTC\s*[:\-]?\s*([A-Za-z .]+?)\s*(?:,|\n|$)/i);
-//   const district = get(/(?<!Sub\s?)District\s*[:\-]?\s*([A-Za-z .]+?)\s*(?:,|\n|$)/i);
-//   const stateLabel = get(/State\s*[:\-]?\s*([A-Za-z .]+?)\s*(?:,|\n|$)/i);
+//   const vtc = get(/VTC\s*[:\-]?\s*([A-Za-z .]+?)\s*,/i);
+//   const po = get(/\bPO\s*[:\-]?\s*([A-Za-z .]+?)\s*,/i);
+//   const district = get(/District\s*[:\-]?\s*([A-Za-z .]+?)\s*,/i);
+//   const stateLabel = get(/State\s*[:\-]?\s*([A-Za-z .]+?)\s*,/i);
 //   const pin = get(/PIN\s*Code\s*[:\-]?\s*(\d{6})/i);
-
-//   // Street = from the W/O-S/O line (or the line after "To", minus the
-//   // name) down to the "VTC:" line.
+ 
 //   const toIdx = lines.findIndex((l, i) => i < 40 && /^to\b/i.test(l));
-//   const relIdx = lines.findIndex((l, i) => i < 40 && RELATION_LINE_RE.test(l));
 //   const vtcIdx = lines.findIndex((l) => /VTC\s*[:\-]/i.test(l));
 //   let street = "";
-//   const startIdx = relIdx !== -1 ? relIdx : toIdx !== -1 ? toIdx + 1 : -1;
-//   if (startIdx !== -1 && vtcIdx > startIdx) {
-//     const escapeRegex = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-//     street = lines.slice(startIdx, vtcIdx).map(cleanLetterLine).filter(Boolean).join(", ");
-//     if (name && relIdx === -1) street = street.replace(new RegExp(escapeRegex(name), "i"), "");
-//     street = street.replace(/,\s*,/g, ",").replace(/^[\s,]+|[\s,]+$/g, "").trim();
-//   }
-
-//   let address = [street, vtc, district, stateLabel, pin].filter(Boolean).join(", ");
-//   if (!street) {
-//     const fallback = extractAddressFallbackFromToBlock(lines, toIdx, name);
-//     if (fallback) address = fallback;
-//   }
-//   const addressParts = splitAddressComponents(address);
-//   // The letter labels these, so trust the labels over the generic split.
-//   if (district || vtc) addressParts.city = district || vtc;
-//   if (stateLabel) {
-//     const canon = INDIAN_STATES_UTS.find((x) => x.toLowerCase() === stateLabel.toLowerCase());
-//     if (canon) addressParts.state = canon;
-//   }
-//   if (pin) addressParts.pincode = pin;
-//   // Printed letter text is clean — keep it as-is (with "R K", "R T O").
-//   if (street) {
-//     const town = vtc && vtc.toLowerCase() !== (district || "").toLowerCase() ? vtc : "";
-//     addressParts.addressLine1 = [street, town].filter(Boolean).join(", ");
-//   }
-//   const mobileMatch = text.match(/Mobile\s*[:\-]?\s*(\d{10})/i);
-
-//   return { firstName, lastName, address, addressParts, phone: mobileMatch ? mobileMatch[1] : "" };
-// }
-
-// // Shape check for a real word, lenient enough for Indian names/places with
-// // consonant clusters ("Shanthi", "Street", "Varalakshmi") but still rejects
-// // OCR junk ("rrr", "Hmmsd", "XKQZT").
-// function looksLikeIndianWord(bare) {
-//   const lower = bare.toLowerCase();
-//   const vowels = (lower.match(/[aeiouy]/g) || []).length;
-//   if (vowels / lower.length < 0.2) return false;
-//   if (/[^aeiouy]{5,}/.test(lower)) return false;
-//   if (/(.)\1\1/.test(lower)) return false;
-//   return true;
-// }
-
-// // ── Name helpers (English-only) ─────────────────────────────────────────
-// // Tesseract runs in English only, so Tamil/Hindi text on the card comes out
-// // as random Latin junk ("Ny SAN An Sa", "Nc UImbs Beit"). A real English
-// // name word is Title Case or ALL CAPS, at least 3 letters and vowel-shaped;
-// // a lone capital (with or without a dot) is an initial.
-// const NAME_STOP_WORDS = new Set([
-//   "government", "india", "aadhaar", "unique", "identification", "authority",
-//   "dob", "date", "birth", "year", "male", "female", "transgender", "issue",
-//   "proof", "identity", "citizenship", "father", "husband", "mother", "address",
-//   "enrolment", "download", "mera", "meri", "pehchaan", "pahchan",
-// ]);
-// function nameTokenKind(tok) {
-//   // Tokens with brackets/digits/symbols glued on ("EMHE)", "[JHIGEOIT",
-//   // "S60") are OCR junk, not names.
-//   const core = tok.replace(/[.,]+$/, "");
-//   if (!/^[A-Za-z]+(\.[A-Za-z]+)*$/.test(core)) return "noise";
-//   const bare = core.replace(/\./g, "");
-//   if (/^[A-Z]$/.test(bare)) return "initial";
-//   if (/^[A-Z][a-z]$/.test(bare) && bare[0].toLowerCase() === bare[1]) return "initial"; // "Vv" → V
-//   // "KR", "SK", "MRK" — run-together initials (no vowel, 2–3 capitals).
-//   if (/^[A-Z]{2,3}$/.test(bare) && !/[AEIOU]/.test(bare)) return "initials";
-//   if (bare.length < 3) return "noise";
-//   if (NAME_STOP_WORDS.has(bare.toLowerCase())) return "noise";
-//   if (!looksLikeIndianWord(bare)) return "noise";
-//   if (/^[A-Z][a-z]+$/.test(bare)) return "title";
-//   if (/^[A-Z]+$/.test(bare)) return "caps";
-//   return "noise";
-// }
-// // Best name run in one line: consecutive Title-Case words + initials, or
-// // consecutive ALL-CAPS words + initials (never mixed, so caps noise next to
-// // a Title-Case name is dropped). Score = letters in real words.
-// function bestNameRunInLine(line) {
-//   // "S.K.Brindha" → "S. K. Brindha"; then split on spaces only, so junk
-//   // like "S60" stays one (rejected) token instead of becoming initial "S".
-//   const tokens = line
-//     .replace(/([A-Za-z])\.(?=[A-Za-z])/g, "$1. ")
-//     // Initials stuck to the name ("SivaswamiMS" → "Sivaswami M S").
-//     .replace(/\b([A-Z][a-z]{2,})([A-Z]{1,3})\b/g, (m, w, ini) => `${w} ${ini.split("").join(" ")}`)
-//     .split(/\s+/)
-//     .filter(Boolean);
-//   let best = { words: [], score: 0 };
-//   for (const style of ["title", "caps"]) {
-//     let cur = [];
-//     let score = 0;
-//     const flush = () => {
-//       // A run made only of initials isn't a name.
-//       if (score > 0 && score > best.score) best = { words: cur, score };
-//       cur = [];
-//       score = 0;
-//     };
-//     for (const tok of tokens) {
-//       const kind = nameTokenKind(tok);
-//       if (/^J?[\])]$/.test(tok) && score > 0) {
-//         // Initial "J" right after a name is often OCR'd as "]" ("Chandrakala ]").
-//         cur.push("J");
-//       } else if (kind === "initial") {
-//         cur.push(tok.replace(/[.,]/g, "").charAt(0).toUpperCase());
-//       } else if (kind === "initials" && score > 0) {
-//         // Only after a real name word ("Gomathi KR") — a leading "HB" is
-//         // usually OCR junk from the photo/border.
-//         cur.push(...tok.replace(/[.,]/g, "").split(""));
-//       } else if (kind === style) {
-//         const w = tok.replace(/[.,]/g, "");
-//         cur.push(w);
-//         score += style === "title" ? w.length * 2 : w.length;
-//       } else {
-//         flush();
+//   if (toIdx !== -1 && vtcIdx !== -1 && vtcIdx > toIdx) {
+//     const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+//     street = cleanAddressNoise(lines.slice(toIdx + 1, vtcIdx).join(", "));
+//     if (name) {
+//       street = street.replace(new RegExp(escapeRegex(name), "gi"), "").trim();
+//       const upperName = name.toUpperCase();
+//       if (upperName !== name) {
+//         street = street.replace(new RegExp(escapeRegex(upperName), "gi"), "").trim();
 //       }
 //     }
-//     flush();
+//     street = street.replace(/^[\s,]+/, "").replace(/[\s,]+$/, "").trim();
 //   }
-//   // Trim stray initials glued on by noise beyond 2 at either end.
-//   return best;
+ 
+//   let address = [street, vtc, district, stateLabel, pin].filter(Boolean).join(", ");
+//   if (!address) {
+//     address = extractAddressFallbackFromToBlock(lines, toIdx, name);
+//   }
+//   const addressParts = splitAddressComponents(address);
+//   const mobileMatch = text.match(/Mobile\s*[:\-]?\s*(\d{10})/i);
+ 
+//   return { firstName, lastName, address, addressParts, phone: mobileMatch ? mobileMatch[1] : "" };
 // }
-// function pickNameAboveDob(lines, dobIdx) {
-//   if (dobIdx === -1) return "";
-//   let winner = { words: [], score: 0, dist: Infinity };
-//   for (let i = dobIdx - 1, dist = 1; i >= Math.max(0, dobIdx - 6); i--, dist++) {
-//     const line = lines[i];
-//     if (/government|unique identification|authority/i.test(line)) break;
-//     if (/father|husband|\b[sdwc]\s*\/\s*o\b/i.test(line)) continue;
-//     const run = bestNameRunInLine(line);
-//     if (!run.score) continue;
-//     // Longer real name wins; on a tie the line closest to DOB wins.
-//     if (run.score > winner.score || (run.score === winner.score && dist < winner.dist)) {
-//       winner = { ...run, dist };
-//     }
-//   }
-//   return winner.words.join(" ");
-// }
-// // First / last name rules:
-// //   "Balameena"        → Balameena / Balameena
-// //   "S.Brindha"        → S / Brindha
-// //   "S.K.Brindha"      → S K / Brindha
-// //   "Brindha S"        → Brindha / S
-// //   "Brindha S K"      → Brindha / S K
-// //   "Geetha Sankaram"  → Geetha / Sankaram
-// function splitIndianName(fullName = "") {
-//   const tokens = fullName.replace(/\./g, ". ").split(/\s+/).map((t) => t.replace(/\./g, "")).filter(Boolean);
-//   if (tokens.length === 0) return { firstName: "", lastName: "" };
-//   if (tokens.length === 1) return { firstName: tokens[0], lastName: tokens[0] };
-//   const isInitial = (t) => /^[A-Za-z]$/.test(t);
-//   let lead = 0;
-//   while (lead < tokens.length && isInitial(tokens[lead])) lead++;
-//   if (lead > 0 && lead < tokens.length) {
-//     return { firstName: tokens.slice(0, lead).join(" ").toUpperCase(), lastName: tokens.slice(lead).join(" ") };
-//   }
-//   let trail = 0;
-//   while (trail < tokens.length && isInitial(tokens[tokens.length - 1 - trail])) trail++;
-//   if (trail > 0 && trail < tokens.length) {
-//     return {
-//       firstName: tokens.slice(0, tokens.length - trail).join(" "),
-//       lastName: tokens.slice(tokens.length - trail).join(" ").toUpperCase(),
-//     };
-//   }
-//   return { firstName: tokens[0], lastName: tokens.slice(1).join(" ") };
-// }
-// // DOB even when OCR splits "DOB :" and the date onto different lines.
-// function findDob(text, lines) {
-//   const labelled = text.match(/(?:DOB|D\.O\.B|Date of Birth)\s*[:\-]?\s*(\d{2}[/\-.]\d{2}[/\-.]\d{4})/i);
-//   if (labelled) return labelled[1];
-//   // OCR turns "/" into "1", "l", "I" or "|" ("DOB: 29111/1955" = 29/11/1955).
-//   const fuzzy = text.match(/(?:DOB|D\.O\.B|Date of Birth)\s*[:\-]?\s*(\d{2})\s*[/\-.1lI|]?\s*(\d{2})\s*[/\-.1lI|]\s*(\d{4})/i);
-//   if (fuzzy) {
-//     const [, d, m, y] = fuzzy;
-//     if (+d >= 1 && +d <= 31 && +m >= 1 && +m <= 12 && +y >= 1900 && +y <= new Date().getFullYear()) {
-//       return `${d}/${m}/${y}`;
-//     }
-//   }
-//   const thisYear = new Date().getFullYear();
-//   const okYear = (d) => {
-//     const y = Number(d.slice(-4));
-//     return y >= 1900 && y <= thisYear;
-//   };
-//   const dobIdx = lines.findIndex((l) => /DOB|D\.O\.B|Date of Birth/i.test(l));
-//   if (dobIdx !== -1) {
-//     for (const i of [dobIdx, dobIdx - 1, dobIdx + 1, dobIdx - 2, dobIdx + 2]) {
-//       const m = lines[i]?.match(/\b(\d{2}[/\-.]\d{2}[/\-.]\d{4})\b/);
-//       if (m && okYear(m[1]) && !/issue/i.test(lines[i])) return m[1];
-//     }
-//   }
-//   for (const l of lines) {
-//     if (/issue|download|generat/i.test(l)) continue;
-//     const m = l.match(/\b(\d{2}[/\-.]\d{2}[/\-.]\d{4})\b/);
-//     if (m && okYear(m[1])) return m[1];
-//   }
-//   return "";
-// }
-
-// // OCR writes "S/O" as "S /O", "S|O", "5/0", "S/0" — make it "S/O" so the
-// // address start is found and doesn't come out as a stray "O:".
-// function normalizeRelation(text = "") {
-//   // "Address:" misread ("addrass/O:", "AddresgaW/O:", "Adress") → "Address: "
-//   text = text.replace(
-//     /\b[Aa][Dd][Dd]?[Rr][AaEe][Ss][Ss]?[a-z]{0,2}?\s*[:;.]?\s*(?=[SDWC]\s*\/\s*O\b|\/\s*O\b|[A-Z0-9])/g,
-//     "Address: ",
-//   );
-//   // Relation letter eaten by the label ("addrass/O: Sankar") — drop the
-//   // orphan "/O:" rather than guess S/W/D/C.
-//   text = text.replace(/Address:\s*\/\s*[O0]\s*[:.]?\s*/g, "Address: ");
-//   text = text.replace(/(^|\n)([^A-Za-z0-9\n]*)([SDWC0])([O0])\s*:/g, (m, nl, pre, c) =>
-//     `${nl}${pre}${c === "0" ? "D" : c}/O:`);
-//   return text.replace(/(^|[^A-Za-z0-9])([SDWC50])\s*[\/|]\s*([O0])(?=\s*[:.,]|\s)/gi, (m, pre, c, o) =>
-//     `${pre}${c === "5" ? "S" : c === "0" ? "D" : c}/${o === "0" ? "O" : o}`);
-// }
-
-// // State from the pincode's first digits (India Post zones). Used when OCR
-// // couldn't read the state, and to catch a state that disagrees with the PIN.
-// const PIN_PREFIX_STATE = [
-//   [[11, 11], "Delhi"], [[12, 13], "Haryana"], [[14, 15], "Punjab"], [[17, 17], "Himachal Pradesh"],
-//   [[18, 19], "Jammu And Kashmir"], [[30, 34], "Rajasthan"], [[36, 39], "Gujarat"],
-//   [[40, 44], "Maharashtra"], [[45, 48], "Madhya Pradesh"], [[49, 49], "Chhattisgarh"],
-//   [[50, 50], "Telangana"], [[51, 53], "Andhra Pradesh"], [[56, 59], "Karnataka"],
-//   [[60, 64], "Tamil Nadu"], [[67, 69], "Kerala"], [[70, 74], "West Bengal"],
-//   [[75, 77], "Odisha"], [[78, 78], "Assam"],
-// ];
-// // Pincode → [district, state] from the India Post directory, shipped as
-// // data/pincodeDistricts.json (~300 KB, loaded once).
-// let PIN_TABLE = null;
-// function districtFromPincode(pin = "") {
-//   if (!/^[1-9]\d{5}$/.test(pin)) return null;
-//   if (!PIN_TABLE) {
-//     try {
-//       PIN_TABLE = JSON.parse(fs.readFileSync(new URL("../data/pincodeDistricts.json", import.meta.url), "utf8"));
-//     } catch (err) {
-//       console.error("[aadhaarOcr] pincode table missing (data/pincodeDistricts.json):", err.message);
-//       PIN_TABLE = { pins: {}, districts: [], states: [] };
-//     }
-//   }
-//   const v = PIN_TABLE.pins[pin];
-//   if (v === undefined) return null;
-//   return { district: PIN_TABLE.districts[Math.floor(v / 100)], state: PIN_TABLE.states[v % 100] };
-// }
-
-// function stateFromPincode(pin = "") {
-//   if (!/^[1-9]\d{5}$/.test(pin)) return "";
-//   if (/^6050(0|1)\d$/.test(pin) || /^533464$/.test(pin) || /^6091(0|1)\d$/.test(pin)) return "Puducherry";
-//   const two = Number(pin.slice(0, 2));
-//   const hit = PIN_PREFIX_STATE.find(([[lo, hi]]) => two >= lo && two <= hi);
-//   return hit ? hit[1] : "";
-// }
-
+ 
 // function parseAadhaarText(text = "") {
-//   text = normalizeRelation(text);
 //   const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+//   const dobMatch = text.match(/(?:DOB|D\.O\.B|Date of Birth)\s*[:\-]?\s*(\d{2}[/\-]\d{2}[/\-]\d{4})/i);
 //   const yobMatch = text.match(/(?:Year of Birth|YOB)\s*[:\-]?\s*(\d{4})/i);
-//   let age = "", dob = findDob(text, lines);
-//   if (dob) { age = calcAge(dob); }
+//   let age = "", dob = "";
+//   if (dobMatch) { dob = dobMatch[1]; age = calcAge(dob); }
 //   else if (yobMatch) { age = new Date().getFullYear() - Number(yobMatch[1]); }
 //   const gender = detectGender(text);
  
@@ -1000,11 +422,42 @@
 //     };
 //   }
  
+//   let fullName = "";
 //   const dobIdx = lines.findIndex((l) => /DOB|D\.O\.B|Year of Birth|YOB|Date of Birth/i.test(l));
-//   // DOB line itself sometimes loses the "DOB" word; fall back to the date line.
-//   const anchorIdx = dobIdx !== -1 ? dobIdx : lines.findIndex((l) => dob && l.includes(dob));
-//   const fullName = pickNameAboveDob(lines, anchorIdx);
-//   const { firstName, lastName } = splitIndianName(fullName);
+//   // Scan a window above DOB and keep the line with the most Title-Case
+//   // words (regional-script OCR noise is almost never Title Case).
+//   const NAME_SCAN_WINDOW = 6;
+//   let bestScore = -1;
+//   let bestCandidate = "";
+//   for (let i = dobIdx - 1; i >= Math.max(0, dobIdx - 1 - NAME_SCAN_WINDOW); i--) {
+//     const line = lines[i];
+//     if (/government|india|authority|unique identification/i.test(line)) continue;
+//     // Skip "Father : X" / S/O / D/O / W/O / C/O lines.
+//     if (/father|\b[sdwc]\/o\b/i.test(line)) continue;
+//     const runs = line.match(/[A-Za-z][A-Za-z .]*/g) || [];
+//     const words = runs
+//       .flatMap((r) => r.trim().split(/\s+/))
+//       .filter((w) => w.length > 1);
+//     if (words.length === 0) continue;
+ 
+//     const titleCaseWords = words.filter((w) => /^[A-Z][a-z]+$/.test(w));
+//     const candidate = (titleCaseWords.length > 0 ? titleCaseWords : words).join(" ");
+//     if (candidate.length < 3) continue;
+ 
+//     const score = titleCaseWords.length;
+//     if (score > bestScore) {
+//       bestScore = score;
+//       bestCandidate = candidate;
+//     }
+//   }
+//   fullName = bestCandidate;
+//   const parts = fullName.split(/\s+/).filter(Boolean);
+//   const firstName = parts[0] || "";
+//   let lastName = parts.slice(1).join(" ");
+//   // Single-name card → Last Name = First Name.
+//   if (!lastName) {
+//     lastName = firstName;
+//   }
 //   const phone = extractPhone(text);
 //   const address = extractAddress(text);
 //   const addressParts = splitAddressComponents(address);
@@ -1020,13 +473,7 @@
  
 // // 12-digit Aadhaar number (never starts with 0/1), returned as "XXXX XXXX XXXX".
 // function extractAadhaarNumber(text = "") {
-//   // Skip the 16-digit VID ("VID : 9100 8113 0273 0000") — its first 12
-//   // digits look like an Aadhaar number.
-//   const cleaned = text
-//     .split("\n")
-//     .filter((l) => !/\bVID\b/i.test(l))
-//     .join("\n");
-//   const candidates = cleaned.match(/(?<![\d\s-]\d|\d)\b\d{4}[\s-]?\d{4}[\s-]?\d{4}\b(?![\s-]?\d)/g) || [];
+//   const candidates = text.match(/\b\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g) || [];
 //   for (const raw of candidates) {
 //     const digits = raw.replace(/[\s-]/g, "");
 //     if (digits.length === 12 && /^[2-9]/.test(digits)) {
@@ -1071,156 +518,51 @@
 //   "Dadra And Nagar Haveli And Daman And Diu",
 // ];
 // // Best-effort split of one address string into Line1/Line2/City/State/Pincode.
-// // One word of an address that looks real: a number/house no ("15", "3rd",
-// // "No.15", "1/24", "W/O"), a kept abbreviation, or a Title-Case/ALL-CAPS
-// // word of 3+ letters that's shaped like a real word. Mixed junk like
-// // "A530", "THe", lowercase "ry"/"aan" fails.
-// function isGoodAddressToken(t, keepShort) {
-//   if (!t) return false;
-//   const clean = t.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9.]+$/g, "");
-//   if (!clean) return false;
-//   if (/^[SDWC]\/O:?$/i.test(t)) return true;
-//   if (/^(No\.?)?\d+([/\-]\d+)*(st|nd|rd|th)?\.?$/i.test(clean)) return true;
-//   if (/^No\.?\d+/i.test(clean)) return true;
-//   const bare = clean.replace(/\./g, "");
-//   if (keepShort.has(bare.toLowerCase())) return true;
-//   if (bare.length < 3 || /\d/.test(bare)) return false;
-//   // Title Case / ALL CAPS words, or lowercase village names of 5+ letters
-//   // ("thopanandal") — cards sometimes print those in lowercase.
-//   if (!(/^[A-Z][a-z]+$/.test(bare) || /^[A-Z]+$/.test(bare) || /^[a-z]{5,}$/.test(bare))) return false;
-//   return looksLikeIndianWord(bare);
-// }
-
-// // Splits one OCR'd address into: full street address (one line, not
-// // split further), city, state and pincode.
-// //   • pincode = last 6-digit number
-// //   • state   = Indian state name anywhere in the text, even when OCR junk
-// //               sits between its words ("Tamil oo AT Lad, 8 Nadu")
-// //   • city    = "DIST:/District:" label if printed, else the segment just
-// //               before the state (Aadhaar prints District right before State)
-// //   • rest    = everything before the city, junk tokens removed
 // function splitAddressComponents(addr = "") {
 //   const out = { addressLine1: "", addressLine2: "", city: "", state: "", pincode: "" };
 //   if (!addr) return out;
-//   let text = addr.replace(/\s*\n\s*/g, ", ");
-//   // The real address starts at "C/O:", "S/O:", "W/O:", "D/O:" when the card
-//   // prints one — anything OCR'd before it is background/Tamil junk.
-//   const relMatch = text.match(/\b[SDWC]\s*\/\s*O\b/i);
-//   if (relMatch) text = text.slice(relMatch.index);
-
-//   // Pincode
-//   const pins = [...text.matchAll(/\b(\d{6})\b/g)];
-//   if (pins.length) {
-//     const last = pins[pins.length - 1];
-//     out.pincode = last[1];
-//     text = text.slice(0, last.index);
-//   }
-
-//   // State (longest names first so "West Bengal" beats "Bengal"-like hits)
-//   const escapeRegex = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-//   const sortedStates = [...INDIAN_STATES_UTS].sort((x, y) => y.length - x.length);
-//   let stateAt = -1;
-//   for (const state of sortedStates) {
-//     const re = new RegExp(`\\b${state.split(" ").map(escapeRegex).join("[\\s\\S]{0,25}?")}\\b`, "gi");
-//     const hits = [...text.matchAll(re)];
-//     if (hits.length) {
-//       const h = hits[hits.length - 1];
-//       if (h.index > stateAt) {
-//         stateAt = h.index;
-//         out.state = state;
-//       }
-//     }
-//   }
-//   // Second line of the state lost ("Kancheepuram, Tamil" + PIN line
-//   // unreadable): a distinctive first word is enough.
-//   if (stateAt === -1) {
-//     const PARTIAL = { tamil: "Tamil Nadu", andhra: "Andhra Pradesh", arunachal: "Arunachal Pradesh",
-//       himachal: "Himachal Pradesh", madhya: "Madhya Pradesh", jammu: "Jammu And Kashmir" };
-//     const hits = [...text.matchAll(/\b(Tamil|Andhra|Arunachal|Himachal|Madhya|Jammu)\b/gi)];
-//     if (hits.length) {
-//       const h = hits[hits.length - 1];
-//       stateAt = h.index;
-//       out.state = PARTIAL[h[1].toLowerCase()];
-//     }
-//   }
-//   if (stateAt !== -1) {
-//     // Words on the same line/segment just before the state are junk
-//     // ("SOBEENILSE ny Tamil Nadu") — District is printed on its own before it.
-//     const cut = text.lastIndexOf(",", stateAt);
-//     text = text.slice(0, cut === -1 ? stateAt : cut);
-//   }
-
-//   // City from a printed District label
-//   const distMatch = text.match(/\b(?:DIST|District)\s*[:.\-]\s*([A-Za-z][A-Za-z .]+?)\s*(?:,|$)/i);
-//   if (distMatch) {
-//     out.city = distMatch[1].trim();
-//     text = text.slice(0, distMatch.index) + text.slice(distMatch.index + distMatch[0].length);
-//   }
-
-//   // Clean each comma segment: drop labels (PO:, VTC:, Sub District:),
-//   // stray symbols and 2-letter OCR junk; keep "No.15", "3rd", "W/O".
-//   const KEEP_SHORT = new Set(["no", "rd", "st", "dr", "nr", "po", "ps", "ho"]);
-//   let segments = text
-//     .split(",")
-//     // Drop a whole segment when most of its words are junk ("ry Ses A530",
-//     // "SOBEENILSE ny") — better to lose a little than fill the form with noise.
-//     .filter((seg) => {
-//       const toks = seg.replace(/\b(?:PO|P\.O|VTC|Sub\s*District|Post)\s*[:.\-]\s*/gi, "").split(/\s+/).filter(Boolean);
-//       if (!toks.length) return false;
-//       const goodToks = toks.filter((t) => isGoodAddressToken(t, KEEP_SHORT));
-//       // Keep if mostly real, or if it has one solid place word ("RR Kidampalayam").
-//       return goodToks.length / toks.length >= 0.6 || goodToks.some((t) => /[A-Za-z]{5,}/.test(t));
-//     })
-//     .map((seg) =>
-//       seg
-//         .replace(/\b(?:PO|P\.O|VTC|Sub\s*District|Post)\s*[:.\-]\s*/gi, "")
-//         .replace(/[+:;|£€$#@!?=~_*^<>{}\[\]§]/g, " ")
-//         .split(/\s+/)
-//         .filter((t) => isGoodAddressToken(t, KEEP_SHORT))
-//         .join(" ")
-//         .trim(),
-//     )
-//     .filter(Boolean);
-
-//   // City from the segment just before the state (only place-name words).
-//   if (!out.city && out.state) {
-//     for (let i = segments.length - 1; i >= 0; i--) {
-//       const seg = segments[i];
-//       const ok =
-//         /^[A-Za-z][A-Za-z .-]*$/.test(seg) &&
-//         (seg.match(/[A-Za-z]{4,}/g) || []).some((w) => /^[A-Z]/.test(w) && looksLikeIndianWord(w));
+ 
+//   let segments = addr.split(",").map((s) => s.trim()).filter(Boolean);
+//   for (let i = segments.length - 1; i >= 0; i--) {
+//     const m = segments[i].match(/\b(\d{6})\b/);
+//     if (!m) continue;
+//     out.pincode = m[1];
+//     const rest = (segments[i].slice(0, m.index) + segments[i].slice(m.index + m[1].length)).trim();
+//     if (!rest || /^[A-Z]{1,4}$/.test(rest)) {
 //       segments.splice(i, 1);
-//       if (ok) {
-//         out.city = seg;
-//         break;
-//       }
+//     } else {
+//       segments[i] = rest;
+//     }
+//     break;
+//   }
+ 
+//   // Fuzzy state match on the trailing segment (longest names first).
+//   const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+//   const sortedStates = [...INDIAN_STATES_UTS].sort((a, b) => b.length - a.length);
+//   for (const state of sortedStates) {
+//     const words = state.split(" ").map(escapeRegex);
+//     const re = new RegExp(`^${words.join("[^,]*")}$`, "i");
+//     if (segments.length && re.test(segments[segments.length - 1])) {
+//       out.state = state;
+//       segments = segments.slice(0, -1);
+//       break;
 //     }
 //   }
-//   if (out.city) {
-//     out.city = out.city
-//       .split(/\s+/)
-//       .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-//       .join(" ");
+ 
+//   // City deliberately NOT auto-filled (usually the district).
+//   if (segments.length <= 1) {
+//     out.addressLine1 = segments.join(", ");
+//   } else {
+//     const mid = Math.ceil(segments.length / 2);
+//     out.addressLine1 = segments.slice(0, mid).join(", ");
+//     out.addressLine2 = segments.slice(mid).join(", ");
 //   }
-
-//   // Remove repeated segments (e.g. "Vengikkal, Vengikkal") and the city
-//   // repeated inside the street part; keep the address as ONE line.
-//   const seen = new Set();
-//   segments = segments.filter((seg) => {
-//     const key = seg.toLowerCase().replace(/[^a-z0-9]/g, "");
-//     if (!key || seen.has(key)) return false;
-//     seen.add(key);
-//     return true;
-//   });
-//   out.addressLine1 = segments.join(", ");
+ 
 //   return out;
 // }
  
 // // Address — progressively looser fallbacks, all anchored on the 6-digit PIN.
 // function extractAddress(text = "") {
-//   // Front side has no address — only read one when the card says so, else a
-//   // random 6-digit number in the noise becomes a fake pincode.
-//   if (!/Address|\b[SDWC]\s*\/\s*O\b/i.test(text)) return "";
 //   let match = text.match(/Address[:\s]*([\s\S]*?\b\d{6}\b)/i);
 //   if (match) return cleanAddressNoise(match[1].replace(/\s*\n\s*/g, ", ").trim());
  
@@ -1234,32 +576,11 @@
 //     const lines = before.split("\n").map((l) => l.trim()).filter(Boolean);
 //     return cleanAddressNoise(lines.slice(-6).join(", "));
 //   }
-
-//   // No PIN read at all (blurred/cut off): take the lines after the
-//   // "Address" / S/O-W/O-D/O-C/O label, stopping at the footer.
-//   const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
-//   const startIdx = lines.findIndex((l) => /Address\s*[:.]|\b[SDWC]\s*\/\s*O\b/i.test(l));
-//   if (startIdx !== -1) {
-//     const block = [];
-//     for (let i = startIdx; i < Math.min(lines.length, startIdx + 6); i++) {
-//       if (i > startIdx && /uidai|help@|www\.|1947|\b\d{4}\s?\d{4}\s?\d{4}\b/i.test(lines[i])) break;
-//       block.push(i === startIdx ? lines[i].replace(/^.*?(Address\s*[:.]\s*|(?=\b[SDWC]\s*\/\s*O\b))/i, "") : lines[i]);
-//     }
-//     const joined = cleanAddressNoise(block.join(", "));
-//     if (joined) {
-//       console.log("[extractAddress] no PIN found — using Address-label block");
-//       return joined;
-//     }
-//   }
-
+ 
 //   return "";
 // }
 // function mergeSides(front, back) {
-//   // Back side normally carries the address; but on an e-Aadhaar letter the
-//   // front has the labelled address and the back is UIDAI boilerplate, so
-//   // prefer whichever side actually found a state.
-//   const hasState = (x) => !!(x.address && x.state);
-//   const addrSource = hasState(back) ? back : hasState(front) ? front : back.address ? back : front.address ? front : back;
+//   const addrSource = back.address ? back : front.address ? front : back;
 //   return {
 //     firstName: front.firstName || back.firstName || "",
 //     lastName: front.lastName || back.lastName || "",
@@ -1268,7 +589,7 @@
 //     gender: front.gender || back.gender || "",
 //     phone: front.phone || back.phone || "",
 //     aadhaarNumber: front.aadhaarNumber || back.aadhaarNumber || "",
-//     address: addrSource.address || "",
+//     address: back.address || front.address || "",
 //     addressLine1: addrSource.addressLine1 || "",
 //     addressLine2: addrSource.addressLine2 || "",
 //     city: addrSource.city || "",
@@ -1277,476 +598,7 @@
 //   };
 // }
  
-// // ── Aadhaar QR code ───────────────────────────────────────────────────
-// // The QR printed on the card is exact data signed by UIDAI, so when it can
-// // be read it beats OCR. Two formats exist:
-// //   • Secure QR (2018+): a long decimal number → bytes → gzip → fields
-// //     separated by byte 255.
-// //   • Old QR (pre-2018): plain XML <PrintLetterBarcodeData name=".." .../>.
-// // Only the last 4 digits of the Aadhaar number are in the Secure QR.
-
-// // ZXing (WebAssembly) reads the dense Aadhaar Secure QR far better than
-// // jsQR. Loaded lazily from the local package (no CDN); if the package isn't
-// // installed, jsQR alone is used.
-// let zxingReady = null;
-// function getZxing() {
-//   if (!zxingReady) {
-//     zxingReady = import("zxing-wasm/reader")
-//       .then((mod) => {
-//         const wasmPath = require.resolve("zxing-wasm/reader/zxing_reader.wasm");
-//         mod.prepareZXingModule({ overrides: { wasmBinary: fs.readFileSync(wasmPath) }, fireImmediately: true });
-//         return mod;
-//       })
-//       .catch((err) => {
-//         console.error("[aadhaarQr] zxing-wasm not available, using jsQR only:", err.message);
-//         return null;
-//       });
-//   }
-//   return zxingReady;
-// }
-// async function scanQrWithZxing(source) {
-//   const zx = await getZxing();
-//   if (!zx) return null;
-//   try {
-//     const { data, info } = await sharp(source).rotate()
-//       .resize({ width: 3000, height: 3000, fit: "inside", withoutEnlargement: true })
-//       .toColourspace("srgb").ensureAlpha().raw({ depth: "uchar" })
-//       .toBuffer({ resolveWithObject: true });
-//     const results = await zx.readBarcodes(
-//       { data: new Uint8ClampedArray(data.buffer, data.byteOffset, data.length), width: info.width, height: info.height, colorSpace: "srgb" },
-//       { formats: ["QRCode"], tryHarder: true, maxNumberOfSymbols: 4 },
-//     );
-//     for (const r of results) {
-//       const code = { data: r.text || "" };
-//       if (r.isValid && isAadhaarQrPayload(code)) return code;
-//     }
-//   } catch (err) {
-//     console.error("[aadhaarQr] zxing read failed:", err.message);
-//   }
-//   return null;
-// }
-
-// async function scanQrFromImage(filePath) {
-//   let source = filePath;
-//   let tmpPng = null;
-//   try {
-//     if (isPdfFile(filePath)) {
-//       tmpPng = pdfFirstPageToPngFile(filePath, 400);
-//       source = tmpPng;
-//     }
-//     const zxCode = await scanQrWithZxing(source);
-//     if (zxCode) return zxCode;
-//     const meta = await sharp(source).rotate().metadata();
-//     const longSide = Math.max(meta.width || 0, meta.height || 0);
-//     // Try a few sizes: dense Secure QRs need resolution, but very large
-//     // phone photos decode faster and better when scaled down.
-//     const sizes = [...new Set([Math.min(longSide, 2400), 1800, 1300, 900].filter((s) => s > 0 && s <= longSide))];
-//     for (const size of sizes) {
-//       for (const boost of [false, true]) {
-//         let img = sharp(source).rotate().resize({ width: size, height: size, fit: "inside" });
-//         if (boost) img = img.grayscale().normalize().sharpen();
-//         const { data, info } = await img.toColourspace("srgb").ensureAlpha().raw({ depth: "uchar" }).toBuffer({ resolveWithObject: true });
-//         if (data.length !== info.width * info.height * 4) continue;
-//         const code = jsQR(new Uint8ClampedArray(data.buffer, data.byteOffset, data.length), info.width, info.height, {
-//           inversionAttempts: "attemptBoth",
-//         });
-//         if (isAadhaarQrPayload(code)) return code;
-//       }
-//     }
-//     // e-Aadhaar letters / full-page scans have 2–3 QR codes on one page,
-//     // which confuses the whole-image scan. Scan overlapping tiles instead.
-//     return await scanQrTiles(source, meta);
-//   } finally {
-//     if (tmpPng) fs.unlink(tmpPng, () => {});
-//   }
-// }
-
-// // Only a long decimal number (Secure QR) or the old XML QR is an Aadhaar
-// // QR — a small QR like a website link is ignored so scanning goes on.
-// function isAadhaarQrPayload(code) {
-//   const txt = (code?.data || "").trim();
-//   return /^\d{200,}$/.test(txt) || /PrintLetterBarcodeData/i.test(txt);
-// }
-
-// async function scanQrTiles(source, meta) {
-//   const W = meta.width || 0, H = meta.height || 0;
-//   if (!W || !H) return null;
-//   for (const grid of [2, 3]) {
-//     const tw = Math.round((W / grid) * 1.5), th = Math.round((H / grid) * 1.5);
-//     const stepX = grid > 1 ? (W - Math.min(tw, W)) / (grid - 1) : 0;
-//     const stepY = grid > 1 ? (H - Math.min(th, H)) / (grid - 1) : 0;
-//     for (let gy = 0; gy < grid; gy++) {
-//       for (let gx = 0; gx < grid; gx++) {
-//         const left = Math.round(gx * stepX), top = Math.round(gy * stepY);
-//         const width = Math.min(tw, W - left), height = Math.min(th, H - top);
-//         try {
-//           const { data, info } = await sharp(source)
-//             .rotate()
-//             .extract({ left, top, width, height })
-//             .resize({ width: Math.min(width, 1600), height: Math.min(height, 1600), fit: "inside" })
-//             .toColourspace("srgb").ensureAlpha().raw({ depth: "uchar" })
-//             .toBuffer({ resolveWithObject: true });
-//           if (data.length !== info.width * info.height * 4) continue;
-//           const code = jsQR(new Uint8ClampedArray(data.buffer, data.byteOffset, data.length), info.width, info.height, {
-//             inversionAttempts: "attemptBoth",
-//           });
-//           if (isAadhaarQrPayload(code)) return code;
-//         } catch { /* try next tile */ }
-//       }
-//     }
-//   }
-//   return null;
-// }
-
-// function decimalStringToBytes(str) {
-//   let n = BigInt(str);
-//   const bytes = [];
-//   while (n > 0n) {
-//     bytes.unshift(Number(n & 255n));
-//     n >>= 8n;
-//   }
-//   return Buffer.from(bytes);
-// }
-
-// function decompressAny(buf) {
-//   for (const fn of [zlib.gunzipSync, zlib.inflateSync, zlib.inflateRawSync]) {
-//     try {
-//       return fn(buf);
-//     } catch {
-//       /* try the next format */
-//     }
-//   }
-//   return null;
-// }
-
-// function normaliseQrDob(raw = "") {
-//   const m = String(raw).match(/^(\d{2})[-/.](\d{2})[-/.](\d{4})$/);
-//   if (m) return `${m[1]}/${m[2]}/${m[3]}`;
-//   const iso = String(raw).match(/^(\d{4})[-/.](\d{2})[-/.](\d{2})$/);
-//   if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
-//   return "";
-// }
-
-// const QR_GENDER = { M: "Male", F: "Female", T: "Other" };
-
-// // Turns decoded QR fields into the same shape parseAadhaarText returns.
-// function qrFieldsToParsed(f) {
-//   const { firstName, lastName } = splitIndianName(f.name || "");
-//   const dob = normaliseQrDob(f.dob);
-//   let age = dob ? calcAge(dob) : "";
-//   if (!age && /^\d{4}$/.test(f.yob || "")) age = new Date().getFullYear() - Number(f.yob);
-//   const careOf = (f.careof || "").trim();
-//   const street = [careOf, f.house, f.street, f.landmark, f.location].map((x) => (x || "").trim()).filter(Boolean);
-//   const area = [f.vtc, f.postoffice, f.subdistrict]
-//     .map((x) => (x || "").trim())
-//     .filter(Boolean)
-//     .filter((x, i, arr) => arr.findIndex((y) => y.toLowerCase() === x.toLowerCase()) === i);
-//   const city = (f.district || "").trim();
-//   const state = (f.state || "").trim();
-//   const pincode = (String(f.pincode || "").match(/\d{6}/) || [""])[0];
-//   const address = [...street, ...area, city, state, pincode].filter(Boolean).join(", ");
-//   return {
-//     firstName,
-//     lastName,
-//     age,
-//     dob,
-//     gender: QR_GENDER[(f.gender || "").trim().toUpperCase().charAt(0)] || "",
-//     address,
-//     phone: "",
-//     aadhaarLast4: (f.last4 || "").replace(/\D/g, "").slice(-4),
-//     // One address line (house/street/area together), as on the OCR side.
-//     addressLine1: [...street, ...area].join(", "),
-//     addressLine2: "",
-//     city,
-//     state,
-//     pincode,
-//   };
-// }
-
-// function parseSecureQr(numericText) {
-//   if (!/^\d{50,}$/.test(numericText)) return null;
-//   const raw = decompressAny(decimalStringToBytes(numericText));
-//   if (!raw) return null;
-//   const parts = [];
-//   let start = 0;
-//   for (let i = 0; i < raw.length && parts.length < 20; i++) {
-//     if (raw[i] === 255) {
-//       parts.push(raw.slice(start, i).toString("utf8"));
-//       start = i + 1;
-//     }
-//   }
-//   // V2+ starts with "V2"/"V3"; V1 has no version field.
-//   const off = /^V\d$/.test(parts[0] || "") ? 1 : 0;
-//   const at = (i) => (parts[i + off] || "").trim();
-//   return {
-//     referenceId: at(1),
-//     last4: at(1).slice(0, 4),
-//     name: at(2),
-//     dob: at(3),
-//     gender: at(4),
-//     careof: at(5),
-//     district: at(6),
-//     landmark: at(7),
-//     house: at(8),
-//     location: at(9),
-//     pincode: at(10),
-//     postoffice: at(11),
-//     state: at(12),
-//     street: at(13),
-//     subdistrict: at(14),
-//     vtc: at(15),
-//   };
-// }
-
-// function parseXmlQr(text) {
-//   if (!/<\s*PrintLetterBarcodeData/i.test(text)) return null;
-//   const attr = (k) => {
-//     const m = text.match(new RegExp(`\\b${k}\\s*=\\s*"([^"]*)"`, "i"));
-//     return m ? m[1].trim() : "";
-//   };
-//   return {
-//     last4: attr("uid").slice(-4),
-//     name: attr("name"),
-//     dob: attr("dob"),
-//     yob: attr("yob"),
-//     gender: attr("gender"),
-//     careof: attr("co"),
-//     district: attr("dist"),
-//     landmark: attr("lm"),
-//     house: attr("house"),
-//     location: attr("loc"),
-//     pincode: attr("pc"),
-//     postoffice: attr("po"),
-//     state: attr("state"),
-//     street: attr("street"),
-//     subdistrict: attr("subdist"),
-//     vtc: attr("vtc"),
-//   };
-// }
-
-// // Returns parsed fields from the card's QR, or null when there is no
-// // readable Aadhaar QR in the image.
-// async function readAadhaarQr(filePath) {
-//   try {
-//     const code = await scanQrFromImage(filePath);
-//     if (!code) return null;
-//     const text = (code.data || "").trim();
-//     const fields = parseSecureQr(text) || parseXmlQr(text);
-//     if (!fields || !fields.name) return null;
-//     console.log(`[aadhaarQr] read QR for "${fields.name}"`);
-//     return qrFieldsToParsed(fields);
-//   } catch (err) {
-//     console.error("[aadhaarQr] QR read failed, using OCR only:", err.message);
-//     return null;
-//   }
-// }
-
-// // QR values win; OCR fills whatever the QR doesn't carry (full Aadhaar
-// // number, mobile). The OCR'd Aadhaar number is kept only if its last 4
-// // digits agree with the QR.
-// function mergeQrWithOcr(qr, ocr) {
-//   if (!qr) return ocr;
-//   const pick = (k) => (qr[k] !== undefined && qr[k] !== "" ? qr[k] : ocr[k] || "");
-//   let aadhaarNumber = ocr.aadhaarNumber || "";
-//   if (qr.aadhaarLast4 && aadhaarNumber && !aadhaarNumber.replace(/\D/g, "").endsWith(qr.aadhaarLast4)) {
-//     aadhaarNumber = "";
-//   }
-//   return {
-//     firstName: pick("firstName"),
-//     lastName: pick("lastName"),
-//     age: pick("age"),
-//     dob: pick("dob"),
-//     gender: pick("gender"),
-//     phone: ocr.phone || "",
-//     aadhaarNumber,
-//     address: pick("address"),
-//     addressLine1: pick("addressLine1"),
-//     addressLine2: pick("addressLine2"),
-//     city: pick("city"),
-//     state: pick("state"),
-//     pincode: pick("pincode"),
-//     source: "qr",
-//   };
-// }
-
 // // POST /ocr/aadhaar — multipart: front (required), back (optional)
-// // The whole read (QR + PDF text / OCR + parsing) for one Aadhaar, with no
-// // upload and no req/res — used by extractAadhaar and by the accuracy test
-// // script (scripts/aadhaarAccuracyTest.js).
-// export async function extractAadhaarFromFiles(frontPath, backPath = null, opts = {}) {
-//   // One PDF with front on page 1 and back on page 2 (scanned card) — use
-//   // page 2 as the back side so the address and QR are read too.
-//   let pdfBackTmp = null;
-//   if (!backPath && isPdfFile(frontPath)) {
-//     pdfBackTmp = pdfSecondPageToPngFile(frontPath);
-//     if (pdfBackTmp) {
-//       console.log("[aadhaarOcr] PDF has 2 pages — reading page 2 as the back side");
-//       backPath = pdfBackTmp;
-//     }
-//   }
-//   try {
-//     return await extractAadhaarFromFilesInner(frontPath, backPath, opts);
-//   } finally {
-//     if (pdfBackTmp) fs.unlink(pdfBackTmp, () => {});
-//   }
-// }
-
-// async function extractAadhaarFromFilesInner(frontPath, backPath = null, opts = {}) {
-//   // Language chosen in the dropdown wins; then the hint; then Tamil.
-//   const forcedLang = SUPPORTED_CARD_LANGS.includes(opts.cardLang) ? opts.cardLang : null;
-//   const hintLang =
-//     forcedLang || langFromPincode(opts.pincode) || langFromState(opts.state) || DEFAULT_CARD_LANG;
-//   let cardLang = hintLang;
-
-//   // PaddleOCR runs alongside Tesseract (own threads) — start both sides now.
-//   const paddleBackP = backPath ? readPaddleText(backPath) : Promise.resolve("");
-//   const paddleFrontP = readPaddleText(frontPath);
-
-//   // Back side first (main traveller): read it, then pick the language
-//   // from the pincode/state printed on it. Re-read only if that language
-//   // differs from the guess — Tamil cards stay a single pass.
-//   let backData = {}, backText = "";
-//   if (backPath) {
-//     backText = await readAadhaarText(backPath, cardLang);
-//     backData = parseAadhaarText(backText);
-//     const detected =
-//       langFromPincode(backData.pincode) ||
-//       langFromPincode((backText.match(/\b[1-9]\d{5}\b/g) || []).slice(-1)[0]) ||
-//       langFromState(backData.state);
-//     if (!forcedLang && detected && detected !== cardLang) {
-//       console.log(`[aadhaarOcr] back side says "${detected}" (pincode ${backData.pincode || "?"}), re-reading`);
-//       cardLang = detected;
-//       backText = await readAadhaarText(backPath, cardLang);
-//       backData = parseAadhaarText(backText);
-//     }
-//     const paddleBack = await paddleBackP;
-//     if (paddleBack) {
-//       backData = mergeOcrParses(backData, parseAadhaarText(paddleBack));
-//       backText += `\n--- PaddleOCR ---\n${paddleBack}`;
-//     }
-//   }
-
-//   // Secure QR is usually on the back (newer cards also on the front);
-//   // try back first, then front.
-//   let qrData = backPath ? await readAadhaarQr(backPath) : null;
-//   if (!qrData) qrData = await readAadhaarQr(frontPath);
-
-//   let frontText = await readAadhaarText(frontPath, cardLang);
-//   let frontData = parseAadhaarText(frontText);
-//   const paddleFront = await paddleFrontP;
-//   const paddleFrontData = paddleFront ? parseAadhaarText(paddleFront) : null;
-//   if (paddleFrontData) {
-//     frontData = mergeOcrParses(frontData, paddleFrontData);
-//     frontText += `\n--- PaddleOCR ---\n${paddleFront}`;
-//   }
-
-//   // Front only (co-traveller) and the name doesn't look right? The card
-//   // may be from another state than the main traveller — try the other
-//   // languages one by one and keep the first that gives a clean name.
-//   // Skipped when the QR already gave the name.
-//   if (!forcedLang && !backPath && !qrData?.firstName && !nameLooksSolid(frontData)) {
-//     for (const lang of SUPPORTED_CARD_LANGS.filter((l) => l !== cardLang)) {
-//       const text = await readAadhaarText(frontPath, lang);
-//       const data = paddleFrontData ? mergeOcrParses(parseAadhaarText(text), paddleFrontData) : parseAadhaarText(text);
-//       if (nameLooksSolid(data)) {
-//         console.log(`[aadhaarOcr] co-traveller name read with "${lang}" instead of "${cardLang}"`);
-//         frontText = text;
-//         frontData = data;
-//         cardLang = lang;
-//         break;
-//       }
-//     }
-//   }
-//   const parsed = mergeQrWithOcr(qrData, mergeSides(frontData, backData));
-//   const readFrom = qrData ? "qr" : "ocr";
-//   const stateMismatch = applyPincodeDistrict(parsed, readFrom);
-//   const reviewFields = fieldsToReview(parsed, readFrom, !!backPath);
-//   if (stateMismatch) {
-//     for (const f of ["state", "city", "pincode"]) if (!reviewFields.includes(f)) reviewFields.push(f);
-//   }
-//   return { parsed, readFrom, cardLang, frontText, backText, reviewFields };
-// }
-
-// const DISTRICT_ALIASES = [
-//   ["bengaluru", "bangalore"], ["mysuru", "mysore"], ["chennai", "madras"], ["kolkata", "calcutta"],
-//   ["mumbai", "bombay"], ["thiruvananthapuram", "trivandrum"], ["puducherry", "pondicherry"],
-//   ["tiruchirappalli", "trichy", "tiruchirapalli"], ["gurugram", "gurgaon"], ["belagavi", "belgaum"],
-//   ["kalaburagi", "gulbarga"], ["mangaluru", "mangalore", "dakshina kannada"], ["thoothukudi", "tuticorin"],
-//   ["kanchipuram", "kancheepuram"], ["prayagraj", "allahabad"], ["visakhapatnam", "vizag", "vishakhapatnam"],
-//   ["vijayapura", "bijapur"], ["shivamogga", "shimoga"], ["tumakuru", "tumkur"], ["hubballi", "hubli", "dharwad"],
-//   ["kozhikode", "calicut"], ["thrissur", "trichur"], ["kochi", "cochin", "ernakulam"], ["kollam", "quilon"],
-//   ["villupuram", "viluppuram"], ["tiruvallur", "thiruvallur"], ["tiruvannamalai", "thiruvannamalai"],
-// ];
-// function sameDistrict(a = "", b = "") {
-//   const n = (x) => x.toLowerCase().replace(/[^a-z]/g, "");
-//   const x = n(a), y = n(b);
-//   if (!x || !y) return false;
-//   if (x === y || x.includes(y) && x.length - y.length <= 3) return true;
-//   if (DISTRICT_ALIASES.some((g) => g.map(n).includes(x) && g.map(n).includes(y))) return true;
-//   return levenshtein(x, y) <= Math.max(1, Math.floor(y.length / 5));
-// }
-
-// function applyPincodeDistrict(parsed, readFrom) {
-//   let stateMismatch = false;
-//   // City = DISTRICT and State = state, always from the pincode when the
-//   // pincode is a real one (India Post directory). Whatever OCR put in city
-//   // that isn't the district (a village/area like "Moongileripatti") goes
-//   // back into the address line instead of being lost.
-//   const pinInfo = readFrom === "qr" && parsed.city && parsed.state ? null : districtFromPincode(parsed.pincode);
-//   if (pinInfo) {
-//     const ocrCity = (parsed.city || "").trim();
-//     // Card prints the new/local name ("Bengaluru") — same district as the
-//     // directory's "Bangalore": keep the card's spelling, nothing left over.
-//     if (ocrCity && sameDistrict(ocrCity, pinInfo.district)) {
-//       parsed.city = ocrCity;
-//       if (parsed.state && parsed.state.toLowerCase() !== pinInfo.state.toLowerCase()) stateMismatch = true;
-//       parsed.state = pinInfo.state;
-//       return stateMismatch;
-//     }
-//     const distRe = new RegExp(`\\b${pinInfo.district.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
-//     const leftover = ocrCity.replace(distRe, "").replace(/[^A-Za-z0-9 ]+/g, " ").replace(/\s{2,}/g, " ").trim();
-//     if (leftover.length >= 3 && !new RegExp(`\\b${leftover}\\b`, "i").test(parsed.addressLine1 || "")) {
-//       parsed.addressLine1 = [parsed.addressLine1, leftover].filter(Boolean).join(", ");
-//     }
-//     parsed.city = pinInfo.district;
-//     if (parsed.state && parsed.state.toLowerCase() !== pinInfo.state.toLowerCase()) {
-//       stateMismatch = true; // OCR'd state vs pincode disagree — pincode may be misread
-//       console.log(`[aadhaarOcr] state "${parsed.state}" ≠ pincode state "${pinInfo.state}" — using pincode`);
-//     }
-//     parsed.state = pinInfo.state;
-//   } else {
-//     const pinState = stateFromPincode(parsed.pincode);
-//     if (!parsed.state && pinState) parsed.state = pinState;
-//     else if (pinState && parsed.state && pinState.toLowerCase() !== parsed.state.toLowerCase()) stateMismatch = true;
-//   }
-//   return stateMismatch;
-// }
-
-// // Fields the admin should double-check (shown in yellow on the page).
-// // QR data is UIDAI's own, so only what the QR doesn't carry is flagged.
-// function fieldsToReview(p = {}, readFrom = "ocr", hasBack = false) {
-//   const out = [];
-//   const fromQr = readFrom === "qr";
-//   if (!fromQr && !nameLooksSolid(p)) out.push("firstName", "lastName");
-//   if (!p.firstName) out.includes("firstName") || out.push("firstName");
-//   if (!p.lastName) out.includes("lastName") || out.push("lastName");
-//   if (!p.age) out.push("age");
-//   if (!p.gender) out.push("gender");
-//   if (hasBack || p.addressLine1 || p.pincode) {
-//     const line = p.addressLine1 || "";
-//     const junk =
-//       /[|=~_^*{}<>%]/.test(line) ||
-//       /(^|[\s,])[a-z]{1,2}(?=[\s,]|$)/.test(line) ||
-//       /(^|\s)[.:;]+(\s|,|$)/.test(line);
-//     if (!line || line.length < 12 || (!fromQr && junk)) out.push("addressLine1");
-//     if (!p.city) out.push("city");
-//     if (!p.state) out.push("state");
-//     if (!/^\d{6}$/.test(p.pincode || "")) out.push("pincode");
-//     if (!/^\d{10}$/.test(p.phone || "")) out.push("phone");
-//   }
-//   return out;
-// }
-
 // export const extractAadhaar = withTempCleanup(async (req, res) => {
 //   try {
 //     const frontFile = req.files?.front?.[0];
@@ -1754,21 +606,20 @@
 //     if (!frontFile) {
 //       return res.status(400).json({ success: false, message: "Aadhaar front image is required" });
 //     }
-//     const { parsed: merged, readFrom, cardLang, frontText, backText, reviewFields } = await extractAadhaarFromFiles(
-//       frontFile.path,
-//       backFile?.path || null,
-//       { cardLang: req.body?.cardLang, pincode: req.body?.pincode, state: req.body?.state },
-//     );
-//     const backUpload = backFile
-//       ? await cloudinary.uploader.upload(backFile.path, { folder: "aadhaar", resource_type: "image" })
-//       : null;
+//     const frontText = await readImageText(frontFile.path);
+//     const frontData = parseAadhaarText(frontText);
 //     const frontUpload = await cloudinary.uploader.upload(frontFile.path, { folder: "aadhaar", resource_type: "image" });
+ 
+//     let backData = {}, backUpload = null, backText = "";
+//     if (backFile) {
+//       backText = await readImageText(backFile.path);
+//       backData = parseAadhaarText(backText);
+//       backUpload = await cloudinary.uploader.upload(backFile.path, { folder: "aadhaar", resource_type: "image" });
+//     }
+//     const merged = mergeSides(frontData, backData);
 //     return res.status(200).json({
 //       success: true,
 //       parsed: merged,
-//       readFrom,
-//       reviewFields,
-//       cardLang,
 //       front: { url: frontUpload.secure_url, ocrText: frontText },
 //       back: backUpload ? { url: backUpload.secure_url, ocrText: backText } : null,
 //     });
@@ -1967,17 +818,6 @@
 //           },
 //           uploadedBy: "admin",
 //         });
-//         if (ct.back?.url) {
-//           docs.push({
-//             groupId,
-//             type: "aadhaarBack",
-//             isCoTraveller: true,
-//             url: ct.back.url,
-//             ocrText: ct.back.ocrText || "",
-//             parsed: { firstName: ct.firstName || "", lastName: ct.lastName || "" },
-//             uploadedBy: "admin",
-//           });
-//         }
 //       }
 //     }
  
@@ -2175,12 +1015,6 @@
 //           g.main = g.main
 //             ? { ...g.main, back: { url: d.url } }
 //             : { _id: d._id, ...d.parsed, back: { url: d.url }, front: null };
-//         } else {
-//           // Optional co-traveller back side (uploaded for a different-state
-//           // co-traveller) — attach to the co-traveller with the same name.
-//           const nm = (t) => `${t?.firstName || ""} ${t?.lastName || ""}`.trim().toLowerCase();
-//           const match = [...g.coTravellers].reverse().find((ct) => nm(ct) && nm(ct) === nm(d.parsed));
-//           if (match && !match.back) match.back = { url: d.url };
 //         }
 //       } else if (d.type === "paymentAdvance") {
 //         g.payments.advance.push({ _id: d._id, url: d.url, amount: d.amount, createdAt: d.createdAt, remarks: d.remarks || "" });
@@ -2242,8 +1076,7 @@
 //       proofsByTnr.get(d.tnr).push(d);
 //     }
  
-//     // Letters only — "Senthil " + "Kumar" (stray space) still matches "Senthil Kumar".
-//     const nameKey = (x) => [x?.firstName, x?.lastName].filter(Boolean).join("").toLowerCase().replace(/[^a-z]/g, "");
+//     const nameKey = (x) => [x?.firstName, x?.lastName].filter(Boolean).join(" ").trim().toLowerCase();
  
 //     for (const rb of ungroupedRealDocs) {
 //       if (!rb.tnr) continue;
@@ -2471,9 +1304,7 @@
 //       : [];
 //     const realBookingByTnr = new Map(realBookingDocs.map((d) => [d.tnr, d]));
  
-//     // Letters only — extra/trailing spaces or dots in a saved name ("Senthil "
-//     // + "Kumar") must not stop the match with Tour Bookings ("Senthil Kumar").
-//     const normName = (t) => [t?.firstName, t?.lastName].filter(Boolean).join("").toLowerCase().replace(/[^a-z]/g, "");
+//     const normName = (t) => [t?.firstName, t?.lastName].filter(Boolean).join(" ").trim().toLowerCase();
  
 //     const cancellationDocs = linkedTnrs.length
 //       ? await cancellationModel
@@ -2624,7 +1455,7 @@
 //   try {
 //     const {
 //       groupId, tnr, title, firstName, lastName, age, dob, gender, sharingType, phone,
-//       address, addressLine1, addressLine2, city, state, pincode, front, back, aadhaarNumber,
+//       address, addressLine1, addressLine2, city, state, pincode, front, aadhaarNumber,
 //     } = req.body;
  
 //     if (!groupId && !tnr) {
@@ -2689,21 +1520,6 @@
 //       parsed: parsedFields,
 //       uploadedBy: "admin",
 //     });
-//     // Optional back side (different-state co-traveller) — shown on the card
-//     // and included in the Aadhaar ZIP.
-//     if (back?.url) {
-//       await aadhaarModel.create({
-//         groupId,
-//         tnr: existing?.tnr || "",
-//         postBooking: !!existing?.tnr,
-//         type: "aadhaarBack",
-//         isCoTraveller: true,
-//         url: back.url,
-//         ocrText: back.ocrText || "",
-//         parsed: { firstName: parsedFields.firstName, lastName: parsedFields.lastName },
-//         uploadedBy: "admin",
-//       });
-//     }
  
 //     return res.status(201).json({ success: true, traveller: doc });
 //   } catch (error) {
@@ -3828,6 +2644,9 @@
 // };
 
 
+
+
+
 import mongoose from "mongoose";
 import { v2 as cloudinary } from "cloudinary";
 import { createWorker } from "tesseract.js";
@@ -4420,7 +3239,7 @@ function extractNameFromEAadhaarPdf(lines, dob = "") {
   if (relIdx > 0) {
     let best = { words: [], score: 0 };
     for (let i = relIdx - 1; i >= Math.max(0, relIdx - 2); i--) {
-      if (/^to\b|enrol|authority|government/i.test(lines[i])) break;
+      if (/^to\b|enrol/i.test(lines[i]) || CARD_HEADER_RE.test(lines[i])) break;
       const run = bestNameRunInLine(lines[i]);
       if (run.score > best.score) best = run;
     }
@@ -4612,6 +3431,20 @@ const NAME_STOP_WORDS = new Set([
   "proof", "identity", "citizenship", "father", "husband", "mother", "address",
   "enrolment", "download", "mera", "meri", "pehchaan", "pahchan",
 ]);
+// OCR misspells the card header ("Governmeht", "Governmen", "Goverment")
+// — a long word 1–2 letters away from a header word is header, not a name.
+const CARD_HEADER_RE = /gov[eo]?r?n?m[ea]n|of\s+ind[il]a|unique\s+identification|authority/i;
+function isMisreadStopWord(bare) {
+  const lower = bare.toLowerCase();
+  if (/^gov[eo]?rn/.test(lower)) return true;
+  if (lower.length < 7) return false;
+  // Only long header words — short ones ("mother", "aadhaar") sit too close
+  // to real names ("Mathew", "Aadhav").
+  for (const w of ["government", "identification", "authority", "citizenship", "enrolment", "pehchaan"]) {
+    if (Math.abs(w.length - lower.length) <= 2 && levenshtein(lower, w) <= 2) return true;
+  }
+  return false;
+}
 function nameTokenKind(tok) {
   // Tokens with brackets/digits/symbols glued on ("EMHE)", "[JHIGEOIT",
   // "S60") are OCR junk, not names.
@@ -4624,10 +3457,24 @@ function nameTokenKind(tok) {
   if (/^[A-Z]{2,3}$/.test(bare) && !/[AEIOU]/.test(bare)) return "initials";
   if (bare.length < 3) return "noise";
   if (NAME_STOP_WORDS.has(bare.toLowerCase())) return "noise";
+  if (isMisreadStopWord(bare)) return "noise";
   if (!looksLikeIndianWord(bare)) return "noise";
   if (/^[A-Z][a-z]+$/.test(bare)) return "title";
   if (/^[A-Z]+$/.test(bare)) return "caps";
   return "noise";
+}
+// OCR often reads "ri" as "n" ("Knshnan" → Krishnan). For a Title-Case
+// word that fails the word-shape check, try each "n" as "ri"; return the
+// first fix that looks like a real word, else "".
+function repairRiAsN(tok) {
+  const bare = tok.replace(/[.,]+$/, "");
+  if (!/^[A-Z][a-z]{4,}$/.test(bare)) return "";
+  for (let i = 1; i < bare.length; i++) {
+    if (bare[i] !== "n") continue;
+    const fixed = bare.slice(0, i) + "ri" + bare.slice(i + 1);
+    if (looksLikeIndianWord(fixed) && nameTokenKind(fixed) === "title") return fixed;
+  }
+  return "";
 }
 // Best name run in one line: consecutive Title-Case words + initials, or
 // consecutive ALL-CAPS words + initials (never mixed, so caps noise next to
@@ -4662,6 +3509,11 @@ function bestNameRunInLine(line) {
         // Only after a real name word ("Gomathi KR") — a leading "HB" is
         // usually OCR junk from the photo/border.
         cur.push(...tok.replace(/[.,]/g, "").split(""));
+      } else if (style === "title" && score > 0 && kind === "noise" && repairRiAsN(tok)) {
+        // "Subramanian Knshnan" — OCR merged "ri" into "n".
+        const w = repairRiAsN(tok);
+        cur.push(w);
+        score += w.length * 2;
       } else if (kind === style) {
         const w = tok.replace(/[.,]/g, "");
         cur.push(w);
@@ -4680,13 +3532,20 @@ function pickNameAboveDob(lines, dobIdx) {
   let winner = { words: [], score: 0, dist: Infinity };
   for (let i = dobIdx - 1, dist = 1; i >= Math.max(0, dobIdx - 6); i--, dist++) {
     const line = lines[i];
-    if (/government|unique identification|authority/i.test(line)) break;
+    if (CARD_HEADER_RE.test(line)) break;
     if (/father|husband|\b[sdwc]\s*\/\s*o\b/i.test(line)) continue;
     const run = bestNameRunInLine(line);
     if (!run.score) continue;
-    // Longer real name wins; on a tie the line closest to DOB wins.
+    // The English name is printed alone on the line right above DOB; the
+    // regional-script name above it often reads as fake English ("பிரபா"
+    // → "Mrur"). So the closest CLEAN line (name is nearly all its letters)
+    // wins. With no clean line: longer real name wins, tie → closest.
+    const lineLetters = (line.match(/[A-Za-z]/g) || []).length;
+    const clean = run.words.join("").length >= 0.7 * lineLetters;
+    if (clean && !winner.clean) { winner = { ...run, dist, clean }; continue; }
+    if (winner.clean) continue;
     if (run.score > winner.score || (run.score === winner.score && dist < winner.dist)) {
-      winner = { ...run, dist };
+      winner = { ...run, dist, clean };
     }
   }
   return winner.words.join(" ");
@@ -4831,7 +3690,18 @@ function parseAadhaarText(text = "") {
  
   const dobIdx = lines.findIndex((l) => /DOB|D\.O\.B|Year of Birth|YOB|Date of Birth/i.test(l));
   // DOB line itself sometimes loses the "DOB" word; fall back to the date line.
-  const anchorIdx = dobIdx !== -1 ? dobIdx : lines.findIndex((l) => dob && l.includes(dob));
+  let anchorIdx = dobIdx !== -1 ? dobIdx : lines.findIndex((l) => dob && l.includes(dob));
+  // DOB not read at all (blurry photo): the name still sits above the
+  // Father / gender / Aadhaar-number lines, so anchor on the first of those.
+  // Front side only — the back's "S/O ..." address line isn't a name anchor.
+  const looksLikeBack = /address|\bpin\b|\b\d{6}\b/i.test(text);
+  if (anchorIdx === -1 && !looksLikeBack) {
+    anchorIdx = lines.findIndex(
+      (l) =>
+        /\b(father|husband|male|female)\b|\b[sdwc]\s*\/\s*o\b/i.test(l) ||
+        /^\W*\d{4}\s?\d{4}\s?\d{4}\W*$/.test(l)
+    );
+  }
   const fullName = pickNameAboveDob(lines, anchorIdx);
   const { firstName, lastName } = splitIndianName(fullName);
   const phone = extractPhone(text);
@@ -4843,7 +3713,10 @@ function parseAadhaarText(text = "") {
  
 // Mobile number — tolerates an internal space/hyphen.
 function extractPhone(text = "") {
-  const match = text.match(/\b([6-9]\d{4})[\s-]?(\d{5})\b/);
+  // Only a number printed with a label ("Mobile: 99801 61550"). Cards don't
+  // print a phone, so an unlabelled 10-digit run is OCR junk from the
+  // photo / QR area ("6442412239").
+  const match = text.match(/\b(?:mobile|mob|phone|ph|cell)\b\s*(?:no\.?|number)?\s*[:.\-]?\s*(?:\+?91[\s-]?)?([6-9]\d{4})[\s-]?(\d{5})\b/i);
   return match ? `${match[1]}${match[2]}` : "";
 }
  
@@ -5904,6 +4777,83 @@ async function autoMatchTnrForGroup(group) {
 // What a walk-in group's package SHOULD cost (same age-bracket +
 // sharingType formula as adminAddBooking, + addons). null when it can't be
 // priced reliably.
+// Balance Due once a TNR exists — no admin remarks involved. Smaller of:
+//   A) total − every payment screenshot uploaded here
+//   B) Tour Bookings pending (unpaid advance + balance) − screenshots
+//      uploaded AFTER Tour Bookings was last changed (not adjusted there yet)
+// So: an upload lowers it straight away; once the admin adjusts / cancels
+// in Tour Bookings, that new pending amount is shown and the next upload
+// lowers it again. Balance marked paid in Tour Bookings → 0.
+function dueAfterTnr(payment = {}, total = 0, payments = {}, tbUpdatedAt = null) {
+  if (payment?.balance?.paid) return 0;
+  const when = (x) => new Date(x || 0).getTime() || 0;
+  const allShots = ["advance", "balance", "partial"].flatMap((k) => payments[k] || []);
+  const sum = (list) => list.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  const fromShots = Math.max(0, (Number(total) || 0) - sum(allShots));
+  const tbPending =
+    (payment?.advance?.paid ? 0 : Number(payment?.advance?.amount) || 0) +
+    (Number(payment?.balance?.amount) || 0);
+  const tbTime = when(tbUpdatedAt);
+  const notYetInTb = tbTime
+    ? allShots.filter((p) => when(p.uploadedAt || p.createdAt) > tbTime)
+    : [];
+  const fromTourBookings = Math.max(0, tbPending - sum(notYetInTb));
+  return Math.max(0, Math.min(fromShots, fromTourBookings));
+}
+
+// When Tour Bookings last changed for this booking — works even if the
+// booking schema has no timestamps: latest of updatedAt, booking date,
+// paid-at dates, admin adjustment dates, cancellation dates.
+function tourBookingChangedAt(doc = {}, cancellationDocs = []) {
+  const times = [
+    doc.updatedAt,
+    doc.bookingDate,
+    doc.payment?.advance?.paidAt,
+    doc.payment?.balance?.paidAt,
+    doc.cancelled?.cancelledAt,
+    ...(doc.adminRemarks || []).map((r) => r?.addedAt),
+    ...(doc.advanceAdminRemarks || []).map((r) => r?.addedAt),
+    ...(doc.travellers || []).map((t) => t?.cancelled?.cancelledAt),
+    ...(cancellationDocs || []).flatMap((c) => [c?.createdAt, c?.updatedAt, c?.approvedAt]),
+  ]
+    .map((x) => new Date(x || 0).getTime() || 0)
+    .filter(Boolean);
+  return times.length ? new Date(Math.max(...times)) : null;
+}
+
+// "of ₹…" total for a booking that has a TNR — from the TOUR (package
+// price per traveller by age/sharing, main or variant) + each traveller's
+// add-ons as stored on the booking. Not affected by balance adjustments.
+// 0 when it can't be priced (no tour doc / no priced traveller).
+function tourTotalFromBooking(tourDoc, travellers = []) {
+  if (!tourDoc) return 0;
+  let total = 0;
+  for (const t of travellers || []) {
+    const pkg =
+      t?.packageType === "variant"
+        ? tourDoc.variantPackage?.[t.variantPackageIndex]
+        : tourDoc;
+    if (!pkg) continue;
+    const age = Number(t.age);
+    if (isNaN(age) || age < 1) continue;
+    const sharing = t.sharingType || (age >= 11 ? "double" : "withBerth");
+    if (age >= 11) {
+      total += Number(pkg.advanceAmount?.adult) || 0;
+      if (sharing === "triple") total += Number(pkg.balanceTriple) || 0;
+      else total += Number(pkg.balanceDouble) || 0;
+    } else if (age >= 6) {
+      total += Number(pkg.advanceAmount?.child) || 0;
+      if (sharing === "withoutBerth") total += Number(pkg.balanceChildWithoutBerth) || 0;
+      else total += Number(pkg.balanceChildWithBerth) || 0;
+    }
+    const addons = Array.isArray(t.selectedAddons) && t.selectedAddons.length
+      ? t.selectedAddons.reduce((sum, a) => sum + (Number(a?.amount) || 0), 0)
+      : Number(t.selectedAddon?.price) || 0;
+    total += addons;
+  }
+  return total;
+}
+
 function computePackageAmount(tourDoc, mainTraveller, coTravellers, bookingNotes) {
   if (!tourDoc || !mainTraveller) return null;
  
@@ -5925,14 +4875,18 @@ function computePackageAmount(tourDoc, mainTraveller, coTravellers, bookingNotes
     const age = Number(t.age);
     if (isNaN(age) || age < 1) continue;
     if (age >= 6) pricedTravellers++;
+    // Sharing not picked yet → same default Create Booking uses
+    // (adult = double, child = with berth), so the total is never just
+    // the advance (which made Balance Due show "Fully Paid" too early).
+    const sharing = t.sharingType || (age >= 11 ? "double" : "withBerth");
     if (age >= 11) {
       total += Number(selectedPackage.advanceAmount?.adult) || 0;
-      if (t.sharingType === "double") total += Number(selectedPackage.balanceDouble) || 0;
-      else if (t.sharingType === "triple") total += Number(selectedPackage.balanceTriple) || 0;
+      if (sharing === "triple") total += Number(selectedPackage.balanceTriple) || 0;
+      else total += Number(selectedPackage.balanceDouble) || 0;
     } else if (age >= 6 && age <= 10) {
       total += Number(selectedPackage.advanceAmount?.child) || 0;
-      if (t.sharingType === "withBerth") total += Number(selectedPackage.balanceChildWithBerth) || 0;
-      else if (t.sharingType === "withoutBerth") total += Number(selectedPackage.balanceChildWithoutBerth) || 0;
+      if (sharing === "withoutBerth") total += Number(selectedPackage.balanceChildWithoutBerth) || 0;
+      else total += Number(selectedPackage.balanceChildWithBerth) || 0;
     }
   }
  
@@ -6242,7 +5196,7 @@ export const getAadhaarBookings = async (req, res) => {
     // the bookingNotes estimate is only used before a TNR exists.
     const pricedTnrs = bookings.map((b) => b.tnr).filter(Boolean);
     const pricedDocs = pricedTnrs.length
-      ? await tourBookingModel.find({ tnr: { $in: pricedTnrs } }).select("tnr payment").lean()
+      ? await tourBookingModel.find({ tnr: { $in: pricedTnrs } }).select("tnr payment travellers tourId updatedAt bookingDate cancelled adminRemarks advanceAdminRemarks").lean()
       : [];
     const realPriceByTnr = new Map(
       pricedDocs.map((d) => [
@@ -6262,6 +5216,17 @@ export const getAadhaarBookings = async (req, res) => {
       ]),
     );
  
+    // Once a TNR exists, Balance Due follows Tour Bookings (dueAfterTnr).
+    const realDocByTnr = new Map(pricedDocs.map((d) => [d.tnr, d]));
+    const pricedCancelDocs = pricedTnrs.length
+      ? await cancellationModel.find({ tnr: { $in: pricedTnrs } }).lean()
+      : [];
+    const cancelDocsByTnr = new Map();
+    for (const c of pricedCancelDocs) {
+      if (!cancelDocsByTnr.has(c.tnr)) cancelDocsByTnr.set(c.tnr, []);
+      cancelDocsByTnr.get(c.tnr).push(c);
+    }
+
     for (const b of bookings) {
       let packageAmount;
       const realPrice = b.tnr ? realPriceByTnr.get(b.tnr) : undefined;
@@ -6285,14 +5250,28 @@ export const getAadhaarBookings = async (req, res) => {
         b.payments.balance.reduce((s, p) => s + (Number(p.amount) || 0), 0) +
         b.payments.partial.reduce((s, p) => s + (Number(p.amount) || 0), 0);
       const bookingPaid = b.tnr ? realPaidByTnr.get(b.tnr) || 0 : 0;
-      const amountPaid = Math.max(screenshotsPaid, bookingPaid);
- 
-      const balanceRemaining = Math.max(0, packageAmount - amountPaid);
+      let amountPaid = Math.max(screenshotsPaid, bookingPaid);
+      let balanceRemaining = Math.max(0, packageAmount - amountPaid);
+      const realDoc = b.tnr ? realDocByTnr.get(b.tnr) : undefined;
+      if (realDoc && packageAmount > 0) {
+        // Total shown = tour package + add-ons (from the tour), so a balance
+        // adjustment only lowers Balance Due, never the total.
+        const tourDoc = tourById.get(String(realDoc.tourId || b.tourId || ""));
+        const tourTotal = tourTotalFromBooking(tourDoc, realDoc.travellers);
+        if (tourTotal > 0) packageAmount = tourTotal;
+        balanceRemaining = dueAfterTnr(
+          realDoc.payment,
+          packageAmount,
+          b.payments,
+          tourBookingChangedAt(realDoc, cancelDocsByTnr.get(b.tnr)),
+        );
+        amountPaid = Math.max(0, packageAmount - balanceRemaining);
+      }
       b.paymentSummary = {
         packageAmount,
         amountPaid,
         balanceRemaining,
-        fullyPaid: amountPaid >= packageAmount,
+        fullyPaid: balanceRemaining <= 0,
       };
     }
  
@@ -6311,7 +5290,7 @@ export const getAadhaarBookings = async (req, res) => {
     const cancellationDocs = linkedTnrs.length
       ? await cancellationModel
         .find({ tnr: { $in: linkedTnrs } })
-        .select("tnr travellerIds raisedBy approvedBy rejectedAt createdAt")
+        .select("tnr travellerIds raisedBy approvedBy rejectedAt createdAt updatedAt approvedAt")
         .sort({ createdAt: 1 })
         .lean()
       : [];
@@ -6358,8 +5337,9 @@ export const getAadhaarBookings = async (req, res) => {
         t.inRealBooking = !!realT;
  
         t.cancelStatus = status; // null | "request" | "rejected" | "cancelled"
-        // Aadhaar ZIP filter only cares about approved cancellations.
-        t.cancelled = status === "cancelled";
+        // Aadhaar ZIP: only ACTIVE travellers — anyone with a cancellation
+        // request, an approved cancellation or rejected by admin is left out.
+        t.cancelled = status !== null;
         return t;
       };
       if (b.main) markCancelled(b.main);
@@ -7185,9 +6165,14 @@ export const searchUserBookings = async (req, res) => {
     }
     const bookings = await tourBookingModel
       .find(query)
-      .select("tnr travellers contact bookingDate payment cancelled")
+      .select("tnr tourId travellers contact bookingDate payment cancelled updatedAt adminRemarks advanceAdminRemarks")
       .sort({ bookingDate: -1 })
       .lean();
+    const searchTourDoc = await tourModel
+      .findById(tourId)
+      .select("price advanceAmount balanceDouble balanceTriple balanceChildWithBerth balanceChildWithoutBerth variantPackage")
+      .lean()
+      .catch(() => null);
  
     const tnrs = bookings.map((b) => b.tnr).filter(Boolean);
     const proofDocs = tnrs.length
@@ -7202,7 +6187,7 @@ export const searchUserBookings = async (req, res) => {
     const cancellationDocs = tnrs.length
       ? await cancellationModel
         .find({ tnr: { $in: tnrs } })
-        .select("tnr travellerIds raisedBy approvedBy rejectedAt createdAt")
+        .select("tnr travellerIds raisedBy approvedBy rejectedAt createdAt updatedAt approvedAt")
         .sort({ createdAt: 1 })
         .lean()
       : [];
@@ -7247,7 +6232,13 @@ export const searchUserBookings = async (req, res) => {
           }
         }
  
-        const packageAmount = (Number(b.payment?.advance?.amount) || 0) + (Number(b.payment?.balance?.amount) || 0);
+        // Total = tour package + add-ons (from the tour); falls back to the
+        // booking's advance + balance if the tour can't price it.
+        const tourTotal = tourTotalFromBooking(searchTourDoc, b.travellers);
+        const packageAmount =
+          tourTotal > 0
+            ? tourTotal
+            : (Number(b.payment?.advance?.amount) || 0) + (Number(b.payment?.balance?.amount) || 0);
         const screenshotsPaid =
           payments.advance.reduce((s, p) => s + (Number(p.amount) || 0), 0) +
           payments.balance.reduce((s, p) => s + (Number(p.amount) || 0), 0) +
@@ -7255,8 +6246,13 @@ export const searchUserBookings = async (req, res) => {
         const bookingPaid =
           (b.payment?.advance?.paid ? Number(b.payment?.advance?.amount) || 0 : 0) +
           (b.payment?.balance?.paid ? Number(b.payment?.balance?.amount) || 0 : 0);
-        const amountPaid = Math.max(screenshotsPaid, bookingPaid);
-        const balanceRemaining = Math.max(0, packageAmount - amountPaid);
+        const balanceRemaining = dueAfterTnr(
+          b.payment,
+          packageAmount,
+          payments,
+          tourBookingChangedAt(b, cancellationDocs.filter((c) => c.tnr === b.tnr)),
+        );
+        const amountPaid = Math.max(0, packageAmount - balanceRemaining);
  
         return {
           tnr: b.tnr,
@@ -7279,7 +6275,7 @@ export const searchUserBookings = async (req, res) => {
             packageAmount,
             amountPaid,
             balanceRemaining,
-            fullyPaid: packageAmount > 0 && amountPaid >= packageAmount,
+            fullyPaid: packageAmount > 0 && balanceRemaining <= 0,
           },
         };
       }),

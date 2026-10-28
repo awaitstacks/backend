@@ -4786,21 +4786,48 @@ async function autoMatchTnrForGroup(group) {
 // So: an upload lowers it straight away; once the admin adjusts / cancels
 // in Tour Bookings, that new pending amount is shown and the next upload
 // lowers it again. Balance marked paid in Tour Bookings → 0.
+// function dueAfterTnr(payment = {}, total = 0, payments = {}, tbUpdatedAt = null) {
+//   if (payment?.balance?.paid) return 0;
+//   const when = (x) => new Date(x || 0).getTime() || 0;
+//   const allShots = ["advance", "balance", "partial"].flatMap((k) => payments[k] || []);
+//   const sum = (list) => list.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+//   const fromShots = Math.max(0, (Number(total) || 0) - sum(allShots));
+//   const tbPending =
+//     (payment?.advance?.paid ? 0 : Number(payment?.advance?.amount) || 0) +
+//     (Number(payment?.balance?.amount) || 0);
+//   const tbTime = when(tbUpdatedAt);
+//   const notYetInTb = tbTime
+//     ? allShots.filter((p) => when(p.uploadedAt || p.createdAt) > tbTime)
+//     : [];
+//   const fromTourBookings = Math.max(0, tbPending - sum(notYetInTb));
+//   return Math.max(0, Math.min(fromShots, fromTourBookings));
+// }
+
+// Balance Due once a TNR exists — follows Tour Bookings:
+//   Tour Bookings pending (unpaid advance + balance amount)
+//   − advance screenshots, while Tour Bookings advance is still unpaid
+//     (capped at the advance amount)
+//   − balance / partial screenshots uploaded AFTER Tour Bookings last
+//     changed (not adjusted there yet)
+// Once the admin adjusts / cancels in Tour Bookings, that new balance shows;
+// the next upload lowers it again. Balance marked paid there → 0.
 function dueAfterTnr(payment = {}, total = 0, payments = {}, tbUpdatedAt = null) {
   if (payment?.balance?.paid) return 0;
   const when = (x) => new Date(x || 0).getTime() || 0;
-  const allShots = ["advance", "balance", "partial"].flatMap((k) => payments[k] || []);
   const sum = (list) => list.reduce((s, p) => s + (Number(p.amount) || 0), 0);
-  const fromShots = Math.max(0, (Number(total) || 0) - sum(allShots));
-  const tbPending =
-    (payment?.advance?.paid ? 0 : Number(payment?.advance?.amount) || 0) +
-    (Number(payment?.balance?.amount) || 0);
+  const advancePaid = !!payment?.advance?.paid;
+  const advanceAmount = Number(payment?.advance?.amount) || 0;
+  const tbPending = (advancePaid ? 0 : advanceAmount) + (Number(payment?.balance?.amount) || 0);
+  const advanceShots = advancePaid ? 0 : Math.min(advanceAmount, sum(payments.advance || []));
   const tbTime = when(tbUpdatedAt);
-  const notYetInTb = tbTime
-    ? allShots.filter((p) => when(p.uploadedAt || p.createdAt) > tbTime)
-    : [];
-  const fromTourBookings = Math.max(0, tbPending - sum(notYetInTb));
-  return Math.max(0, Math.min(fromShots, fromTourBookings));
+  const laterShots = tbTime
+    ? sum(
+      ["balance", "partial"]
+        .flatMap((k) => payments[k] || [])
+        .filter((p) => when(p.uploadedAt || p.createdAt) > tbTime),
+    )
+    : 0;
+  return Math.max(0, tbPending - advanceShots - laterShots);
 }
 
 // When Tour Bookings last changed for this booking — works even if the

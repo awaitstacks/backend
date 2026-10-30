@@ -86,7 +86,10 @@ import {
 
 
 } from "../controllers/tourController.js";
-import authTour from "../middlewares/authTour.js";
+// import authTour from "../middlewares/authTour.js";
+import authTourStrict from "../middlewares/authTour.js";
+
+import { authTourOrStaff } from "../middlewares/authStaff.js";
 import { tourUpload } from "../middlewares/multer.js";
 import { paymentQrUpload, staffPhotoUpload, queryUpload, aadhaarUpload, paymentScreenshotUpload } from "../middlewares/multer.js";
 import cancelBookingController from "../controllers/cancelController.js";
@@ -94,8 +97,13 @@ import { extractAadhaar, uploadPaymentScreenshot, saveBookingNotes, saveAadhaarU
 import {
   createStaff, getAllStaff, getStaffById, updateStaff, deleteStaff,
 } from "../controllers/staffController.js";
+import {
+  getRoles, createRole, updateRole, deleteRole,
+} from "../controllers/staffRoleController.js";
 
 import { get } from "mongoose";
+// Tour Admin + Staff. HR mattum routes ku authTourStrict.
+const authTour = authTourOrStaff();
 
 const tourRouter = express.Router();
 
@@ -243,11 +251,25 @@ tourRouter.put('/enquiry/:id/update', authTour, updateEnquiry);
 tourRouter.put('/enquiry/:id/rate-passed', authTour, toggleRatePassed);
 tourRouter.put('/enquiry/:id/accept', authTour, acceptEnquiry);
 tourRouter.put('/enquiry/:id/reject', authTour, rejectEnquiry);
-tourRouter.post('/staff/create', authTour, staffPhotoUpload, createStaff);
-tourRouter.get('/staff/all', authTour, getAllStaff); // '/staff/:id'-kku munnadi
-tourRouter.get('/staff/:id', authTour, getStaffById);
-tourRouter.put('/staff/:id/update', authTour, staffPhotoUpload, updateStaff);
-tourRouter.delete('/staff/:id/delete', authTour, deleteStaff);
+// tourRouter.post('/staff/create', authTour, staffPhotoUpload, createStaff);
+// tourRouter.get('/staff/all', authTour, getAllStaff); // '/staff/:id'-kku munnadi
+// tourRouter.get('/staff/:id', authTour, getStaffById);
+// tourRouter.put('/staff/:id/update', authTour, staffPhotoUpload, updateStaff);
+// tourRouter.delete('/staff/:id/delete', authTour, deleteStaff);
+// tourRouter.get('/staff-roles', authTour, getRoles);
+// tourRouter.post('/staff-roles', authTour, createRole);
+// tourRouter.put('/staff-roles/:id', authTour, updateRole);
+// tourRouter.delete('/staff-roles/:id', authTour, deleteRole);
+
+tourRouter.post('/staff/create', authTourStrict, staffPhotoUpload, createStaff);
+tourRouter.get('/staff/all', authTourStrict, getAllStaff);
+tourRouter.get('/staff/:id', authTourStrict, getStaffById);
+tourRouter.put('/staff/:id/update', authTourStrict, staffPhotoUpload, updateStaff);
+tourRouter.delete('/staff/:id/delete', authTourStrict, deleteStaff);
+tourRouter.get('/staff-roles', authTourStrict, getRoles);
+tourRouter.post('/staff-roles', authTourStrict, createRole);
+tourRouter.put('/staff-roles/:id', authTourStrict, updateRole);
+tourRouter.delete('/staff-roles/:id', authTourStrict, deleteRole);
 
 tourRouter.get("/queries/sync", authTour, getAdminQuerySync);
 tourRouter.get("/queries", authTour, getTourQueries);

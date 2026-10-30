@@ -1,248 +1,3 @@
-// // import { v2 as cloudinary } from "cloudinary";
-// // import fs from "fs";
-// // import staffModel from "../models/staffProfileModel.js";
-// // // ══════════════════════════════════════════════════════════════════════════════
-// // // STAFF PROFILES (admin only) — basic, contact & study details
-// // // ══════════════════════════════════════════════════════════════════════════════
-
-// // // Plain text fields copied from req.body (trimmed)
-// // const STAFF_TEXT_FIELDS = [
-// //   "fullName", "employeeId", "designation", "department", "reportingManager",
-// //   "status", "gender", "maritalStatus", "staffType",
-// //   "mobileNumber", "alternateNumber", "whatsappNumber", "email", "currentAddress", "permanentAddress",
-// //   "emergencyName", "emergencyRelation", "emergencyNumber",
-// //   "qualification", "specialization", "collegeOrUniversity", "yearOfPassing", "experience",
-// // ];
-
-// // const STAFF_REQUIRED_FIELDS = {
-// //   fullName: "Full name",
-// //   designation: "Designation",
-// //   mobileNumber: "Mobile number",
-// // };
-
-// // // Form-data sends lists as: repeated keys (array), JSON string, or "a, b, c" text.
-// // // All three end up as a clean array.
-// // const parseList = (value, splitter) => {
-// //   let list = value;
-// //   if (typeof value === "string") {
-// //     const text = value.trim();
-// //     if (text.startsWith("[")) {
-// //       try {
-// //         list = JSON.parse(text);
-// //       } catch {
-// //         list = text.split(splitter);
-// //       }
-// //     } else {
-// //       list = text.split(splitter);
-// //     }
-// //   }
-// //   if (!Array.isArray(list)) list = [];
-// //   return list.map((item) => String(item).trim()).filter(Boolean);
-// // };
-
-// // // Only fields that were actually sent are returned, so update works as a partial update
-// // const buildStaffData = (body = {}) => {
-// //   const data = {};
-
-// //   STAFF_TEXT_FIELDS.forEach((field) => {
-// //     if (body[field] === undefined) return;
-// //     const value = body[field] === null ? "" : String(body[field]).trim();
-// //     // Empty employeeId → let the auto-code apply instead of saving ""
-// //     if (!value && field === "employeeId") return;
-// //     data[field] = value;
-// //   });
-
-// //   if (body.dateOfJoining !== undefined) data.dateOfJoining = body.dateOfJoining || null;
-// //   if (body.dateOfBirth !== undefined) data.dateOfBirth = body.dateOfBirth || null;
-// //   if (body.age !== undefined) {
-// //     const n = body.age === "" || body.age === null ? null : Number(body.age);
-// //     data.age = Number.isNaN(n) ? null : n;
-// //   }
-// //   if (body.sameAsCurrent !== undefined) {
-// //     data.sameAsCurrent = body.sameAsCurrent === true || body.sameAsCurrent === "true";
-// //   }
-// //   if (body.skills !== undefined) data.skills = parseList(body.skills, ",");
-
-// //   return data;
-// // };
-
-// // // multer saves the file on disk BEFORE the controller runs, so it must be removed
-// // // whatever the outcome (validation error, 404, upload failure, success).
-// // const cleanupTempFile = (req, res) => {
-// //   if (!req.file) return;
-// //   res.once("close", () => fs.promises.unlink(req.file.path).catch(() => {}));
-// // };
-
-// // // Upload the multer temp file to Cloudinary, returns the secure URL
-// // const uploadStaffPhoto = async (file) => {
-// //   const result = await cloudinary.uploader.upload(file.path, {
-// //     folder: "staff/photos",
-// //     resource_type: "image",
-// //   });
-// //   return result.secure_url;
-// // };
-
-// // // Never fails the request — just logs
-// // const deleteStaffPhoto = async (url) => {
-// //   if (!url) return;
-// //   try {
-// //     const publicId = url.split("/").pop().split(".")[0];
-// //     await cloudinary.uploader.destroy(`staff/photos/${publicId}`);
-// //   } catch (cloudErr) {
-// //     console.warn("Failed to delete staff photo from Cloudinary:", cloudErr);
-// //   }
-// // };
-
-// // const staffErrorResponse = (res, error, fallbackMessage) => {
-// //   if (error.code === 11000) {
-// //     return res.status(409).json({ success: false, message: "Employee ID already exists" });
-// //   }
-// //   if (error.name === "ValidationError") {
-// //     return res.status(400).json({ success: false, message: error.message });
-// //   }
-// //   return res.status(500).json({ success: false, message: fallbackMessage, error: error.message });
-// // };
-
-// // // ──────────────────────────────────────────────────────────────────────────────
-// // // POST /api/tour/staff/create   (multipart/form-data, optional file field: "photo")
-// // // employeeId is optional — EMP0001 style code is auto-generated
-// // // ──────────────────────────────────────────────────────────────────────────────
-// // const createStaff = async (req, res) => {
-// //   cleanupTempFile(req, res);
-// //   let uploadedPhoto = null;
-// //   try {
-// //     const data = buildStaffData(req.body);
-
-// //     if (!data.fullName || !data.designation || !data.mobileNumber) {
-// //       return res.status(400).json({ success: false, message: "Please fill all required fields" });
-// //     }
-
-// //     // Handle photo upload (optional)
-// //     if (req.file) {
-// //       try {
-// //         uploadedPhoto = await uploadStaffPhoto(req.file);
-// //         data.photo = uploadedPhoto;
-// //       } catch (uploadErr) {
-// //         console.error("Cloudinary upload failed:", uploadErr);
-// //         return res.status(500).json({ success: false, message: "Failed to upload staff photo" });
-// //       }
-// //     }
-
-// //     const staff = await staffModel.create(data);
-
-// //     return res.status(201).json({
-// //       success: true,
-// //       message: `Staff added! Employee ID: ${staff.employeeId}`,
-// //       data: staff,
-// //       employeeId: staff.employeeId,
-// //     });
-// //   } catch (error) {
-// //     if (uploadedPhoto) await deleteStaffPhoto(uploadedPhoto); // don't leave an orphan image
-// //     console.error("createStaff error:", error);
-// //     return staffErrorResponse(res, error, "Failed to add staff");
-// //   }
-// // };
-
-// // // ──────────────────────────────────────────────────────────────────────────────
-// // // GET /api/tour/staff/all
-// // // ──────────────────────────────────────────────────────────────────────────────
-// // const getAllStaff = async (req, res) => {
-// //   try {
-// //     const staff = await staffModel
-// //       .find()
-// //       .collation({ locale: "en", strength: 2 }) // case-insensitive A-Z
-// //       .sort({ fullName: 1 });
-// //     return res.status(200).json({ success: true, data: staff });
-// //   } catch (error) {
-// //     return res.status(500).json({ success: false, message: error.message });
-// //   }
-// // };
-
-// // // GET BY ID — GET /api/tour/staff/:id
-// // const getStaffById = async (req, res) => {
-// //   try {
-// //     const staff = await staffModel.findById(req.params.id);
-// //     if (!staff) return res.status(404).json({ success: false, message: "Staff not found" });
-// //     return res.status(200).json({ success: true, data: staff });
-// //   } catch (error) {
-// //     return res.status(500).json({ success: false, message: "Internal server error", error: error.message });
-// //   }
-// // };
-
-// // // ──────────────────────────────────────────────────────────────────────────────
-// // // UPDATE — PUT /api/tour/staff/:id/update   (multipart/form-data)
-// // // Send only what changed. New "photo" file replaces the old one,
-// // // removePhoto=true clears it.
-// // // ──────────────────────────────────────────────────────────────────────────────
-// // const updateStaff = async (req, res) => {
-// //   cleanupTempFile(req, res);
-// //   let uploadedPhoto = null;
-// //   try {
-// //     const staff = await staffModel.findById(req.params.id);
-// //     if (!staff) return res.status(404).json({ success: false, message: "Staff not found" });
-
-// //     const data = buildStaffData(req.body);
-
-// //     // Required fields can be omitted, but not blanked out
-// //     for (const [field, label] of Object.entries(STAFF_REQUIRED_FIELDS)) {
-// //       if (data[field] !== undefined && !data[field]) {
-// //         return res.status(400).json({ success: false, message: `${label} cannot be empty` });
-// //       }
-// //     }
-
-// //     let oldPhoto = null;
-// //     if (req.file) {
-// //       try {
-// //         uploadedPhoto = await uploadStaffPhoto(req.file);
-// //         oldPhoto = staff.photo;
-// //         data.photo = uploadedPhoto;
-// //       } catch (uploadErr) {
-// //         console.error("Cloudinary upload failed:", uploadErr);
-// //         return res.status(500).json({ success: false, message: "Failed to upload new staff photo" });
-// //       }
-// //     } else if (req.body?.removePhoto === true || req.body?.removePhoto === "true") {
-// //       oldPhoto = staff.photo;
-// //       data.photo = null;
-// //     }
-
-// //     staff.set(data);
-// //     const updated = await staff.save(); // save() so validation + address sync hook run
-
-// //     if (oldPhoto) await deleteStaffPhoto(oldPhoto);
-
-// //     return res.status(200).json({ success: true, message: "Staff updated successfully", data: updated });
-// //   } catch (error) {
-// //     if (uploadedPhoto) await deleteStaffPhoto(uploadedPhoto);
-// //     console.error("updateStaff error:", error);
-// //     return staffErrorResponse(res, error, "Failed to update staff");
-// //   }
-// // };
-
-// // // ──────────────────────────────────────────────────────────────────────────────
-// // // DELETE — DELETE /api/tour/staff/:id/delete
-// // // ──────────────────────────────────────────────────────────────────────────────
-// // const deleteStaff = async (req, res) => {
-// //   try {
-// //     const staff = await staffModel.findByIdAndDelete(req.params.id);
-// //     if (!staff) return res.status(404).json({ success: false, message: "Staff not found" });
-
-// //     // Optional: delete photo from Cloudinary if exists
-// //     if (staff.photo) await deleteStaffPhoto(staff.photo);
-
-// //     return res.status(200).json({ success: true, message: "Staff deleted successfully" });
-// //   } catch (error) {
-// //     console.error("deleteStaff error:", error);
-// //     return res.status(500).json({ success: false, message: "Internal server error", error: error.message });
-// //   }
-// // };
-
-// // export {
-// //   createStaff,
-// //   getAllStaff,
-// //   getStaffById,
-// //   updateStaff,
-// //   deleteStaff,
-// // };
 
 // import { v2 as cloudinary } from "cloudinary";
 // import fs from "fs";
@@ -261,6 +16,7 @@
 //   "aadharNumber", "panNumber",
 //   "bankAccountNumber", "bankIfscCode", "bankAccountName", "bankBranchName",
 //   "bankBranchCode", "bankSwiftCode", "bankAccountType",
+//   "relievingReason",
 // ];
 
 // // No field is mandatory — every profile can be created with as little or as
@@ -309,6 +65,8 @@
 
 //   if (body.dateOfJoining !== undefined) data.dateOfJoining = body.dateOfJoining || null;
 //   if (body.dateOfBirth !== undefined) data.dateOfBirth = body.dateOfBirth || null;
+//   // relievedOn is a Date — same pattern as the other date fields
+//   if (body.relievedOn !== undefined) data.relievedOn = body.relievedOn || null;
 //   if (body.age !== undefined) {
 //     const n = body.age === "" || body.age === null ? null : Number(body.age);
 //     data.age = Number.isNaN(n) ? null : n;
@@ -473,7 +231,7 @@
 //     const staff = await staffModel
 //       .find()
 //       .collation({ locale: "en", strength: 2 }) // case-insensitive A-Z
-//       .sort({ fullName: 1 });
+//       .sort({ employeeId: 1 });
 //     return res.status(200).json({ success: true, data: staff });
 //   } catch (error) {
 //     return res.status(500).json({ success: false, message: error.message });
@@ -585,9 +343,13 @@
 //   deleteStaff,
 // };
 
+
 import { v2 as cloudinary } from "cloudinary";
 import fs from "fs";
+import bcrypt from "bcryptjs";
+import mongoose from "mongoose";
 import staffModel from "../models/staffProfileModel.js";
+import staffRoleModel from "../models/staffRoleModel.js";
 // ══════════════════════════════════════════════════════════════════════════════
 // STAFF PROFILES (admin only) — basic, contact & study details
 // ══════════════════════════════════════════════════════════════════════════════
@@ -665,6 +427,79 @@ const buildStaffData = (body = {}) => {
   return data;
 };
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Staff portal login fields — HR Staff Profile form la set pannuvaanga
+//   username, password (hash aagum), role (roleId), loginEnabled
+// existing = update pannum podhu DB la irukura staff (password select pannirukanum)
+// Returns { data, errors } — errors irundha save panna koodadhu
+// ──────────────────────────────────────────────────────────────────────────────
+const buildLoginData = async (body = {}, existing = null) => {
+  const data = {};
+  const errors = {};
+
+  // Username — empty anuppuna ignore (pazhaya username apdiye irukkum)
+  if (body.username !== undefined && body.username !== null) {
+    const u = String(body.username).trim().toLowerCase();
+    if (u) {
+      if (!/^[a-z0-9._-]{3,30}$/.test(u)) {
+        errors.username = "3–30 characters, letters/numbers/. _ - only";
+      } else {
+        data.username = u;
+      }
+    }
+  }
+
+  // Password — anuppuna mattum (empty = maathala). Set pannadhum reset request clear
+  if (body.password !== undefined && body.password !== null && String(body.password) !== "") {
+    const pwd = String(body.password);
+    if (pwd.length < 6) {
+      errors.password = "At least 6 characters";
+    } else {
+      data.password = await bcrypt.hash(pwd, 10);
+      data.resetRequested = false;
+      data.resetRequestedAt = null;
+    }
+  }
+
+  // Role — "" anuppuna role remove
+  if (body.role !== undefined) {
+    const roleId = body.role === null ? "" : String(body.role).trim();
+    if (!roleId) {
+      data.role = null;
+    } else if (!mongoose.isValidObjectId(roleId)) {
+      errors.role = "Select a valid role";
+    } else {
+      const role = await staffRoleModel.findById(roleId).select("_id").lean();
+      if (!role) errors.role = "Selected role not found";
+      else data.role = role._id;
+    }
+  }
+
+  if (body.loginEnabled !== undefined) {
+    data.loginEnabled = body.loginEnabled === true || body.loginEnabled === "true";
+  }
+
+  // Login ON pannanum na username + password rendum venum
+  const enabled = data.loginEnabled ?? existing?.loginEnabled ?? false;
+  if (enabled) {
+    if (!(data.username || existing?.username) && !errors.username) {
+      errors.username = "Username is required to enable login";
+    }
+    if (!(data.password || existing?.password) && !errors.password) {
+      errors.password = "Password is required to enable login";
+    }
+  }
+
+  return { data, errors };
+};
+
+// Response la password hash poga koodadhu
+const toSafeStaff = (doc) => {
+  const obj = doc?.toObject ? doc.toObject() : { ...doc };
+  delete obj.password;
+  return obj;
+};
+
 // Checks the required fields directly against the incoming body (not just
 // buildStaffData's output) so a field left out or sent blank is always
 // caught, and returns a { field: message } map the UI can attach per-input.
@@ -725,7 +560,12 @@ const staffErrorResponse = (res, error, fallbackMessage) => {
     const field = Object.keys(error.keyPattern || {})[0] || "employeeId";
     return res.status(409).json({
       success: false,
-      message: field === "employeeId" ? "That employee ID is already in use" : `That ${field} is already in use`,
+      message:
+        field === "employeeId"
+          ? "That employee ID is already in use"
+          : field === "username"
+            ? "That username is already taken"
+            : `That ${field} is already in use`,
       errors: { [field]: "Already in use — try a different value" },
     });
   }
@@ -756,6 +596,14 @@ const createStaff = async (req, res) => {
     }
 
     const data = buildStaffData(req.body);
+
+    // Login fields (username / password / role / loginEnabled)
+    const login = await buildLoginData(req.body);
+    if (Object.keys(login.errors).length) {
+      return res.status(400).json({ success: false, message: "Please check the login details", errors: login.errors });
+    }
+    Object.assign(data, login.data);
+
     const photoFile = req.files?.photo?.[0];
     const resumeFile = req.files?.resume?.[0];
 
@@ -798,7 +646,7 @@ const createStaff = async (req, res) => {
     return res.status(201).json({
       success: true,
       message: `Staff added! Employee ID: ${staff.employeeId}`,
-      data: staff,
+      data: toSafeStaff(staff),
       employeeId: staff.employeeId,
     });
   } catch (error) {
@@ -816,6 +664,7 @@ const getAllStaff = async (req, res) => {
   try {
     const staff = await staffModel
       .find()
+      .populate("role", "name tabs") // card la role name kaatta
       .collation({ locale: "en", strength: 2 }) // case-insensitive A-Z
       .sort({ employeeId: 1 });
     return res.status(200).json({ success: true, data: staff });
@@ -827,7 +676,7 @@ const getAllStaff = async (req, res) => {
 // GET BY ID — GET /api/tour/staff/:id
 const getStaffById = async (req, res) => {
   try {
-    const staff = await staffModel.findById(req.params.id);
+    const staff = await staffModel.findById(req.params.id).populate("role", "name tabs");
     if (!staff) return res.status(404).json({ success: false, message: "Staff not found" });
     return res.status(200).json({ success: true, data: staff });
   } catch (error) {
@@ -845,7 +694,8 @@ const updateStaff = async (req, res) => {
   let uploadedPhoto = null;
   let uploadedResume = null;
   try {
-    const staff = await staffModel.findById(req.params.id);
+    // +password → login enable check ku (response la anuppa maattom)
+    const staff = await staffModel.findById(req.params.id).select("+password");
     if (!staff) return res.status(404).json({ success: false, message: "Staff not found" });
 
     // Required fields can be omitted (partial update), but not blanked out
@@ -855,6 +705,14 @@ const updateStaff = async (req, res) => {
     }
 
     const data = buildStaffData(req.body);
+
+    // Login fields — anuppuna mattum update (password empty = maathala)
+    const login = await buildLoginData(req.body, staff);
+    if (Object.keys(login.errors).length) {
+      return res.status(400).json({ success: false, message: "Please check the login details", errors: login.errors });
+    }
+    Object.assign(data, login.data);
+
     const photoFile = req.files?.photo?.[0];
     const resumeFile = req.files?.resume?.[0];
 
@@ -890,11 +748,12 @@ const updateStaff = async (req, res) => {
 
     staff.set(data);
     const updated = await staff.save(); // save() so validation + address sync hook run
+    await updated.populate("role", "name tabs");
 
     if (oldPhoto) await deleteStaffPhoto(oldPhoto);
     if (oldResume) await deleteStaffResume(oldResume);
 
-    return res.status(200).json({ success: true, message: "Staff updated successfully", data: updated });
+    return res.status(200).json({ success: true, message: "Staff updated successfully", data: toSafeStaff(updated) });
   } catch (error) {
     if (uploadedPhoto) await deleteStaffPhoto(uploadedPhoto);
     if (uploadedResume) await deleteStaffResume(uploadedResume);

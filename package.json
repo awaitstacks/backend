@@ -16,6 +16,7 @@
     "archiver": "^8.0.0",
     "axios": "^1.18.0",
     "bcrypt": "^5.1.1",
+    "bcryptjs": "^3.0.3",
     "chart.js": "^4.5.1",
     "cloudinary": "^2.10.0",
     "cors": "^2.8.5",

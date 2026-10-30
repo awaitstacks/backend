@@ -61,21 +61,28 @@ import {
 
 
 } from "../controllers/tourAdminController.js";
-import authAdmin from "../middlewares/authAdmin.js";
+// import authAdmin from "../middlewares/authAdmin.js";
+import authAdminStrict from "../middlewares/authAdmin.js";
+import { authAdminOrStaff } from "../middlewares/authStaff.js";
 import { tourUpload, queryUpload } from "../middlewares/multer.js";
 import { getAllEnquiries } from "../controllers/tourController.js";
 import { getPaymentTasks, markPaymentTaskDone } from "../controllers/aadhaarController.js";
 import { get } from "mongoose";
+// Admin + Staff. IT mattum routes ku authAdminStrict.
+const authAdmin = authAdminOrStaff();
 const touradminRouter = express.Router();
 
 // ✅ Route: Add a new tour with images
 touradminRouter.post("/add-tour", authAdmin, tourUpload, addTour);
 touradminRouter.post("/login", loginAdmin);
 touradminRouter.post("/all-tours", authAdmin, allTours);
-touradminRouter.post("/generate-missing-tnrs", authAdmin, generateMissingTNRs);
+// touradminRouter.post("/generate-missing-tnrs", authAdmin, generateMissingTNRs);
+touradminRouter.post("/generate-missing-tnrs", authAdminStrict, generateMissingTNRs);
+
 
 touradminRouter.post("/reject-bookingadmin", authAdmin, bookingRejectAdmin);
-touradminRouter.post("/delete-booking", authAdmin, deleteBookingByTNR);
+// touradminRouter.post("/delete-booking", authAdmin, deleteBookingByTNR);
+touradminRouter.post("/delete-booking", authAdminStrict, deleteBookingByTNR);
 touradminRouter.post("/release-bookingadmin", authAdmin, bookingRelease);
 touradminRouter.post(
   "/change-touravailablity",

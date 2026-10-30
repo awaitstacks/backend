@@ -8,6 +8,7 @@ import userRouter from "./routes/userRoute.js";
 import touradminRouter from "./routes/tourAdminRoute.js";
 import tourRouter from "./routes/tourRoute.js";
 import bookingRouter from "./routes/bookingRoute.js";
+import staffRouter from "./routes/staffRoute.js";
 
 //app config
 
@@ -30,6 +31,8 @@ app.use(
       "ttoken",
       "token",
       "aToken",
+      "stoken",
+
     ],
   }),
 );
@@ -47,6 +50,8 @@ app.use("/api/user", userRouter);
 
 //public
 app.use("/api/bookings", bookingRouter);
+
+app.use("/api/staff", staffRouter);
 
 //localhost:4000/api/admin
 

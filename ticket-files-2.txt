@@ -1,0 +1,351 @@
+===== raiseQueryCore
+async function raiseQueryCore(req, res, via = "admin") {
+    const files = getQueryFiles(req);
+    let attachments = [];
+ 
+    try {
+        const { queryType, subject, description, raisedBy, raisedTo } = req.body;
+ 
+        // ── Field validation ──
+        if (!queryType?.trim() || !subject?.trim() || !raisedBy || !raisedTo) {
+            return res.status(400).json({
+                success: false,
+                message: "queryType, subject, raisedBy and raisedTo are required",
+            });
+        }
+        if (![raisedBy, raisedTo].every((id) => mongoose.isValidObjectId(id))) {
+            return res
+                .status(400)
+                .json({ success: false, message: "Invalid ID format" });
+        }
+        if (String(raisedBy) === String(raisedTo)) {
+            return res.status(400).json({
+                success: false,
+                message: "Raised by and raised to can't be the same staff",
+            });
+        }
+ 
+        // ── File validation (upload pannura munnadiye) ──
+        if (files.length > QUERY_MAX_FILES) {
+            return res.status(400).json({
+                success: false,
+                message: `Maximum ${QUERY_MAX_FILES} files allowed`,
+            });
+        }
+        const badType = files.find((f) => !QUERY_FILE_TYPES[f.mimetype]);
+        if (badType) {
+            return res.status(400).json({
+                success: false,
+                message: `"${badType.originalname}" is not allowed. Only JPG, PNG, WEBP or PDF.`,
+            });
+        }
+        const tooBig = files.find((f) => f.size > QUERY_MAX_FILE_SIZE);
+        if (tooBig) {
+            return res.status(400).json({
+                success: false,
+                message: `"${tooBig.originalname}" is larger than 5 MB`,
+            });
+        }
+ 
+        // Type spelling check um file upload um ORE NERAM la (onnukkaga onnu wait pannadhu)
+        // Already irukura type na adhe spelling use pannu ("payment" → "Payment")
+        const typeInput = queryType.trim();
+        const [existing, uploaded] = await Promise.all([
+            Query.findOne({ queryType: new RegExp(`^${escapeRegex(typeInput)}$`, "i") })
+                .select("queryType")
+                .lean(),
+            uploadQueryAttachments(files),
+        ]);
+        const finalType = existing ? existing.queryType : typeInput;
+        // Raise pannum bodhu vara files ellam "Attachment 1"
+        attachments = uploaded.map((a) => ({ ...a, set: 1 }));
+ 
+        // GVTKT number — rendu per same time raise pannuna duplicate aagama retry
+        let created;
+        for (let attempt = 0; attempt < 5 && !created; attempt += 1) {
+            const seq = await nextTicketSeq();
+            try {
+                created = await Query.create({
+                    ticketSeq: seq,
+                    ticketNo: formatTicketNo(seq),
+                    queryType: finalType,
+                    subject: subject.trim(),
+                    description: description?.trim() || "",
+                    attachments,
+                    raisedBy,
+                    raisedTo,
+                    raisedVia: via,
+                });
+            } catch (e) {
+                if (e?.code !== 11000 || attempt === 4) throw e; // duplicate number na thirumba try
+            }
+        }
+ 
+        // Thirumba DB la padikkama udane reply — page list ah refresh pannum
+        return res.status(201).json({
+            success: true,
+            message: "Query raised successfully",
+            query: created.toObject(),
+        });
+    } catch (err) {
+        console.error("raiseQuery error:", err);
+        // DB save fail aana Cloudinary files um remove
+        if (attachments.length) await destroyAttachments(attachments);
+        if (err.name === "ValidationError") {
+            return res.status(400).json({ success: false, message: err.message });
+        }
+        return res.status(500).json({ success: false, message: err.message });
+    } finally {
+        removeTempFiles(files); // background la — reply ah late aakkadhu
+    }
+}
+===== updateQueryCore
+async function updateQueryCore(req, res, by = "admin", onlyOwn = false) {
+    const files = getQueryFiles(req);
+    let newAttachments = [];
+ 
+    try {
+        const { queryId } = req.params;
+        if (!mongoose.isValidObjectId(queryId)) {
+            return res
+                .status(400)
+                .json({ success: false, message: "Invalid query ID" });
+        }
+ 
+        const query = await Query.findById(queryId);
+        if (!query) {
+            return res
+                .status(404)
+                .json({ success: false, message: "Query not found" });
+        }
+        if (["close", "reject"].includes(query.status)) {
+            return res.status(400).json({
+                success: false,
+                message: `This query is ${query.status === "close" ? "closed" : "rejected"} and can't be edited`,
+            });
+        }
+ 
+        if (onlyOwn && (query.raisedVia || "admin") !== by) {
+            return res.status(403).json({
+                success: false,
+                message: "You can only edit tickets you raised",
+            });
+        }
+ 
+        // ── Before snapshot (edit history ku) ──
+        const before = editSnapshot(query);
+ 
+        const { queryType, subject, description, raisedBy, raisedTo } = req.body;
+ 
+        // ── Text fields ──
+        if (queryType !== undefined) {
+            const typeInput = String(queryType).trim();
+            if (!typeInput) {
+                return res
+                    .status(400)
+                    .json({ success: false, message: "Query type can't be empty" });
+            }
+            // Already irukura type na adhe spelling ("payment" → "Payment")
+            const existing = await Query.findOne({
+                _id: { $ne: query._id },
+                queryType: new RegExp(`^${escapeRegex(typeInput)}$`, "i"),
+            })
+                .select("queryType")
+                .lean();
+            query.queryType = existing ? existing.queryType : typeInput;
+        }
+        if (subject !== undefined) {
+            if (!String(subject).trim()) {
+                return res
+                    .status(400)
+                    .json({ success: false, message: "Subject can't be empty" });
+            }
+            query.subject = String(subject).trim();
+        }
+        if (description !== undefined) {
+            query.description = String(description).trim();
+        }
+ 
+        // ── Staff ──
+        if (raisedBy !== undefined) {
+            if (!mongoose.isValidObjectId(raisedBy)) {
+                return res
+                    .status(400)
+                    .json({ success: false, message: "Invalid raisedBy ID" });
+            }
+            query.raisedBy = raisedBy;
+        }
+        if (raisedTo !== undefined) {
+            if (!mongoose.isValidObjectId(raisedTo)) {
+                return res
+                    .status(400)
+                    .json({ success: false, message: "Invalid raisedTo ID" });
+            }
+            query.raisedTo = raisedTo;
+        }
+        if (String(query.raisedBy) === String(query.raisedTo)) {
+            return res.status(400).json({
+                success: false,
+                message: "Raised by and raised to can't be the same staff",
+            });
+        }
+ 
+        // ── Attachments: remove ──
+        let removeIds = [];
+        if (req.body.removeAttachmentIds) {
+            try {
+                const parsed = JSON.parse(req.body.removeAttachmentIds);
+                removeIds = Array.isArray(parsed) ? parsed.map(String) : [];
+            } catch {
+                return res.status(400).json({
+                    success: false,
+                    message: "removeAttachmentIds must be a JSON array",
+                });
+            }
+        }
+        const removed = query.attachments.filter((a) => removeIds.includes(String(a._id)));
+        const kept = query.attachments.filter((a) => !removeIds.includes(String(a._id)));
+ 
+        // ── Attachments: add (validate before upload) ──
+        if (kept.length + files.length > QUERY_MAX_FILES) {
+            return res.status(400).json({
+                success: false,
+                message: `Maximum ${QUERY_MAX_FILES} files allowed (currently ${kept.length})`,
+            });
+        }
+        const badType = files.find((f) => !QUERY_FILE_TYPES[f.mimetype]);
+        if (badType) {
+            return res.status(400).json({
+                success: false,
+                message: `"${badType.originalname}" is not allowed. Only JPG, PNG, WEBP or PDF.`,
+            });
+        }
+        const tooBig = files.find((f) => f.size > QUERY_MAX_FILE_SIZE);
+        if (tooBig) {
+            return res.status(400).json({
+                success: false,
+                message: `"${tooBig.originalname}" is larger than 5 MB`,
+            });
+        }
+ 
+        // Indha edit la vara puthu files → adutha attachment set (2, 3, ...)
+        const nextSet = Math.max(0, ...query.attachments.map((a) => a.set || 1)) + 1;
+        newAttachments = (await uploadQueryAttachments(files)).map((a) => ({ ...a, set: nextSet }));
+        query.attachments = [...kept, ...newAttachments];
+ 
+        // ── After snapshot → before / after changes ──
+        const changes = await buildEditChanges(before, editSnapshot(query));
+        if (!changes.length) {
+            return res.status(200).json({ success: true, message: "Nothing changed", noChange: true });
+        }
+        query.editHistory.push({ editedAt: new Date(), kind: "query", by, changes });
+        query.editCount = query.editHistory.length;
+ 
+        await query.save();
+ 
+        // Save aana apram dhaan pazhaya files ah Cloudinary la irundhu delete
+        if (removed.length) await destroyAttachments(removed);
+ 
+        const updated = await Query.findById(query._id)
+            .populate("raisedBy", "-password")
+            .populate("raisedTo", "-password")
+            .lean();
+ 
+        return res.status(200).json({
+            success: true,
+            message: "Query updated successfully",
+            query: updated,
+        });
+    } catch (err) {
+        console.error("updateQuery error:", err);
+        // Save fail aana puthusa upload aana files ah remove
+        if (newAttachments.length) await destroyAttachments(newAttachments);
+        if (err.name === "ValidationError") {
+            return res.status(400).json({ success: false, message: err.message });
+        }
+        return res.status(500).json({ success: false, message: err.message });
+    } finally {
+        await removeTempFiles(files);
+    }
+}
+===== fetchQueries
+async function fetchQueries(reqQuery) {
+  await ensureTicketNumbers();
+  const filter = buildQueryFilter(reqQuery);
+  const page = Math.max(parseInt(reqQuery.page) || 1, 1);
+  const limit = Math.min(Math.max(parseInt(reqQuery.limit) || 20, 1), 100);
+ 
+  // Tab counts la status filter apply panna koodadhu
+  const { status, ...countFilter } = filter;
+ 
+  const [queries, total, counts, queryTypes] = await Promise.all([
+    Query.find(filter)
+      .select("-replies -editHistory") // replies / history thani API la varum
+      .populate("raisedBy", "-password")
+      .populate("raisedTo", "-password")
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean(),
+    Query.countDocuments(filter),
+    Query.aggregate([
+      { $match: countFilter },
+      { $group: { _id: "$status", count: { $sum: 1 } } },
+    ]),
+    // Type filter dropdown ku — ellaa types um (rendu page kum ore list)
+    fetchQueryTypes(),
+  ]);
+ 
+  const statusCounts = { open: 0, pickup: 0, processing: 0, close: 0, reject: 0 };
+  counts.forEach((c) => (statusCounts[c._id] = c.count));
+ 
+  return {
+    queries,
+    total,
+    page,
+    totalPages: Math.ceil(total / limit) || 1,
+    statusCounts,
+    queryTypes,
+  };
+}
+===== imports (top 40)
+
+import mongoose from "mongoose";
+
+import { v2 as cloudinary } from "cloudinary";
+import jwt from "jsonwebtoken";
+
+import tourModel from "../models/tourModel.js";
+import userModel from "../models/userModel.js";
+import Terms from "../models/termModel.js";
+import tourBookingModel from "../models/tourBookingmodel.js";
+import cancelRuleModel from "../models/cancelRuleModel.js";
+import cancellationModel from "../models/cancellationModel.js";
+import tourRoomAllocationModel from "../models/roomModel.js";
+import manageBookingModel from "../models/manageBookingModel.js";
+import TourVehicle from "../models/tourVehicleModel.js";
+import PaymentMethod from "../models/paymentModel.js";
+import { resyncInvoiceForTnr } from "./tourController.js"; // ADDED: eager invoice resync on trip-cancel
+import fs from "fs/promises";
+import Query, { QUERY_STATUS, REPLY_FROM } from "../models/queryModel.js";
+import staffModel from "../models/staffProfileModel.js";
+
+
+// controllers/adminController.js   (or wherever your admin controllers live)
+
+// Helper function to generate 6-char TNR in format: AAA9AA
+function generateTNR() {
+    const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const digits = "0123456789";
+
+    // Position 1-2: uppercase letters
+    let code =
+        letters.charAt(Math.floor(Math.random() * letters.length)) +
+        letters.charAt(Math.floor(Math.random() * letters.length));
+
+    // Position 3-4: digits
+    code +=
+        digits.charAt(Math.floor(Math.random() * digits.length)) +
+        digits.charAt(Math.floor(Math.random() * digits.length));
+
+    // Position 5-6: uppercase letters

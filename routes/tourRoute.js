@@ -89,8 +89,7 @@ import {
 // import authTour from "../middlewares/authTour.js";
 import authTourStrict from "../middlewares/authTour.js";
 
-import { authTourOrStaff } from "../middlewares/authStaff.js";
-import { tourUpload } from "../middlewares/multer.js";
+import { authTourOrStaff, forceRaisedByStaff, stampStaffRaisedBy } from "../middlewares/authStaff.js";import { tourUpload } from "../middlewares/multer.js";
 import { paymentQrUpload, staffPhotoUpload, queryUpload, aadhaarUpload, paymentScreenshotUpload } from "../middlewares/multer.js";
 import cancelBookingController from "../controllers/cancelController.js";
 import { extractAadhaar, uploadPaymentScreenshot, saveBookingNotes, saveAadhaarUpload, getAadhaarBookings, addCoTraveller, uploadGroupPayment, linkGroupTnr, editAadhaarTraveller, deleteAadhaarTraveller, linkGuestTnr, unlinkGuestTnr, deleteGroupPayment, getPaymentTasks, markPaymentTaskDone, searchUserBookings, uploadUserTravellerAadhaar, uploadUserBookingPayment, exportActiveTravellersPdfData, getPaymentRecords } from "../controllers/aadhaarController.js";
@@ -100,6 +99,7 @@ import {
 import {
   getRoles, createRole, updateRole, deleteRole,
 } from "../controllers/staffRoleController.js";
+import { lookupTicketTnr, forceRaisedToFromTnr } from "../controllers/ticketTnrController.js";
 
 import { get } from "mongoose";
 // Tour Admin + Staff. HR mattum routes ku authTourStrict.
@@ -262,7 +262,8 @@ tourRouter.put('/enquiry/:id/reject', authTour, rejectEnquiry);
 // tourRouter.delete('/staff-roles/:id', authTour, deleteRole);
 
 tourRouter.post('/staff/create', authTourStrict, staffPhotoUpload, createStaff);
-tourRouter.get('/staff/all', authTourStrict, getAllStaff);
+// tourRouter.get('/staff/all', authTourStrict, getAllStaff);
+tourRouter.get('/staff/all', authTour, getAllStaff);
 tourRouter.get('/staff/:id', authTourStrict, getStaffById);
 tourRouter.put('/staff/:id/update', authTourStrict, staffPhotoUpload, updateStaff);
 tourRouter.delete('/staff/:id/delete', authTourStrict, deleteStaff);
@@ -274,8 +275,10 @@ tourRouter.delete('/staff-roles/:id', authTourStrict, deleteRole);
 tourRouter.get("/queries/sync", authTour, getAdminQuerySync);
 tourRouter.get("/queries", authTour, getTourQueries);
 // ← puthusu: tour admin raise (tourRoute.js top la: import { queryUpload } from "../middlewares/multer.js";)
-tourRouter.post("/queries", authTour, queryUpload, raiseTourQuery);
-tourRouter.patch("/queries/:queryId", authTour, queryUpload, updateTourQuery); // ← puthusu
+// tourRouter.post("/queries", authTour, queryUpload, raiseTourQuery);
+tourRouter.get("/queries/tnr-lookup/:tnr", authTour, lookupTicketTnr);
+tourRouter.post("/queries", authTour, queryUpload, forceRaisedByStaff, forceRaisedToFromTnr, raiseTourQuery);// tourRouter.patch("/queries/:queryId", authTour, queryUpload, updateTourQuery); // ← puthusu
+tourRouter.patch("/queries/:queryId", authTour, queryUpload, forceRaisedByStaff, forceRaisedToFromTnr, updateTourQuery);
 tourRouter.delete("/queries/:queryId", authTour, deleteTourQuery); // ← puthusu
 tourRouter.patch("/queries/:queryId/pickup", authTour, pickupQuery);
 tourRouter.patch("/queries/:queryId/processing", authTour, processQuery);
@@ -294,7 +297,8 @@ tourRouter.get("/bookings/admin-created", authTour, getAdminCreatedBookings);
 tourRouter.post("/bookings", authTour, adminAddBooking);
 tourRouter.post("/cancel-traveller", authTour, adminCancelTraveller);
 tourRouter.post("/ocr/booking-notes", authTour, saveBookingNotes);
-tourRouter.post("/save-aadhaar-upload", saveAadhaarUpload);
+// tourRouter.post("/save-aadhaar-upload", saveAadhaarUpload);
+tourRouter.post("/save-aadhaar-upload", stampStaffRaisedBy, saveAadhaarUpload);
 tourRouter.get("/bookings", getAadhaarBookings);
 tourRouter.get("/ocr/payment-records", authTour, getPaymentRecords);
 tourRouter.post("/add-co-traveller", addCoTraveller);

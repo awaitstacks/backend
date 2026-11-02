@@ -7324,7 +7324,8 @@ const reopenEnquiry = async (req, res) => {
 // Tour admin raise panna ellaa queries um — attachments + replyCount oda
 const getTourQueries = async (req, res) => {
   try {
-    const data = await fetchQueries(req.query);
+    // const data = await fetchQueries(req.query);
+    const data = await fetchQueries(req.query, req);
     return res.status(200).json({ success: true, ...data });
   } catch (err) {
     console.error("getTourQueries error:", err);

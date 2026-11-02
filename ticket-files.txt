@@ -1,0 +1,2379 @@
+===== queryModel
+// models/queryModel.js
+// ONE model — query type, attachments, replies ellam idhukulla dhaan
+import mongoose from "mongoose";
+
+// staffModel.js la mongoose.model("staff", ...) — adhe name
+const STAFF_REF = "staff";
+
+// open → pickup → processing → close
+//                            ↘ reject  (open / pickup / processing la irundhu)
+export const QUERY_STATUS = ["open", "pickup", "processing", "close", "reject"];
+
+// Reply yaar anuppuna
+// "admin" = Ticket Launching (admin page), "touradmin" = Ticket Landing (tour admin page)
+export const REPLY_FROM = ["admin", "touradmin"];
+
+// ────────────────────────────────────────────────
+// Attachment (image / pdf) — Cloudinary la store aagum
+// ────────────────────────────────────────────────
+const attachmentSchema = new mongoose.Schema(
+  {
+    url: { type: String, required: true }, // Cloudinary secure URL
+    publicId: { type: String, required: true },
+    resourceType: { type: String, enum: ["image", "raw"], required: true },
+    fileType: { type: String, enum: ["image", "pdf"], required: true },
+    fileName: { type: String, trim: true },
+    size: { type: Number }, // bytes
+    // Attachment 1 = raise pannum bodhu, 2, 3... = ovvoru edit la add aanadhu
+    set: { type: Number, default: 1 },
+  },
+  { _id: true },
+);
+
+// ────────────────────────────────────────────────
+// Edit history — admin edit pannuna before / after
+// ────────────────────────────────────────────────
+const editChangeSchema = new mongoose.Schema(
+  {
+    field: { type: String, required: true }, // subject, description, raisedBy...
+    label: { type: String, required: true }, // UI la kaata
+    before: { type: String, default: "" },
+    after: { type: String, default: "" },
+  },
+  { _id: false },
+);
+
+const editHistorySchema = new mongoose.Schema(
+  {
+    editedAt: { type: Date, default: Date.now },
+    // enna edit: query details / reply edit / reply delete
+    kind: { type: String, enum: ["query", "reply-edit", "reply-delete"], default: "query" },
+    // yaar pannanga — replies la irukura adhe values
+    by: { type: String, enum: REPLY_FROM, default: "admin" },
+    changes: { type: [editChangeSchema], default: [] },
+  },
+  { _id: true },
+);
+
+// ────────────────────────────────────────────────
+// Reply (tour admin ↔ admin conversation)
+// ────────────────────────────────────────────────
+const replySchema = new mongoose.Schema(
+  {
+    message: {
+      type: String,
+      trim: true,
+      required: [true, "Reply message is required"],
+      maxlength: [2000, "Reply can be at most 2000 characters"],
+    },
+    from: { type: String, enum: REPLY_FROM, required: true },
+    // Optional — yaar reply pannanga nu staff theriyum na
+    staff: { type: mongoose.Schema.Types.ObjectId, ref: STAFF_REF, default: null },
+    // Edit pannuna time — UI la "(edited)" nu kaata
+    editedAt: { type: Date, default: null },
+  },
+  { _id: true, timestamps: { createdAt: true, updatedAt: false } },
+);
+
+const querySchema = new mongoose.Schema(
+  {
+    // GVTKT001, GVTKT002 ... (raise pannum bodhu auto)
+    ticketSeq: { type: Number, unique: true, sparse: true },
+    ticketNo: { type: String, trim: true },
+
+    // e.g. "Payment", "Booking", "Refund"
+    queryType: {
+      type: String,
+      trim: true,
+      required: [true, "Query type is required"],
+      minlength: [2, "Query type must be at least 2 characters long"],
+    },
+
+    subject: {
+      type: String,
+      trim: true,
+      required: [true, "Subject is required"],
+      minlength: [3, "Subject must be at least 3 characters long"],
+    },
+
+    // Text box content
+    description: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    attachments: {
+      type: [attachmentSchema],
+      default: [],
+      validate: [(v) => v.length <= 5, "Maximum 5 attachments allowed"],
+    },
+
+    // ────────────────────────────────────────────────
+    // Staff (StaffProfile)
+    // ────────────────────────────────────────────────
+    raisedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: STAFF_REF,
+      required: [true, "Raised by is required"],
+    },
+
+    raisedTo: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: STAFF_REF,
+      required: [true, "Raised to is required"],
+    },
+
+    // Endha page la irundhu raise aachu — "admin" = Ticket Launching (admin),
+    // "touradmin" = Ticket Landing (tour admin). Replies la irukura adhe values.
+    raisedVia: { type: String, enum: REPLY_FROM, default: "admin" },
+
+    // ────────────────────────────────────────────────
+    // Status — raise pannum bodhu "open"
+    // ────────────────────────────────────────────────
+    status: {
+      type: String,
+      enum: QUERY_STATUS,
+      default: "open",
+    },
+
+    pickupAt: { type: Date, default: null },
+    processingAt: { type: Date, default: null },
+    closedAt: { type: Date, default: null },
+    rejectedAt: { type: Date, default: null },
+    rejectReason: { type: String, trim: true, default: "" },
+
+    // Close aana apram Reopen pannuna (files, replies ellam apdiye irukum)
+    reopenedAt: { type: Date, default: null },
+    reopenCount: { type: Number, default: 0 },
+
+    // Edit history (before / after)
+    editHistory: { type: [editHistorySchema], default: [] },
+    editCount: { type: Number, default: 0 },
+
+    // ────────────────────────────────────────────────
+    // Replies
+    // ────────────────────────────────────────────────
+    replies: {
+      type: [replySchema],
+      default: [],
+    },
+    // List page la "puthu reply" kaata — full replies load pannama
+    replyCount: { type: Number, default: 0 },
+    lastReplyAt: { type: Date, default: null },
+    lastReplyFrom: { type: String, enum: [...REPLY_FROM, null], default: null },
+  },
+  {
+    timestamps: true,
+  },
+);
+
+querySchema.index({ status: 1, createdAt: -1 });
+querySchema.index({ queryType: 1, createdAt: -1 });
+querySchema.index({ raisedTo: 1, status: 1 });
+
+const Query = mongoose.model("Query", querySchema);
+
+export default Query;===== tourController: raiseTourQuery
+const raiseTourQuery = (req, res) => raiseQueryCore(req, res, "touradmin");
+
+// PATCH /api/tour/queries/:queryId   (multipart/form-data — admin edit madhiriye)
+// Tour admin raise panna ticket ah mattum edit panna mudiyum
+const updateTourQuery = (req, res) => updateQueryCore(req, res, "touradmin", true);
+
+// DELETE /api/tour/queries/:queryId
+// Tour admin raise panna ticket ah mattum delete panna mudiyum
+const deleteTourQuery = (req, res) => deleteQueryCore(req, res, "touradmin");
+
+export {
+  tourList,
+  loginTour,
+  bookingsTour,
+  getAdminCreatedBookings,
+  adminAddBooking,
+  adminCancelTraveller,
+  bookingComplete,
+  tourDashboard,
+  tourProfile,
+  updateTourProfile,
+  markOfflineAdvancePaid,
+  markOfflineBalancePaid,
+  updateTraveller,
+  markAdvanceReceiptSent,
+  markBalanceReceiptSent,
+  viewTourBalance,
+  viewTourAdvance,
+  updateTourBalance,
+  updateTourAdvance,
+  updateBalanceRemark,
+  updateAdvanceRemark,
+  deleteBalanceRemark,
+  deleteAdvanceRemark,
+  updateModifyReceipt,
+  viewBooking,
+  getBookingInvoice,
+  resyncInvoiceForTnr,      // ← ADDED: eager invoice resync, for use by other controllers
+  updateBookingInvoice,
+  deleteBookingInvoice,      // ← ADD THIS LINE
+  getCancellationsByBooking,
+  updateBookingBalance,
+  getManagedBookingsHistory,
+  allotRooms,
+  // ==================== NEW ONES TO ADD ====================
+  getManualRooms,           // View Both Guest + Leader Rooms
+  addGuestRoom,             // Add Guest Room
+  addLeaderRoom,            // Add Leader Room
+  deleteLeaderRoom,
+  // =========================================================
+
+
+  getToursByYear,
+  getAvailableTourYears,
+  getAllBookings,
+  TaskBookingComplete,
+  taskMarkModifyReceipt,
+  taskMarkAdvanceReceiptSent,
+  taskMarkBalanceReceiptSent,
+  taskMarkCancellationReceipt,
+  taskMarkManageBookingReceipt,
+  createTourVehicle,
+  updateTourVehicle,
+  toggleVehicleSeatSelection,
+  getTourVehicles,
+  deleteTourVehicle,
+  addTour,
+  getAllPaymentMethods,
+  createPaymentMethod,
+  updatePaymentMethod,
+  deletePaymentMethod,
+  getTourPaymentMethods,
+  createTourPaymentMethod,
+  updateTourPaymentMethod,
+  deleteTourPaymentMethod,
+  getTourVehicleSeatOverview,
+
+  // ↓ new ones
+  adminCreateEnquiry,
+  getAllEnquiries,
+  getEnquiryById,
+  updateEnquiry,
+  // deleteEnquiry,
+  toggleRatePassed,
+  acceptEnquiry,
+  rejectEnquiry,
+  closeEnquiry,    // ← new
+  reopenEnquiry,   // ← new
+
+  getTourQueries,
+  pickupQuery,
+  processQuery,
+  closeQuery,
+  rejectQuery,
+  addAdminReply,
+  getAdminReplies,
+  editAdminReply,
+  deleteAdminReply,
+  getAdminQuerySync,
+  raiseTourQuery,
+  updateTourQuery,
+  deleteTourQuery,
+
+
+
+
+
+};
+===== tourController: updateTourQuery
+const updateTourQuery = (req, res) => updateQueryCore(req, res, "touradmin", true);
+
+// DELETE /api/tour/queries/:queryId
+// Tour admin raise panna ticket ah mattum delete panna mudiyum
+const deleteTourQuery = (req, res) => deleteQueryCore(req, res, "touradmin");
+
+export {
+  tourList,
+  loginTour,
+  bookingsTour,
+  getAdminCreatedBookings,
+  adminAddBooking,
+  adminCancelTraveller,
+  bookingComplete,
+  tourDashboard,
+  tourProfile,
+  updateTourProfile,
+  markOfflineAdvancePaid,
+  markOfflineBalancePaid,
+  updateTraveller,
+  markAdvanceReceiptSent,
+  markBalanceReceiptSent,
+  viewTourBalance,
+  viewTourAdvance,
+  updateTourBalance,
+  updateTourAdvance,
+  updateBalanceRemark,
+  updateAdvanceRemark,
+  deleteBalanceRemark,
+  deleteAdvanceRemark,
+  updateModifyReceipt,
+  viewBooking,
+  getBookingInvoice,
+  resyncInvoiceForTnr,      // ← ADDED: eager invoice resync, for use by other controllers
+  updateBookingInvoice,
+  deleteBookingInvoice,      // ← ADD THIS LINE
+  getCancellationsByBooking,
+  updateBookingBalance,
+  getManagedBookingsHistory,
+  allotRooms,
+  // ==================== NEW ONES TO ADD ====================
+  getManualRooms,           // View Both Guest + Leader Rooms
+  addGuestRoom,             // Add Guest Room
+  addLeaderRoom,            // Add Leader Room
+  deleteLeaderRoom,
+  // =========================================================
+
+
+  getToursByYear,
+  getAvailableTourYears,
+  getAllBookings,
+  TaskBookingComplete,
+  taskMarkModifyReceipt,
+  taskMarkAdvanceReceiptSent,
+  taskMarkBalanceReceiptSent,
+  taskMarkCancellationReceipt,
+  taskMarkManageBookingReceipt,
+  createTourVehicle,
+  updateTourVehicle,
+  toggleVehicleSeatSelection,
+  getTourVehicles,
+  deleteTourVehicle,
+  addTour,
+  getAllPaymentMethods,
+  createPaymentMethod,
+  updatePaymentMethod,
+  deletePaymentMethod,
+  getTourPaymentMethods,
+  createTourPaymentMethod,
+  updateTourPaymentMethod,
+  deleteTourPaymentMethod,
+  getTourVehicleSeatOverview,
+
+  // ↓ new ones
+  adminCreateEnquiry,
+  getAllEnquiries,
+  getEnquiryById,
+  updateEnquiry,
+  // deleteEnquiry,
+  toggleRatePassed,
+  acceptEnquiry,
+  rejectEnquiry,
+  closeEnquiry,    // ← new
+  reopenEnquiry,   // ← new
+
+  getTourQueries,
+  pickupQuery,
+  processQuery,
+  closeQuery,
+  rejectQuery,
+  addAdminReply,
+  getAdminReplies,
+  editAdminReply,
+  deleteAdminReply,
+  getAdminQuerySync,
+  raiseTourQuery,
+  updateTourQuery,
+  deleteTourQuery,
+
+
+
+
+
+};
+===== tourController: getTourQueries
+const getTourQueries = async (req, res) => {
+  try {
+    const data = await fetchQueries(req.query);
+    return res.status(200).json({ success: true, ...data });
+  } catch (err) {
+    console.error("getTourQueries error:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+===== tourController: getAdminReplies
+const getAdminReplies = (req, res) => loadQueryReplies(req, res);
+
+// PATCH  /api/tour/queries/:queryId/replies/:replyId     body: { message }
+// Avanga anuppuna reply ah mattum edit panna mudiyum.
+const editAdminReply = (req, res) => editQueryReply(req, res, "touradmin");
+
+// DELETE /api/tour/queries/:queryId/replies/:replyId
+// Avanga anuppuna reply ah mattum delete panna mudiyum.
+const deleteAdminReply = (req, res) => removeQueryReply(req, res, "touradmin");
+
+// GET /api/tour/queries/sync   (auto-refresh check)
+const getAdminQuerySync = (req, res) => getQuerySync(req, res);
+
+// POST /api/tour/queries   (multipart/form-data — admin page raise madhiriye)
+// Tour admin raise panna query — raisedVia: "touradmin"
+const raiseTourQuery = (req, res) => raiseQueryCore(req, res, "touradmin");
+
+// PATCH /api/tour/queries/:queryId   (multipart/form-data — admin edit madhiriye)
+// Tour admin raise panna ticket ah mattum edit panna mudiyum
+const updateTourQuery = (req, res) => updateQueryCore(req, res, "touradmin", true);
+
+// DELETE /api/tour/queries/:queryId
+// Tour admin raise panna ticket ah mattum delete panna mudiyum
+const deleteTourQuery = (req, res) => deleteQueryCore(req, res, "touradmin");
+
+export {
+  tourList,
+  loginTour,
+  bookingsTour,
+  getAdminCreatedBookings,
+  adminAddBooking,
+  adminCancelTraveller,
+  bookingComplete,
+  tourDashboard,
+  tourProfile,
+  updateTourProfile,
+  markOfflineAdvancePaid,
+  markOfflineBalancePaid,
+  updateTraveller,
+  markAdvanceReceiptSent,
+  markBalanceReceiptSent,
+  viewTourBalance,
+  viewTourAdvance,
+  updateTourBalance,
+  updateTourAdvance,
+  updateBalanceRemark,
+  updateAdvanceRemark,
+  deleteBalanceRemark,
+  deleteAdvanceRemark,
+  updateModifyReceipt,
+  viewBooking,
+  getBookingInvoice,
+  resyncInvoiceForTnr,      // ← ADDED: eager invoice resync, for use by other controllers
+  updateBookingInvoice,
+  deleteBookingInvoice,      // ← ADD THIS LINE
+  getCancellationsByBooking,
+  updateBookingBalance,
+  getManagedBookingsHistory,
+  allotRooms,
+  // ==================== NEW ONES TO ADD ====================
+  getManualRooms,           // View Both Guest + Leader Rooms
+  addGuestRoom,             // Add Guest Room
+  addLeaderRoom,            // Add Leader Room
+  deleteLeaderRoom,
+  // =========================================================
+
+
+  getToursByYear,
+  getAvailableTourYears,
+  getAllBookings,
+  TaskBookingComplete,
+  taskMarkModifyReceipt,
+  taskMarkAdvanceReceiptSent,
+  taskMarkBalanceReceiptSent,
+  taskMarkCancellationReceipt,
+  taskMarkManageBookingReceipt,
+  createTourVehicle,
+  updateTourVehicle,
+  toggleVehicleSeatSelection,
+  getTourVehicles,
+  deleteTourVehicle,
+  addTour,
+  getAllPaymentMethods,
+  createPaymentMethod,
+  updatePaymentMethod,
+  deletePaymentMethod,
+  getTourPaymentMethods,
+  createTourPaymentMethod,
+  updateTourPaymentMethod,
+  deleteTourPaymentMethod,
+  getTourVehicleSeatOverview,
+
+  // ↓ new ones
+  adminCreateEnquiry,
+  getAllEnquiries,
+  getEnquiryById,
+  updateEnquiry,
+  // deleteEnquiry,
+  toggleRatePassed,
+  acceptEnquiry,
+  rejectEnquiry,
+  closeEnquiry,    // ← new
+  reopenEnquiry,   // ← new
+
+  getTourQueries,
+  pickupQuery,
+  processQuery,
+  closeQuery,
+  rejectQuery,
+  addAdminReply,
+  getAdminReplies,
+  editAdminReply,
+  deleteAdminReply,
+  getAdminQuerySync,
+  raiseTourQuery,
+  updateTourQuery,
+  deleteTourQuery,
+
+
+
+
+
+};
+===== tourController: addAdminReply
+const addAdminReply = (req, res) => saveQueryReply(req, res, "touradmin");
+
+// GET  /api/tour/queries/:queryId/replies
+const getAdminReplies = (req, res) => loadQueryReplies(req, res);
+
+// PATCH  /api/tour/queries/:queryId/replies/:replyId     body: { message }
+// Avanga anuppuna reply ah mattum edit panna mudiyum.
+const editAdminReply = (req, res) => editQueryReply(req, res, "touradmin");
+
+// DELETE /api/tour/queries/:queryId/replies/:replyId
+// Avanga anuppuna reply ah mattum delete panna mudiyum.
+const deleteAdminReply = (req, res) => removeQueryReply(req, res, "touradmin");
+
+// GET /api/tour/queries/sync   (auto-refresh check)
+const getAdminQuerySync = (req, res) => getQuerySync(req, res);
+
+// POST /api/tour/queries   (multipart/form-data — admin page raise madhiriye)
+// Tour admin raise panna query — raisedVia: "touradmin"
+const raiseTourQuery = (req, res) => raiseQueryCore(req, res, "touradmin");
+
+// PATCH /api/tour/queries/:queryId   (multipart/form-data — admin edit madhiriye)
+// Tour admin raise panna ticket ah mattum edit panna mudiyum
+const updateTourQuery = (req, res) => updateQueryCore(req, res, "touradmin", true);
+
+// DELETE /api/tour/queries/:queryId
+// Tour admin raise panna ticket ah mattum delete panna mudiyum
+const deleteTourQuery = (req, res) => deleteQueryCore(req, res, "touradmin");
+
+export {
+  tourList,
+  loginTour,
+  bookingsTour,
+  getAdminCreatedBookings,
+  adminAddBooking,
+  adminCancelTraveller,
+  bookingComplete,
+  tourDashboard,
+  tourProfile,
+  updateTourProfile,
+  markOfflineAdvancePaid,
+  markOfflineBalancePaid,
+  updateTraveller,
+  markAdvanceReceiptSent,
+  markBalanceReceiptSent,
+  viewTourBalance,
+  viewTourAdvance,
+  updateTourBalance,
+  updateTourAdvance,
+  updateBalanceRemark,
+  updateAdvanceRemark,
+  deleteBalanceRemark,
+  deleteAdvanceRemark,
+  updateModifyReceipt,
+  viewBooking,
+  getBookingInvoice,
+  resyncInvoiceForTnr,      // ← ADDED: eager invoice resync, for use by other controllers
+  updateBookingInvoice,
+  deleteBookingInvoice,      // ← ADD THIS LINE
+  getCancellationsByBooking,
+  updateBookingBalance,
+  getManagedBookingsHistory,
+  allotRooms,
+  // ==================== NEW ONES TO ADD ====================
+  getManualRooms,           // View Both Guest + Leader Rooms
+  addGuestRoom,             // Add Guest Room
+  addLeaderRoom,            // Add Leader Room
+  deleteLeaderRoom,
+  // =========================================================
+
+
+  getToursByYear,
+  getAvailableTourYears,
+  getAllBookings,
+  TaskBookingComplete,
+  taskMarkModifyReceipt,
+  taskMarkAdvanceReceiptSent,
+  taskMarkBalanceReceiptSent,
+  taskMarkCancellationReceipt,
+  taskMarkManageBookingReceipt,
+  createTourVehicle,
+  updateTourVehicle,
+  toggleVehicleSeatSelection,
+  getTourVehicles,
+  deleteTourVehicle,
+  addTour,
+  getAllPaymentMethods,
+  createPaymentMethod,
+  updatePaymentMethod,
+  deletePaymentMethod,
+  getTourPaymentMethods,
+  createTourPaymentMethod,
+  updateTourPaymentMethod,
+  deleteTourPaymentMethod,
+  getTourVehicleSeatOverview,
+
+  // ↓ new ones
+  adminCreateEnquiry,
+  getAllEnquiries,
+  getEnquiryById,
+  updateEnquiry,
+  // deleteEnquiry,
+  toggleRatePassed,
+  acceptEnquiry,
+  rejectEnquiry,
+  closeEnquiry,    // ← new
+  reopenEnquiry,   // ← new
+
+  getTourQueries,
+  pickupQuery,
+  processQuery,
+  closeQuery,
+  rejectQuery,
+  addAdminReply,
+  getAdminReplies,
+  editAdminReply,
+  deleteAdminReply,
+  getAdminQuerySync,
+  raiseTourQuery,
+  updateTourQuery,
+  deleteTourQuery,
+
+
+
+
+
+};
+===== tourController: editAdminReply
+const editAdminReply = (req, res) => editQueryReply(req, res, "touradmin");
+
+// DELETE /api/tour/queries/:queryId/replies/:replyId
+// Avanga anuppuna reply ah mattum delete panna mudiyum.
+const deleteAdminReply = (req, res) => removeQueryReply(req, res, "touradmin");
+
+// GET /api/tour/queries/sync   (auto-refresh check)
+const getAdminQuerySync = (req, res) => getQuerySync(req, res);
+
+// POST /api/tour/queries   (multipart/form-data — admin page raise madhiriye)
+// Tour admin raise panna query — raisedVia: "touradmin"
+const raiseTourQuery = (req, res) => raiseQueryCore(req, res, "touradmin");
+
+// PATCH /api/tour/queries/:queryId   (multipart/form-data — admin edit madhiriye)
+// Tour admin raise panna ticket ah mattum edit panna mudiyum
+const updateTourQuery = (req, res) => updateQueryCore(req, res, "touradmin", true);
+
+// DELETE /api/tour/queries/:queryId
+// Tour admin raise panna ticket ah mattum delete panna mudiyum
+const deleteTourQuery = (req, res) => deleteQueryCore(req, res, "touradmin");
+
+export {
+  tourList,
+  loginTour,
+  bookingsTour,
+  getAdminCreatedBookings,
+  adminAddBooking,
+  adminCancelTraveller,
+  bookingComplete,
+  tourDashboard,
+  tourProfile,
+  updateTourProfile,
+  markOfflineAdvancePaid,
+  markOfflineBalancePaid,
+  updateTraveller,
+  markAdvanceReceiptSent,
+  markBalanceReceiptSent,
+  viewTourBalance,
+  viewTourAdvance,
+  updateTourBalance,
+  updateTourAdvance,
+  updateBalanceRemark,
+  updateAdvanceRemark,
+  deleteBalanceRemark,
+  deleteAdvanceRemark,
+  updateModifyReceipt,
+  viewBooking,
+  getBookingInvoice,
+  resyncInvoiceForTnr,      // ← ADDED: eager invoice resync, for use by other controllers
+  updateBookingInvoice,
+  deleteBookingInvoice,      // ← ADD THIS LINE
+  getCancellationsByBooking,
+  updateBookingBalance,
+  getManagedBookingsHistory,
+  allotRooms,
+  // ==================== NEW ONES TO ADD ====================
+  getManualRooms,           // View Both Guest + Leader Rooms
+  addGuestRoom,             // Add Guest Room
+  addLeaderRoom,            // Add Leader Room
+  deleteLeaderRoom,
+  // =========================================================
+
+
+  getToursByYear,
+  getAvailableTourYears,
+  getAllBookings,
+  TaskBookingComplete,
+  taskMarkModifyReceipt,
+  taskMarkAdvanceReceiptSent,
+  taskMarkBalanceReceiptSent,
+  taskMarkCancellationReceipt,
+  taskMarkManageBookingReceipt,
+  createTourVehicle,
+  updateTourVehicle,
+  toggleVehicleSeatSelection,
+  getTourVehicles,
+  deleteTourVehicle,
+  addTour,
+  getAllPaymentMethods,
+  createPaymentMethod,
+  updatePaymentMethod,
+  deletePaymentMethod,
+  getTourPaymentMethods,
+  createTourPaymentMethod,
+  updateTourPaymentMethod,
+  deleteTourPaymentMethod,
+  getTourVehicleSeatOverview,
+
+  // ↓ new ones
+  adminCreateEnquiry,
+  getAllEnquiries,
+  getEnquiryById,
+  updateEnquiry,
+  // deleteEnquiry,
+  toggleRatePassed,
+  acceptEnquiry,
+  rejectEnquiry,
+  closeEnquiry,    // ← new
+  reopenEnquiry,   // ← new
+
+  getTourQueries,
+  pickupQuery,
+  processQuery,
+  closeQuery,
+  rejectQuery,
+  addAdminReply,
+  getAdminReplies,
+  editAdminReply,
+  deleteAdminReply,
+  getAdminQuerySync,
+  raiseTourQuery,
+  updateTourQuery,
+  deleteTourQuery,
+
+
+
+
+
+};
+===== tourController: deleteAdminReply
+const deleteAdminReply = (req, res) => removeQueryReply(req, res, "touradmin");
+
+// GET /api/tour/queries/sync   (auto-refresh check)
+const getAdminQuerySync = (req, res) => getQuerySync(req, res);
+
+// POST /api/tour/queries   (multipart/form-data — admin page raise madhiriye)
+// Tour admin raise panna query — raisedVia: "touradmin"
+const raiseTourQuery = (req, res) => raiseQueryCore(req, res, "touradmin");
+
+// PATCH /api/tour/queries/:queryId   (multipart/form-data — admin edit madhiriye)
+// Tour admin raise panna ticket ah mattum edit panna mudiyum
+const updateTourQuery = (req, res) => updateQueryCore(req, res, "touradmin", true);
+
+// DELETE /api/tour/queries/:queryId
+// Tour admin raise panna ticket ah mattum delete panna mudiyum
+const deleteTourQuery = (req, res) => deleteQueryCore(req, res, "touradmin");
+
+export {
+  tourList,
+  loginTour,
+  bookingsTour,
+  getAdminCreatedBookings,
+  adminAddBooking,
+  adminCancelTraveller,
+  bookingComplete,
+  tourDashboard,
+  tourProfile,
+  updateTourProfile,
+  markOfflineAdvancePaid,
+  markOfflineBalancePaid,
+  updateTraveller,
+  markAdvanceReceiptSent,
+  markBalanceReceiptSent,
+  viewTourBalance,
+  viewTourAdvance,
+  updateTourBalance,
+  updateTourAdvance,
+  updateBalanceRemark,
+  updateAdvanceRemark,
+  deleteBalanceRemark,
+  deleteAdvanceRemark,
+  updateModifyReceipt,
+  viewBooking,
+  getBookingInvoice,
+  resyncInvoiceForTnr,      // ← ADDED: eager invoice resync, for use by other controllers
+  updateBookingInvoice,
+  deleteBookingInvoice,      // ← ADD THIS LINE
+  getCancellationsByBooking,
+  updateBookingBalance,
+  getManagedBookingsHistory,
+  allotRooms,
+  // ==================== NEW ONES TO ADD ====================
+  getManualRooms,           // View Both Guest + Leader Rooms
+  addGuestRoom,             // Add Guest Room
+  addLeaderRoom,            // Add Leader Room
+  deleteLeaderRoom,
+  // =========================================================
+
+
+  getToursByYear,
+  getAvailableTourYears,
+  getAllBookings,
+  TaskBookingComplete,
+  taskMarkModifyReceipt,
+  taskMarkAdvanceReceiptSent,
+  taskMarkBalanceReceiptSent,
+  taskMarkCancellationReceipt,
+  taskMarkManageBookingReceipt,
+  createTourVehicle,
+  updateTourVehicle,
+  toggleVehicleSeatSelection,
+  getTourVehicles,
+  deleteTourVehicle,
+  addTour,
+  getAllPaymentMethods,
+  createPaymentMethod,
+  updatePaymentMethod,
+  deletePaymentMethod,
+  getTourPaymentMethods,
+  createTourPaymentMethod,
+  updateTourPaymentMethod,
+  deleteTourPaymentMethod,
+  getTourVehicleSeatOverview,
+
+  // ↓ new ones
+  adminCreateEnquiry,
+  getAllEnquiries,
+  getEnquiryById,
+  updateEnquiry,
+  // deleteEnquiry,
+  toggleRatePassed,
+  acceptEnquiry,
+  rejectEnquiry,
+  closeEnquiry,    // ← new
+  reopenEnquiry,   // ← new
+
+  getTourQueries,
+  pickupQuery,
+  processQuery,
+  closeQuery,
+  rejectQuery,
+  addAdminReply,
+  getAdminReplies,
+  editAdminReply,
+  deleteAdminReply,
+  getAdminQuerySync,
+  raiseTourQuery,
+  updateTourQuery,
+  deleteTourQuery,
+
+
+
+
+
+};
+===== tourAdminController: raiseQuery
+const raiseQuery = (req, res) => raiseQueryCore(req, res, "admin");
+ 
+// ════════════════════════════════════════════════════════════════
+//  ADMIN PAGE LIST + FILTERS
+//  GET /api/touradmin/queries?queryType=&status=&raisedBy=&raisedTo=&search=&fromDate=&toDate=&page=&limit=
+// ════════════════════════════════════════════════════════════════
+const getAdminQueries = async (req, res) => {
+    try {
+        const data = await fetchQueries(req.query);
+        return res.status(200).json({ success: true, ...data });
+    } catch (err) {
+        console.error("getAdminQueries error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+};
+===== tourAdminController: updateQuery
+const updateQuery = (req, res) => updateQueryCore(req, res, "admin", true);
+ 
+// ════════════════════════════════════════════════════════════════
+//  REPLIES — common helpers (tourController um idha use pannum)
+// ════════════════════════════════════════════════════════════════
+ 
+// POST body: { message, staff? }   from = "admin" (Launching) | "touradmin" (Landing)
+async function saveQueryReply(req, res, from) {
+    try {
+        const { queryId } = req.params;
+        const message = String(req.body?.message || "").trim();
+        const staff = req.body?.staff;
+ 
+        if (!mongoose.isValidObjectId(queryId)) {
+            return res
+                .status(400)
+                .json({ success: false, message: "Invalid query ID" });
+        }
+        if (!REPLY_FROM.includes(from)) {
+            return res
+                .status(400)
+                .json({ success: false, message: "Invalid reply source" });
+        }
+        if (!message) {
+            return res
+                .status(400)
+                .json({ success: false, message: "Reply message is required" });
+        }
+        if (message.length > 2000) {
+            return res.status(400).json({
+                success: false,
+                message: "Reply can be at most 2000 characters",
+            });
+        }
+        if (staff && !mongoose.isValidObjectId(staff)) {
+            return res
+                .status(400)
+                .json({ success: false, message: "Invalid staff ID" });
+        }
+ 
+        const now = new Date();
+        const reply = { message, from, staff: staff || null, createdAt: now };
+ 
+        // Close / Reject aana query ku reply panna mudiyadhu.
+        // Oru single atomic update — rendu per same time la reply pannalum ok.
+        const updated = await Query.findOneAndUpdate(
+            { _id: queryId, status: { $nin: ["close", "reject"] } },
+            {
+                $push: { replies: reply },
+                $inc: { replyCount: 1 },
+                $set: { lastReplyAt: now, lastReplyFrom: from },
+            },
+            { new: true, runValidators: true },
+        )
+            .select("replies status replyCount lastReplyAt lastReplyFrom")
+            .populate("replies.staff", "-password")
+            .lean();
+ 
+        if (!updated) {
+            const exists = await Query.findById(queryId).select("status").lean();
+            if (!exists) {
+                return res
+                    .status(404)
+                    .json({ success: false, message: "Query not found" });
+            }
+            return res.status(400).json({
+                success: false,
+                message: `This query is ${exists.status === "close" ? "closed" : "rejected"} — replies are closed`,
+            });
+        }
+ 
+        return res.status(201).json({
+            success: true,
+            message: "Reply sent",
+            reply: updated.replies[updated.replies.length - 1],
+            replyCount: updated.replyCount,
+        });
+    } catch (err) {
+        console.error("saveQueryReply error:", err);
+        if (err.name === "ValidationError") {
+            return res.status(400).json({ success: false, message: err.message });
+        }
+        return res.status(500).json({ success: false, message: err.message });
+    }
+}
+ 
+// GET — oru query oda ellaa replies (pazhasu → puthusu)
+async function loadQueryReplies(req, res) {
+    try {
+        const { queryId } = req.params;
+        if (!mongoose.isValidObjectId(queryId)) {
+            return res
+                .status(400)
+                .json({ success: false, message: "Invalid query ID" });
+        }
+ 
+        const query = await Query.findById(queryId)
+            .select("subject status replies replyCount lastReplyAt lastReplyFrom updatedAt")
+            .populate("replies.staff", "-password")
+            .lean();
+ 
+        if (!query) {
+            return res
+                .status(404)
+                .json({ success: false, message: "Query not found" });
+        }
+ 
+        return res.status(200).json({
+            success: true,
+            queryId: query._id,
+            subject: query.subject,
+            status: query.status,
+            canReply: !["close", "reject"].includes(query.status),
+            // Frontend idha vechu "maariducha?" nu check pannum (sync)
+            version: query.updatedAt,
+            count: query.replies.length,
+            replies: query.replies,
+        });
+    } catch (err) {
+        console.error("loadQueryReplies error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+}
+ 
+// ─── Tour admin side ──────────────────────────────────────────
+// POST /api/touradmin/queries/:queryId/replies     body: { message, staff? }
+const addTourAdminReply = (req, res) => saveQueryReply(req, res, "admin");
+ 
+// GET  /api/touradmin/queries/:queryId/replies
+const getTourAdminReplies = (req, res) => loadQueryReplies(req, res);
+ 
+// ════════════════════════════════════════════════════════════════
+//  DELETE QUERY
+//  DELETE /api/touradmin/queries/:queryId
+//  Query + adhoda replies + Cloudinary files ellam remove aagum.
+//  Close / Reject aana query ah delete panna mudiyadhu.
+// ════════════════════════════════════════════════════════════════
+// onlyVia = "admin" / "touradmin" — adhe side raise panna ticket ah mattum delete panna mudiyum
+async function deleteQueryCore(req, res, onlyVia = null) {
+    try {
+        const { queryId } = req.params;
+        if (!mongoose.isValidObjectId(queryId)) {
+            return res
+                .status(400)
+                .json({ success: false, message: "Invalid query ID" });
+        }
+ 
+        // Close / Reject aana query ah delete panna mudiyadhu (history ku)
+        const match = { _id: queryId, status: { $nin: ["close", "reject"] } };
+        // Pazhaya queries la raisedVia illa — adhu admin raise pannadhu
+        if (onlyVia) match.raisedVia = onlyVia === "admin" ? { $in: ["admin", null] } : onlyVia;
+        const query = await Query.findOneAndDelete(match).lean();
+        if (!query) {
+            const exists = await Query.findById(queryId).select("status raisedVia").lean();
+            if (!exists) {
+                return res
+                    .status(404)
+                    .json({ success: false, message: "Query not found" });
+            }
+            if (onlyVia && (exists.raisedVia || "admin") !== onlyVia) {
+                return res.status(403).json({
+                    success: false,
+                    message: "You can only delete tickets you raised",
+                });
+            }
+            return res.status(400).json({
+                success: false,
+                message: `This query is ${exists.status === "close" ? "closed" : "rejected"} and can't be deleted`,
+            });
+        }
+ 
+        // DB la irundhu pona apram dhaan Cloudinary files remove
+        if (query.attachments?.length) await destroyAttachments(query.attachments);
+ 
+        return res.status(200).json({
+            success: true,
+            message: "Query deleted",
+            deletedId: query._id,
+        });
+    } catch (err) {
+        console.error("deleteQuery error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+}
+ 
+// DELETE /api/touradmin/queries/:queryId  — admin raise panna ticket mattum
+const deleteQuery = (req, res) => deleteQueryCore(req, res, "admin");
+ 
+// ════════════════════════════════════════════════════════════════
+//  REPLY EDIT / DELETE — common helpers
+//  Ovvoruthar um avanga anuppuna reply ah mattum dhaan maatha mudiyum.
+//  Close / Reject aana query la maatha mudiyadhu.
+// ════════════════════════════════════════════════════════════════
+ 
+const CLOSED_STATUS_TEXT = { close: "closed", reject: "rejected" };
+ 
+// PATCH body: { message }
+async function editQueryReply(req, res, from) {
+    try {
+        const { queryId, replyId } = req.params;
+        const message = String(req.body?.message || "").trim();
+ 
+        if (!mongoose.isValidObjectId(queryId) || !mongoose.isValidObjectId(replyId)) {
+            return res.status(400).json({ success: false, message: "Invalid ID" });
+        }
+        if (!message) {
+            return res
+                .status(400)
+                .json({ success: false, message: "Reply message is required" });
+        }
+        if (message.length > 2000) {
+            return res.status(400).json({
+                success: false,
+                message: "Reply can be at most 2000 characters",
+            });
+        }
+ 
+        const query = await Query.findById(queryId).select("status replies editHistory editCount");
+        if (!query) {
+            return res
+                .status(404)
+                .json({ success: false, message: "Query not found" });
+        }
+        if (CLOSED_STATUS_TEXT[query.status]) {
+            return res.status(400).json({
+                success: false,
+                message: `This query is ${CLOSED_STATUS_TEXT[query.status]} — replies can't be changed`,
+            });
+        }
+ 
+        const reply = query.replies.id(replyId);
+        if (!reply) {
+            return res
+                .status(404)
+                .json({ success: false, message: "Reply not found" });
+        }
+        if (reply.from !== from) {
+            return res.status(403).json({
+                success: false,
+                message: "You can only edit your own replies",
+            });
+        }
+ 
+        const oldMessage = reply.message;
+        if (oldMessage === message) {
+            return res.status(200).json({ success: true, message: "Nothing changed", reply: reply.toObject() });
+        }
+        reply.message = message;
+        reply.editedAt = new Date();
+ 
+        // Edit history la reply before / after
+        query.editHistory.push({
+            editedAt: new Date(),
+            kind: "reply-edit",
+            by: from,
+            changes: [{ field: "reply", label: "Reply", before: oldMessage, after: message }],
+        });
+        query.editCount = query.editHistory.length;
+        await query.save();
+ 
+        return res.status(200).json({
+            success: true,
+            message: "Reply updated",
+            reply: reply.toObject(),
+        });
+    } catch (err) {
+        console.error("editQueryReply error:", err);
+        if (err.name === "ValidationError") {
+            return res.status(400).json({ success: false, message: err.message });
+        }
+        return res.status(500).json({ success: false, message: err.message });
+    }
+}
+ 
+async function removeQueryReply(req, res, from) {
+    try {
+        const { queryId, replyId } = req.params;
+        if (!mongoose.isValidObjectId(queryId) || !mongoose.isValidObjectId(replyId)) {
+            return res.status(400).json({ success: false, message: "Invalid ID" });
+        }
+ 
+        const query = await Query.findById(queryId).select(
+            "status replies replyCount lastReplyAt lastReplyFrom editHistory editCount",
+        );
+        if (!query) {
+            return res
+                .status(404)
+                .json({ success: false, message: "Query not found" });
+        }
+        if (CLOSED_STATUS_TEXT[query.status]) {
+            return res.status(400).json({
+                success: false,
+                message: `This query is ${CLOSED_STATUS_TEXT[query.status]} — replies can't be changed`,
+            });
+        }
+ 
+        const reply = query.replies.id(replyId);
+        if (!reply) {
+            return res
+                .status(404)
+                .json({ success: false, message: "Reply not found" });
+        }
+        if (reply.from !== from) {
+            return res.status(403).json({
+                success: false,
+                message: "You can only delete your own replies",
+            });
+        }
+ 
+        const deletedMessage = reply.message;
+        query.replies.pull(replyId); // ellaa mongoose version layum work aagum
+ 
+        // Edit history la delete aana reply um save aagum
+        query.editHistory.push({
+            editedAt: new Date(),
+            kind: "reply-delete",
+            by: from,
+            changes: [{ field: "reply", label: "Reply deleted", before: deletedMessage, after: "" }],
+        });
+        query.editCount = query.editHistory.length;
+ 
+        // Count and "last reply" info ah thirumba calculate
+        const last = query.replies[query.replies.length - 1];
+        query.replyCount = query.replies.length;
+        query.lastReplyAt = last ? last.createdAt : null;
+        query.lastReplyFrom = last ? last.from : null;
+        await query.save();
+ 
+        return res.status(200).json({
+            success: true,
+            message: "Reply deleted",
+            deletedId: replyId,
+            replyCount: query.replyCount,
+        });
+    } catch (err) {
+        console.error("removeQueryReply error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+}
+ 
+// PATCH  /api/touradmin/queries/:queryId/replies/:replyId     body: { message }
+const editTourAdminReply = (req, res) => editQueryReply(req, res, "admin");
+ 
+// DELETE /api/touradmin/queries/:queryId/replies/:replyId
+const deleteTourAdminReply = (req, res) => removeQueryReply(req, res, "admin");
+ 
+// ════════════════════════════════════════════════════════════════
+//  SYNC CHECK — rendu page um auto-refresh aaga
+//  GET /api/touradmin/queries/sync   |   GET /api/tour/queries/sync
+//
+//  Romba light API — full list anuppadhu. Frontend ovvoru 10 sec kum
+//  idha call pannum; "version" maarirundha mattum list ah refetch pannum.
+//  Yaar enna pannalum (raise, edit, delete, status, reply) version maarum.
+// ════════════════════════════════════════════════════════════════
+async function getQuerySync(req, res) {
+    try {
+        const [info] = await Query.aggregate([
+            {
+                $group: {
+                    _id: null,
+                    total: { $sum: 1 },
+                    lastUpdatedAt: { $max: "$updatedAt" },
+                },
+            },
+        ]);
+        const total = info?.total || 0;
+        const lastUpdatedAt = info?.lastUpdatedAt || null;
+ 
+        return res.status(200).json({
+            success: true,
+            total,
+            lastUpdatedAt,
+            // total um sethu — delete pannalum version maarum
+            version: `${total}-${lastUpdatedAt ? new Date(lastUpdatedAt).getTime() : 0}`,
+        });
+    } catch (err) {
+        console.error("getQuerySync error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+}
+ 
+// GET /api/touradmin/queries/sync
+const getTourAdminQuerySync = (req, res) => getQuerySync(req, res);
+ 
+// ════════════════════════════════════════════════════════════════
+//  STAFF LIST — raise form la "Raised by / Raised to" dropdown ku
+//  GET /api/touradmin/staff/all
+//  Inactive thavira ellaa staff um, A-Z order la, dropdown ku thevaiyana fields mattum.
+// ════════════════════════════════════════════════════════════════
+const getStaffForQueries = async (req, res) => {
+    try {
+        const staff = await mongoose.models.staff
+            // "Inactive" illadha ellarum — status field illadha pazhaya staff um varuvanga
+            .find({ status: { $ne: "Inactive" } })
+            .select("fullName employeeId designation department staffType photo")
+            .sort({ employeeId: 1 })
+            .lean();
+        return res.status(200).json({ success: true, count: staff.length, data: staff });
+    } catch (err) {
+        console.error("getStaffForQueries error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+};
+===== tourAdminController: getAdminQueries
+const getAdminQueries = async (req, res) => {
+    try {
+        const data = await fetchQueries(req.query);
+        return res.status(200).json({ success: true, ...data });
+    } catch (err) {
+        console.error("getAdminQueries error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+};
+===== tourAdminController: getStaffForQueries
+const getStaffForQueries = async (req, res) => {
+    try {
+        const staff = await mongoose.models.staff
+            // "Inactive" illadha ellarum — status field illadha pazhaya staff um varuvanga
+            .find({ status: { $ne: "Inactive" } })
+            .select("fullName employeeId designation department staffType photo")
+            .sort({ employeeId: 1 })
+            .lean();
+        return res.status(200).json({ success: true, count: staff.length, data: staff });
+    } catch (err) {
+        console.error("getStaffForQueries error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+};
+===== tourAdminController: getTourAdminReplies
+const getTourAdminReplies = (req, res) => loadQueryReplies(req, res);
+ 
+// ════════════════════════════════════════════════════════════════
+//  DELETE QUERY
+//  DELETE /api/touradmin/queries/:queryId
+//  Query + adhoda replies + Cloudinary files ellam remove aagum.
+//  Close / Reject aana query ah delete panna mudiyadhu.
+// ════════════════════════════════════════════════════════════════
+// onlyVia = "admin" / "touradmin" — adhe side raise panna ticket ah mattum delete panna mudiyum
+async function deleteQueryCore(req, res, onlyVia = null) {
+    try {
+        const { queryId } = req.params;
+        if (!mongoose.isValidObjectId(queryId)) {
+            return res
+                .status(400)
+                .json({ success: false, message: "Invalid query ID" });
+        }
+ 
+        // Close / Reject aana query ah delete panna mudiyadhu (history ku)
+        const match = { _id: queryId, status: { $nin: ["close", "reject"] } };
+        // Pazhaya queries la raisedVia illa — adhu admin raise pannadhu
+        if (onlyVia) match.raisedVia = onlyVia === "admin" ? { $in: ["admin", null] } : onlyVia;
+        const query = await Query.findOneAndDelete(match).lean();
+        if (!query) {
+            const exists = await Query.findById(queryId).select("status raisedVia").lean();
+            if (!exists) {
+                return res
+                    .status(404)
+                    .json({ success: false, message: "Query not found" });
+            }
+            if (onlyVia && (exists.raisedVia || "admin") !== onlyVia) {
+                return res.status(403).json({
+                    success: false,
+                    message: "You can only delete tickets you raised",
+                });
+            }
+            return res.status(400).json({
+                success: false,
+                message: `This query is ${exists.status === "close" ? "closed" : "rejected"} and can't be deleted`,
+            });
+        }
+ 
+        // DB la irundhu pona apram dhaan Cloudinary files remove
+        if (query.attachments?.length) await destroyAttachments(query.attachments);
+ 
+        return res.status(200).json({
+            success: true,
+            message: "Query deleted",
+            deletedId: query._id,
+        });
+    } catch (err) {
+        console.error("deleteQuery error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+}
+ 
+// DELETE /api/touradmin/queries/:queryId  — admin raise panna ticket mattum
+const deleteQuery = (req, res) => deleteQueryCore(req, res, "admin");
+ 
+// ════════════════════════════════════════════════════════════════
+//  REPLY EDIT / DELETE — common helpers
+//  Ovvoruthar um avanga anuppuna reply ah mattum dhaan maatha mudiyum.
+//  Close / Reject aana query la maatha mudiyadhu.
+// ════════════════════════════════════════════════════════════════
+ 
+const CLOSED_STATUS_TEXT = { close: "closed", reject: "rejected" };
+ 
+// PATCH body: { message }
+async function editQueryReply(req, res, from) {
+    try {
+        const { queryId, replyId } = req.params;
+        const message = String(req.body?.message || "").trim();
+ 
+        if (!mongoose.isValidObjectId(queryId) || !mongoose.isValidObjectId(replyId)) {
+            return res.status(400).json({ success: false, message: "Invalid ID" });
+        }
+        if (!message) {
+            return res
+                .status(400)
+                .json({ success: false, message: "Reply message is required" });
+        }
+        if (message.length > 2000) {
+            return res.status(400).json({
+                success: false,
+                message: "Reply can be at most 2000 characters",
+            });
+        }
+ 
+        const query = await Query.findById(queryId).select("status replies editHistory editCount");
+        if (!query) {
+            return res
+                .status(404)
+                .json({ success: false, message: "Query not found" });
+        }
+        if (CLOSED_STATUS_TEXT[query.status]) {
+            return res.status(400).json({
+                success: false,
+                message: `This query is ${CLOSED_STATUS_TEXT[query.status]} — replies can't be changed`,
+            });
+        }
+ 
+        const reply = query.replies.id(replyId);
+        if (!reply) {
+            return res
+                .status(404)
+                .json({ success: false, message: "Reply not found" });
+        }
+        if (reply.from !== from) {
+            return res.status(403).json({
+                success: false,
+                message: "You can only edit your own replies",
+            });
+        }
+ 
+        const oldMessage = reply.message;
+        if (oldMessage === message) {
+            return res.status(200).json({ success: true, message: "Nothing changed", reply: reply.toObject() });
+        }
+        reply.message = message;
+        reply.editedAt = new Date();
+ 
+        // Edit history la reply before / after
+        query.editHistory.push({
+            editedAt: new Date(),
+            kind: "reply-edit",
+            by: from,
+            changes: [{ field: "reply", label: "Reply", before: oldMessage, after: message }],
+        });
+        query.editCount = query.editHistory.length;
+        await query.save();
+ 
+        return res.status(200).json({
+            success: true,
+            message: "Reply updated",
+            reply: reply.toObject(),
+        });
+    } catch (err) {
+        console.error("editQueryReply error:", err);
+        if (err.name === "ValidationError") {
+            return res.status(400).json({ success: false, message: err.message });
+        }
+        return res.status(500).json({ success: false, message: err.message });
+    }
+}
+ 
+async function removeQueryReply(req, res, from) {
+    try {
+        const { queryId, replyId } = req.params;
+        if (!mongoose.isValidObjectId(queryId) || !mongoose.isValidObjectId(replyId)) {
+            return res.status(400).json({ success: false, message: "Invalid ID" });
+        }
+ 
+        const query = await Query.findById(queryId).select(
+            "status replies replyCount lastReplyAt lastReplyFrom editHistory editCount",
+        );
+        if (!query) {
+            return res
+                .status(404)
+                .json({ success: false, message: "Query not found" });
+        }
+        if (CLOSED_STATUS_TEXT[query.status]) {
+            return res.status(400).json({
+                success: false,
+                message: `This query is ${CLOSED_STATUS_TEXT[query.status]} — replies can't be changed`,
+            });
+        }
+ 
+        const reply = query.replies.id(replyId);
+        if (!reply) {
+            return res
+                .status(404)
+                .json({ success: false, message: "Reply not found" });
+        }
+        if (reply.from !== from) {
+            return res.status(403).json({
+                success: false,
+                message: "You can only delete your own replies",
+            });
+        }
+ 
+        const deletedMessage = reply.message;
+        query.replies.pull(replyId); // ellaa mongoose version layum work aagum
+ 
+        // Edit history la delete aana reply um save aagum
+        query.editHistory.push({
+            editedAt: new Date(),
+            kind: "reply-delete",
+            by: from,
+            changes: [{ field: "reply", label: "Reply deleted", before: deletedMessage, after: "" }],
+        });
+        query.editCount = query.editHistory.length;
+ 
+        // Count and "last reply" info ah thirumba calculate
+        const last = query.replies[query.replies.length - 1];
+        query.replyCount = query.replies.length;
+        query.lastReplyAt = last ? last.createdAt : null;
+        query.lastReplyFrom = last ? last.from : null;
+        await query.save();
+ 
+        return res.status(200).json({
+            success: true,
+            message: "Reply deleted",
+            deletedId: replyId,
+            replyCount: query.replyCount,
+        });
+    } catch (err) {
+        console.error("removeQueryReply error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+}
+ 
+// PATCH  /api/touradmin/queries/:queryId/replies/:replyId     body: { message }
+const editTourAdminReply = (req, res) => editQueryReply(req, res, "admin");
+ 
+// DELETE /api/touradmin/queries/:queryId/replies/:replyId
+const deleteTourAdminReply = (req, res) => removeQueryReply(req, res, "admin");
+ 
+// ════════════════════════════════════════════════════════════════
+//  SYNC CHECK — rendu page um auto-refresh aaga
+//  GET /api/touradmin/queries/sync   |   GET /api/tour/queries/sync
+//
+//  Romba light API — full list anuppadhu. Frontend ovvoru 10 sec kum
+//  idha call pannum; "version" maarirundha mattum list ah refetch pannum.
+//  Yaar enna pannalum (raise, edit, delete, status, reply) version maarum.
+// ════════════════════════════════════════════════════════════════
+async function getQuerySync(req, res) {
+    try {
+        const [info] = await Query.aggregate([
+            {
+                $group: {
+                    _id: null,
+                    total: { $sum: 1 },
+                    lastUpdatedAt: { $max: "$updatedAt" },
+                },
+            },
+        ]);
+        const total = info?.total || 0;
+        const lastUpdatedAt = info?.lastUpdatedAt || null;
+ 
+        return res.status(200).json({
+            success: true,
+            total,
+            lastUpdatedAt,
+            // total um sethu — delete pannalum version maarum
+            version: `${total}-${lastUpdatedAt ? new Date(lastUpdatedAt).getTime() : 0}`,
+        });
+    } catch (err) {
+        console.error("getQuerySync error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+}
+ 
+// GET /api/touradmin/queries/sync
+const getTourAdminQuerySync = (req, res) => getQuerySync(req, res);
+ 
+// ════════════════════════════════════════════════════════════════
+//  STAFF LIST — raise form la "Raised by / Raised to" dropdown ku
+//  GET /api/touradmin/staff/all
+//  Inactive thavira ellaa staff um, A-Z order la, dropdown ku thevaiyana fields mattum.
+// ════════════════════════════════════════════════════════════════
+const getStaffForQueries = async (req, res) => {
+    try {
+        const staff = await mongoose.models.staff
+            // "Inactive" illadha ellarum — status field illadha pazhaya staff um varuvanga
+            .find({ status: { $ne: "Inactive" } })
+            .select("fullName employeeId designation department staffType photo")
+            .sort({ employeeId: 1 })
+            .lean();
+        return res.status(200).json({ success: true, count: staff.length, data: staff });
+    } catch (err) {
+        console.error("getStaffForQueries error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+};
+===== tourAdminController: addTourAdminReply
+const addTourAdminReply = (req, res) => saveQueryReply(req, res, "admin");
+ 
+// GET  /api/touradmin/queries/:queryId/replies
+const getTourAdminReplies = (req, res) => loadQueryReplies(req, res);
+ 
+// ════════════════════════════════════════════════════════════════
+//  DELETE QUERY
+//  DELETE /api/touradmin/queries/:queryId
+//  Query + adhoda replies + Cloudinary files ellam remove aagum.
+//  Close / Reject aana query ah delete panna mudiyadhu.
+// ════════════════════════════════════════════════════════════════
+// onlyVia = "admin" / "touradmin" — adhe side raise panna ticket ah mattum delete panna mudiyum
+async function deleteQueryCore(req, res, onlyVia = null) {
+    try {
+        const { queryId } = req.params;
+        if (!mongoose.isValidObjectId(queryId)) {
+            return res
+                .status(400)
+                .json({ success: false, message: "Invalid query ID" });
+        }
+ 
+        // Close / Reject aana query ah delete panna mudiyadhu (history ku)
+        const match = { _id: queryId, status: { $nin: ["close", "reject"] } };
+        // Pazhaya queries la raisedVia illa — adhu admin raise pannadhu
+        if (onlyVia) match.raisedVia = onlyVia === "admin" ? { $in: ["admin", null] } : onlyVia;
+        const query = await Query.findOneAndDelete(match).lean();
+        if (!query) {
+            const exists = await Query.findById(queryId).select("status raisedVia").lean();
+            if (!exists) {
+                return res
+                    .status(404)
+                    .json({ success: false, message: "Query not found" });
+            }
+            if (onlyVia && (exists.raisedVia || "admin") !== onlyVia) {
+                return res.status(403).json({
+                    success: false,
+                    message: "You can only delete tickets you raised",
+                });
+            }
+            return res.status(400).json({
+                success: false,
+                message: `This query is ${exists.status === "close" ? "closed" : "rejected"} and can't be deleted`,
+            });
+        }
+ 
+        // DB la irundhu pona apram dhaan Cloudinary files remove
+        if (query.attachments?.length) await destroyAttachments(query.attachments);
+ 
+        return res.status(200).json({
+            success: true,
+            message: "Query deleted",
+            deletedId: query._id,
+        });
+    } catch (err) {
+        console.error("deleteQuery error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+}
+ 
+// DELETE /api/touradmin/queries/:queryId  — admin raise panna ticket mattum
+const deleteQuery = (req, res) => deleteQueryCore(req, res, "admin");
+ 
+// ════════════════════════════════════════════════════════════════
+//  REPLY EDIT / DELETE — common helpers
+//  Ovvoruthar um avanga anuppuna reply ah mattum dhaan maatha mudiyum.
+//  Close / Reject aana query la maatha mudiyadhu.
+// ════════════════════════════════════════════════════════════════
+ 
+const CLOSED_STATUS_TEXT = { close: "closed", reject: "rejected" };
+ 
+// PATCH body: { message }
+async function editQueryReply(req, res, from) {
+    try {
+        const { queryId, replyId } = req.params;
+        const message = String(req.body?.message || "").trim();
+ 
+        if (!mongoose.isValidObjectId(queryId) || !mongoose.isValidObjectId(replyId)) {
+            return res.status(400).json({ success: false, message: "Invalid ID" });
+        }
+        if (!message) {
+            return res
+                .status(400)
+                .json({ success: false, message: "Reply message is required" });
+        }
+        if (message.length > 2000) {
+            return res.status(400).json({
+                success: false,
+                message: "Reply can be at most 2000 characters",
+            });
+        }
+ 
+        const query = await Query.findById(queryId).select("status replies editHistory editCount");
+        if (!query) {
+            return res
+                .status(404)
+                .json({ success: false, message: "Query not found" });
+        }
+        if (CLOSED_STATUS_TEXT[query.status]) {
+            return res.status(400).json({
+                success: false,
+                message: `This query is ${CLOSED_STATUS_TEXT[query.status]} — replies can't be changed`,
+            });
+        }
+ 
+        const reply = query.replies.id(replyId);
+        if (!reply) {
+            return res
+                .status(404)
+                .json({ success: false, message: "Reply not found" });
+        }
+        if (reply.from !== from) {
+            return res.status(403).json({
+                success: false,
+                message: "You can only edit your own replies",
+            });
+        }
+ 
+        const oldMessage = reply.message;
+        if (oldMessage === message) {
+            return res.status(200).json({ success: true, message: "Nothing changed", reply: reply.toObject() });
+        }
+        reply.message = message;
+        reply.editedAt = new Date();
+ 
+        // Edit history la reply before / after
+        query.editHistory.push({
+            editedAt: new Date(),
+            kind: "reply-edit",
+            by: from,
+            changes: [{ field: "reply", label: "Reply", before: oldMessage, after: message }],
+        });
+        query.editCount = query.editHistory.length;
+        await query.save();
+ 
+        return res.status(200).json({
+            success: true,
+            message: "Reply updated",
+            reply: reply.toObject(),
+        });
+    } catch (err) {
+        console.error("editQueryReply error:", err);
+        if (err.name === "ValidationError") {
+            return res.status(400).json({ success: false, message: err.message });
+        }
+        return res.status(500).json({ success: false, message: err.message });
+    }
+}
+ 
+async function removeQueryReply(req, res, from) {
+    try {
+        const { queryId, replyId } = req.params;
+        if (!mongoose.isValidObjectId(queryId) || !mongoose.isValidObjectId(replyId)) {
+            return res.status(400).json({ success: false, message: "Invalid ID" });
+        }
+ 
+        const query = await Query.findById(queryId).select(
+            "status replies replyCount lastReplyAt lastReplyFrom editHistory editCount",
+        );
+        if (!query) {
+            return res
+                .status(404)
+                .json({ success: false, message: "Query not found" });
+        }
+        if (CLOSED_STATUS_TEXT[query.status]) {
+            return res.status(400).json({
+                success: false,
+                message: `This query is ${CLOSED_STATUS_TEXT[query.status]} — replies can't be changed`,
+            });
+        }
+ 
+        const reply = query.replies.id(replyId);
+        if (!reply) {
+            return res
+                .status(404)
+                .json({ success: false, message: "Reply not found" });
+        }
+        if (reply.from !== from) {
+            return res.status(403).json({
+                success: false,
+                message: "You can only delete your own replies",
+            });
+        }
+ 
+        const deletedMessage = reply.message;
+        query.replies.pull(replyId); // ellaa mongoose version layum work aagum
+ 
+        // Edit history la delete aana reply um save aagum
+        query.editHistory.push({
+            editedAt: new Date(),
+            kind: "reply-delete",
+            by: from,
+            changes: [{ field: "reply", label: "Reply deleted", before: deletedMessage, after: "" }],
+        });
+        query.editCount = query.editHistory.length;
+ 
+        // Count and "last reply" info ah thirumba calculate
+        const last = query.replies[query.replies.length - 1];
+        query.replyCount = query.replies.length;
+        query.lastReplyAt = last ? last.createdAt : null;
+        query.lastReplyFrom = last ? last.from : null;
+        await query.save();
+ 
+        return res.status(200).json({
+            success: true,
+            message: "Reply deleted",
+            deletedId: replyId,
+            replyCount: query.replyCount,
+        });
+    } catch (err) {
+        console.error("removeQueryReply error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+}
+ 
+// PATCH  /api/touradmin/queries/:queryId/replies/:replyId     body: { message }
+const editTourAdminReply = (req, res) => editQueryReply(req, res, "admin");
+ 
+// DELETE /api/touradmin/queries/:queryId/replies/:replyId
+const deleteTourAdminReply = (req, res) => removeQueryReply(req, res, "admin");
+ 
+// ════════════════════════════════════════════════════════════════
+//  SYNC CHECK — rendu page um auto-refresh aaga
+//  GET /api/touradmin/queries/sync   |   GET /api/tour/queries/sync
+//
+//  Romba light API — full list anuppadhu. Frontend ovvoru 10 sec kum
+//  idha call pannum; "version" maarirundha mattum list ah refetch pannum.
+//  Yaar enna pannalum (raise, edit, delete, status, reply) version maarum.
+// ════════════════════════════════════════════════════════════════
+async function getQuerySync(req, res) {
+    try {
+        const [info] = await Query.aggregate([
+            {
+                $group: {
+                    _id: null,
+                    total: { $sum: 1 },
+                    lastUpdatedAt: { $max: "$updatedAt" },
+                },
+            },
+        ]);
+        const total = info?.total || 0;
+        const lastUpdatedAt = info?.lastUpdatedAt || null;
+ 
+        return res.status(200).json({
+            success: true,
+            total,
+            lastUpdatedAt,
+            // total um sethu — delete pannalum version maarum
+            version: `${total}-${lastUpdatedAt ? new Date(lastUpdatedAt).getTime() : 0}`,
+        });
+    } catch (err) {
+        console.error("getQuerySync error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+}
+ 
+// GET /api/touradmin/queries/sync
+const getTourAdminQuerySync = (req, res) => getQuerySync(req, res);
+ 
+// ════════════════════════════════════════════════════════════════
+//  STAFF LIST — raise form la "Raised by / Raised to" dropdown ku
+//  GET /api/touradmin/staff/all
+//  Inactive thavira ellaa staff um, A-Z order la, dropdown ku thevaiyana fields mattum.
+// ════════════════════════════════════════════════════════════════
+const getStaffForQueries = async (req, res) => {
+    try {
+        const staff = await mongoose.models.staff
+            // "Inactive" illadha ellarum — status field illadha pazhaya staff um varuvanga
+            .find({ status: { $ne: "Inactive" } })
+            .select("fullName employeeId designation department staffType photo")
+            .sort({ employeeId: 1 })
+            .lean();
+        return res.status(200).json({ success: true, count: staff.length, data: staff });
+    } catch (err) {
+        console.error("getStaffForQueries error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+};
+===== tourAdminController: editTourAdminReply
+const editTourAdminReply = (req, res) => editQueryReply(req, res, "admin");
+ 
+// DELETE /api/touradmin/queries/:queryId/replies/:replyId
+const deleteTourAdminReply = (req, res) => removeQueryReply(req, res, "admin");
+ 
+// ════════════════════════════════════════════════════════════════
+//  SYNC CHECK — rendu page um auto-refresh aaga
+//  GET /api/touradmin/queries/sync   |   GET /api/tour/queries/sync
+//
+//  Romba light API — full list anuppadhu. Frontend ovvoru 10 sec kum
+//  idha call pannum; "version" maarirundha mattum list ah refetch pannum.
+//  Yaar enna pannalum (raise, edit, delete, status, reply) version maarum.
+// ════════════════════════════════════════════════════════════════
+async function getQuerySync(req, res) {
+    try {
+        const [info] = await Query.aggregate([
+            {
+                $group: {
+                    _id: null,
+                    total: { $sum: 1 },
+                    lastUpdatedAt: { $max: "$updatedAt" },
+                },
+            },
+        ]);
+        const total = info?.total || 0;
+        const lastUpdatedAt = info?.lastUpdatedAt || null;
+ 
+        return res.status(200).json({
+            success: true,
+            total,
+            lastUpdatedAt,
+            // total um sethu — delete pannalum version maarum
+            version: `${total}-${lastUpdatedAt ? new Date(lastUpdatedAt).getTime() : 0}`,
+        });
+    } catch (err) {
+        console.error("getQuerySync error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+}
+ 
+// GET /api/touradmin/queries/sync
+const getTourAdminQuerySync = (req, res) => getQuerySync(req, res);
+ 
+// ════════════════════════════════════════════════════════════════
+//  STAFF LIST — raise form la "Raised by / Raised to" dropdown ku
+//  GET /api/touradmin/staff/all
+//  Inactive thavira ellaa staff um, A-Z order la, dropdown ku thevaiyana fields mattum.
+// ════════════════════════════════════════════════════════════════
+const getStaffForQueries = async (req, res) => {
+    try {
+        const staff = await mongoose.models.staff
+            // "Inactive" illadha ellarum — status field illadha pazhaya staff um varuvanga
+            .find({ status: { $ne: "Inactive" } })
+            .select("fullName employeeId designation department staffType photo")
+            .sort({ employeeId: 1 })
+            .lean();
+        return res.status(200).json({ success: true, count: staff.length, data: staff });
+    } catch (err) {
+        console.error("getStaffForQueries error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+};
+===== tourAdminController: deleteTourAdminReply
+const deleteTourAdminReply = (req, res) => removeQueryReply(req, res, "admin");
+ 
+// ════════════════════════════════════════════════════════════════
+//  SYNC CHECK — rendu page um auto-refresh aaga
+//  GET /api/touradmin/queries/sync   |   GET /api/tour/queries/sync
+//
+//  Romba light API — full list anuppadhu. Frontend ovvoru 10 sec kum
+//  idha call pannum; "version" maarirundha mattum list ah refetch pannum.
+//  Yaar enna pannalum (raise, edit, delete, status, reply) version maarum.
+// ════════════════════════════════════════════════════════════════
+async function getQuerySync(req, res) {
+    try {
+        const [info] = await Query.aggregate([
+            {
+                $group: {
+                    _id: null,
+                    total: { $sum: 1 },
+                    lastUpdatedAt: { $max: "$updatedAt" },
+                },
+            },
+        ]);
+        const total = info?.total || 0;
+        const lastUpdatedAt = info?.lastUpdatedAt || null;
+ 
+        return res.status(200).json({
+            success: true,
+            total,
+            lastUpdatedAt,
+            // total um sethu — delete pannalum version maarum
+            version: `${total}-${lastUpdatedAt ? new Date(lastUpdatedAt).getTime() : 0}`,
+        });
+    } catch (err) {
+        console.error("getQuerySync error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+}
+ 
+// GET /api/touradmin/queries/sync
+const getTourAdminQuerySync = (req, res) => getQuerySync(req, res);
+ 
+// ════════════════════════════════════════════════════════════════
+//  STAFF LIST — raise form la "Raised by / Raised to" dropdown ku
+//  GET /api/touradmin/staff/all
+//  Inactive thavira ellaa staff um, A-Z order la, dropdown ku thevaiyana fields mattum.
+// ════════════════════════════════════════════════════════════════
+const getStaffForQueries = async (req, res) => {
+    try {
+        const staff = await mongoose.models.staff
+            // "Inactive" illadha ellarum — status field illadha pazhaya staff um varuvanga
+            .find({ status: { $ne: "Inactive" } })
+            .select("fullName employeeId designation department staffType photo")
+            .sort({ employeeId: 1 })
+            .lean();
+        return res.status(200).json({ success: true, count: staff.length, data: staff });
+    } catch (err) {
+        console.error("getStaffForQueries error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+};
+===== aadhaarModel
+// import mongoose from "mongoose";
+ 
+// const aadhaarSchema = new mongoose.Schema(
+//   {
+//     tnr: {
+//       type: String,
+//       trim: true,
+//       uppercase: true,
+//       index: true,
+//     },
+//     // Ties together every doc created from ONE "Save Booking" click on the
+//     // Aadhaar Upload page (aadhaarFront + aadhaarBack + paymentAdvance +
+//     // bookingNotes), before a real tnr exists yet. The All Bookings page
+//     // will fetch a walk-in booking's pieces by groupId; once it's actually
+//     // created and gets a tnr, these docs get tnr/travellerId filled in too.
+//     groupId: {
+//       type: String,
+//       index: true,
+//       default: null,
+//     },
+//     travellerId: {
+//       type: mongoose.Schema.Types.ObjectId,
+//       default: null,
+//     },
+//     type: {
+//       type: String,
+//       enum: [
+//         "aadhaarFront",
+//         "aadhaarBack",
+//         "paymentAdvance",
+//         "paymentBalance",
+//         "paymentPartial",
+//         "bookingNotes", // Aadhaar Upload page's typed Package/Boarding/
+//         // Deboarding/Add-ons/Remarks — saved here, NOT onto
+//         // tourBookingModel. CreateBooking.jsx fills those properly via
+//         // dropdowns against the tour's real data.
+//         "guestLink", // Admin-only marker doc — no image, no OCR. Links 2+
+//         // TNRs together as the SAME real guest (e.g. "Vishvanathan" on one
+//         // booking, "Jeyandhi" on another — same person). Its tnr field
+//         // holds ONE of the linked TNRs (the one this doc was created
+//         // from); `guestTnrs` below holds the full linked group (including
+//         // that same tnr). `remarks` doubles as this group's optional
+//         // free-text label. Never written by OCR/upload flows — only by
+//         // linkGuestTnr/unlinkGuestTnr.
+//       ],
+//       required: true,
+//     },
+//     // Only set when type === "guestLink": every TNR (uppercased, deduped)
+//     // that is the same real guest as this doc's own `tnr`. Kept as a flat
+//     // array rather than a separate collection so "this booking's guest
+//     // also has these other bookings" is just one more aadhaarModel query.
+//     guestTnrs: { type: [String], default: undefined },
+//     isCoTraveller: { type: Boolean, default: false },
+//     // True only when this traveller (an aadhaarFront doc) was added via
+//     // "Add Co-Traveller" on the All Bookings tab AFTER the group already
+//     // had a tnr linked — i.e. added post-booking-creation, not part of the
+//     // original Save Booking capture. Only postBooking:true travellers
+//     // should ever show a "Raise Manage Booking" button — everyone who was
+//     // already in the booking when it was created doesn't need one. Stays
+//     // false forever for the original main/co-travellers, even after
+//     // linkGroupTnr backfills `tnr` onto their docs later.
+//     postBooking: { type: Boolean, default: false },
+//     ocrText: { type: String, default: "" },
+//     parsed: {
+//       firstName: { type: String, default: "" },
+//       lastName: { type: String, default: "" },
+//       age: { type: Number, default: null },
+//       dob: { type: String, default: "" },
+//       gender: { type: String, default: "" },
+//       // One combined line (kept for backward compatibility with bookings
+//       // saved before the split fields below existed) plus the split-out
+//       // fields the booking form now shows separately. Country is always
+//       // "India" and is never stored — every tour/traveller here is
+//       // domestic, so it's just shown as a fixed label on the form.
+//       address: { type: String, default: "" },
+//       addressLine1: { type: String, default: "" },
+//       addressLine2: { type: String, default: "" },
+//       city: { type: String, default: "" },
+//       state: { type: String, default: "" },
+//       pincode: { type: String, default: "" },
+//       phone: { type: String, default: "" },
+//       // Not from OCR — the admin's own picks on the Aadhaar Upload page
+//       // (title, sharing type), carried alongside the OCR'd identity so a
+//       // saved aadhaarFront doc has the complete, admin-confirmed traveller.
+//       title: { type: String, default: "" },
+//       sharingType: { type: String, default: "" },
+//     },
+//     amount: { type: Number, default: null },
+//     // "paymentPartial" / "paymentBalance" docs only — the Payment Tasks
+//     // dashboard's manual "Mark Done" action sets this once the admin has
+//     // actually processed/reconciled that screenshot. Until then it shows
+//     // up as a pending task (with its amount + uploaded date/time). Advance
+//     // has no equivalent field here — that task is driven entirely off
+//     // tourBookingModel.payment.advance.paid, set by the EXISTING "mark
+//     // advance paid" action on the Tour Bookings page, so it clears on its
+//     // own without a separate mark-done step on this dashboard.
+//     taskCleared: { type: Boolean, default: false },
+//     url: {
+//       type: String,
+//       // Only aadhaarFront/aadhaarBack/payment* docs carry an uploaded
+//       // image — "bookingNotes" is plain typed text and "guestLink" is a
+//       // pure marker doc, neither has a file.
+//       required: function () {
+//         return this.type !== "bookingNotes" && this.type !== "guestLink";
+//       },
+//     },
+//     uploadedBy: {
+//       type: String,
+//       enum: ["user", "admin"],
+//       default: "admin",
+//     },
+ 
+//     // ── "bookingNotes" type only — admin-typed, free text, reference-only.
+//     // Never matched against the tour's own boardingPoints/deboardingPoints/
+//     // variantPackage/addons; the real booking's structured values are
+//     // picked separately on CreateBooking.jsx and saved to tourBookingModel.
+//     tourId: {
+//       type: mongoose.Schema.Types.ObjectId,
+//       ref: "tour",
+//       default: null,
+//     },
+//     packageType: { type: String, default: "" },
+//     // packageType (above) is only the display label ("Main Package" /
+//     // "Variant 2") shown on the card — it can't be matched back to a real
+//     // tour.variantPackage entry. packageKind + variantPackageIndex are the
+//     // MACHINE-READABLE pair used for that: packageKind is "main" or
+//     // "variant"; variantPackageIndex is that variant's array index on the
+//     // tour (null for "main"). Needed to compute this booking's real
+//     // package price (see computePackageAmount in aadhaarController.js) —
+//     // without the index, a variant package's price can't be looked up at
+//     // all since variants can have completely different pricing.
+//     packageKind: { type: String, enum: ["main", "variant", ""], default: "" },
+//     variantPackageIndex: { type: Number, default: null },
+//     boardingPoint: { type: String, default: "" },
+//     deboardingPoint: { type: String, default: "" },
+//     addons: { type: String, default: "" },
+//     // Structured, train/flight-wise breakdown of the same add-ons that
+//     // `addons` above flattens into one comma-joined string — e.g.
+//     // [{ label: "PUNE EXP (12345) - onward", name: "3AC Extra", amount: 500 }].
+//     // `addons` is kept for backward compatibility with bookings saved
+//     // before this field existed; the All Bookings card renders from
+//     // addonsDetail when present and falls back to the plain string
+//     // otherwise.
+//     addonsDetail: {
+//       type: [
+//         {
+//           label: { type: String, default: "" },
+//           name: { type: String, default: "" },
+//           amount: { type: Number, default: 0 },
+//           _id: false,
+//         },
+//       ],
+//       default: [],
+//     },
+//     remarks: { type: String, default: "" },
+//     // Which staff member actually raised/saved this booking — picked from
+//     // the Staff-Profile directory on the Save Booking form (type:
+//     // "bookingNotes" docs only). A plain name+employeeId snapshot, not a
+//     // ref — so the All Bookings card still shows who saved it even if that
+//     // staff profile is later renamed or deleted.
+//     raisedBy: {
+//       name: { type: String, default: "" },
+//       employeeId: { type: String, default: "" },
+//     },
+//   },
+//   { timestamps: true },
+// );
+ 
+// aadhaarSchema.index({ tnr: 1, type: 1 });
+// aadhaarSchema.index({ tourId: 1, type: 1 });
+// // groupId's index is already declared via `index: true` on the field above —
+// // no separate schema.index() needed (that was causing Mongoose's duplicate-
+// // index warning).
+ 
+// const aadhaarModel =
+//   mongoose.models.aadhaar || mongoose.model("aadhaar", aadhaarSchema);
+ 
+// export default aadhaarModel;
+ 
+import mongoose from "mongoose";
+ 
+const aadhaarSchema = new mongoose.Schema(
+  {
+    tnr: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      index: true,
+    },
+    // Ties together every doc created from ONE "Save Booking" click on the
+    // Aadhaar Upload page (aadhaarFront + aadhaarBack + paymentAdvance +
+    // bookingNotes), before a real tnr exists yet. The All Bookings page
+    // will fetch a walk-in booking's pieces by groupId; once it's actually
+    // created and gets a tnr, these docs get tnr/travellerId filled in too.
+    groupId: {
+      type: String,
+      index: true,
+      default: null,
+    },
+    travellerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null,
+    },
+    type: {
+      type: String,
+      enum: [
+        "aadhaarFront",
+        "aadhaarBack",
+        "paymentAdvance",
+        "paymentBalance",
+        "paymentPartial",
+        "bookingNotes", // Aadhaar Upload page's typed Package/Boarding/
+        // Deboarding/Add-ons/Remarks — saved here, NOT onto
+        // tourBookingModel. CreateBooking.jsx fills those properly via
+        // dropdowns against the tour's real data.
+        "guestLink", // Admin-only marker doc — no image, no OCR. Links 2+
+        // TNRs together as the SAME real guest (e.g. "Vishvanathan" on one
+        // booking, "Jeyandhi" on another — same person). Its tnr field
+        // holds ONE of the linked TNRs (the one this doc was created
+        // from); `guestTnrs` below holds the full linked group (including
+        // that same tnr). `remarks` doubles as this group's optional
+        // free-text label. Never written by OCR/upload flows — only by
+        // linkGuestTnr/unlinkGuestTnr.
+        "advanceTaskCleared", // Admin-only marker doc — no image, no OCR,
+        // just a plain to-do checkbox for the Payment Tasks dashboard's
+        // Advance card. Created ONLY by markAdvanceTaskDone when the admin
+        // manually ticks an Advance task "done" on that dashboard. Purely
+        // cosmetic bookkeeping for the dashboard's own list — it is NEVER
+        // read by, and never writes to, tourBookingModel.payment.advance
+        // or any other part of the real advance-payment flow (that stays
+        // exactly as it was: only "Mark Advance Paid" on the Tour Bookings
+        // page sets payment.advance.paid). One per tnr (upserted).
+      ],
+      required: true,
+    },
+    // Only set when type === "guestLink": every TNR (uppercased, deduped)
+    // that is the same real guest as this doc's own `tnr`. Kept as a flat
+    // array rather than a separate collection so "this booking's guest
+    // also has these other bookings" is just one more aadhaarModel query.
+    guestTnrs: { type: [String], default: undefined },
+    isCoTraveller: { type: Boolean, default: false },
+    // True only when this traveller (an aadhaarFront doc) was added via
+    // "Add Co-Traveller" on the All Bookings tab AFTER the group already
+    // had a tnr linked — i.e. added post-booking-creation, not part of the
+    // original Save Booking capture. Only postBooking:true travellers
+    // should ever show a "Raise Manage Booking" button — everyone who was
+    // already in the booking when it was created doesn't need one. Stays
+    // false forever for the original main/co-travellers, even after
+    // linkGroupTnr backfills `tnr` onto their docs later.
+    postBooking: { type: Boolean, default: false },
+    ocrText: { type: String, default: "" },
+    parsed: {
+      firstName: { type: String, default: "" },
+      lastName: { type: String, default: "" },
+      age: { type: Number, default: null },
+      dob: { type: String, default: "" },
+      gender: { type: String, default: "" },
+      // One combined line (kept for backward compatibility with bookings
+      // saved before the split fields below existed) plus the split-out
+      // fields the booking form now shows separately. Country is always
+      // "India" and is never stored — every tour/traveller here is
+      // domestic, so it's just shown as a fixed label on the form.
+      address: { type: String, default: "" },
+      addressLine1: { type: String, default: "" },
+      addressLine2: { type: String, default: "" },
+      city: { type: String, default: "" },
+      state: { type: String, default: "" },
+      pincode: { type: String, default: "" },
+      phone: { type: String, default: "" },
+      // Not from OCR — the admin's own picks on the Aadhaar Upload page
+      // (title, sharing type), carried alongside the OCR'd identity so a
+      // saved aadhaarFront doc has the complete, admin-confirmed traveller.
+      title: { type: String, default: "" },
+      sharingType: { type: String, default: "" },
+    },
+    amount: { type: Number, default: null },
+    // "paymentPartial" / "paymentBalance" docs only — the Payment Tasks
+    // dashboard's manual "Mark Done" action sets this once the admin has
+    // actually processed/reconciled that screenshot. Until then it shows
+    // up as a pending task (with its amount + uploaded date/time). Advance
+    // has no equivalent field here — that task is driven entirely off
+    // tourBookingModel.payment.advance.paid, set by the EXISTING "mark
+    // advance paid" action on the Tour Bookings page, so it clears on its
+    // own without a separate mark-done step on this dashboard.
+    taskCleared: { type: Boolean, default: false },
+    url: {
+      type: String,
+      default: "",
+      // No longer hard-required for any doc type, on request — a walk-in
+      // booking/traveller can now be saved before its Aadhaar photo is
+      // actually attached (added later from the All Bookings tab), rather
+      // than Mongoose rejecting the whole save over a missing image. The
+      // controller still writes "" rather than leaving this undefined, so
+      // every doc has a predictable string here to check against
+      // (`!doc.url` / `doc.url ? ... : ...`) instead of sometimes-string,
+      // sometimes-undefined.
+    },
+    uploadedBy: {
+      type: String,
+      enum: ["user", "admin"],
+      default: "admin",
+    },
+ 
+    // ── "bookingNotes" type only — admin-typed, free text, reference-only.
+    // Never matched against the tour's own boardingPoints/deboardingPoints/
+    // variantPackage/addons; the real booking's structured values are
+    // picked separately on CreateBooking.jsx and saved to tourBookingModel.
+    tourId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "tour",
+      default: null,
+    },
+    packageType: { type: String, default: "" },
+    // packageType (above) is only the display label ("Main Package" /
+    // "Variant 2") shown on the card — it can't be matched back to a real
+    // tour.variantPackage entry. packageKind + variantPackageIndex are the
+    // MACHINE-READABLE pair used for that: packageKind is "main" or
+    // "variant"; variantPackageIndex is that variant's array index on the
+    // tour (null for "main"). Needed to compute this booking's real
+    // package price (see computePackageAmount in aadhaarController.js) —
+    // without the index, a variant package's price can't be looked up at
+    // all since variants can have completely different pricing.
+    packageKind: { type: String, enum: ["main", "variant", ""], default: "" },
+    variantPackageIndex: { type: Number, default: null },
+    boardingPoint: { type: String, default: "" },
+    deboardingPoint: { type: String, default: "" },
+    addons: { type: String, default: "" },
+    // Structured, train/flight-wise breakdown of the same add-ons that
+    // `addons` above flattens into one comma-joined string — e.g.
+    // [{ label: "PUNE EXP (12345) - onward", name: "3AC Extra", amount: 500 }].
+    // `addons` is kept for backward compatibility with bookings saved
+    // before this field existed; the All Bookings card renders from
+    // addonsDetail when present and falls back to the plain string
+    // otherwise.
+    addonsDetail: {
+      type: [
+        {
+          label: { type: String, default: "" },
+          name: { type: String, default: "" },
+          amount: { type: Number, default: 0 },
+          _id: false,
+        },
+      ],
+      default: [],
+    },
+    remarks: { type: String, default: "" },
+    // Which staff member actually raised/saved this booking — picked from
+    // the Staff-Profile directory on the Save Booking form (type:
+    // "bookingNotes" docs only). A plain name+employeeId snapshot, not a
+    // ref — so the All Bookings card still shows who saved it even if that
+    // staff profile is later renamed or deleted.
+    raisedBy: {
+      name: { type: String, default: "" },
+      employeeId: { type: String, default: "" },
+    },
+  },
+  { timestamps: true },
+);
+ 
+aadhaarSchema.index({ tnr: 1, type: 1 });
+aadhaarSchema.index({ tourId: 1, type: 1 });
+// groupId's index is already declared via `index: true` on the field above —
+// no separate schema.index() needed (that was causing Mongoose's duplicate-
+// index warning).
+ 
+const aadhaarModel =
+  mongoose.models.aadhaar || mongoose.model("aadhaar", aadhaarSchema);
+ 
+export default aadhaarModel;

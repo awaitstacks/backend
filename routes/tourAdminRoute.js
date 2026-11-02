@@ -63,10 +63,12 @@ import {
 } from "../controllers/tourAdminController.js";
 // import authAdmin from "../middlewares/authAdmin.js";
 import authAdminStrict from "../middlewares/authAdmin.js";
-import { authAdminOrStaff } from "../middlewares/authStaff.js";
+// import { authAdminOrStaff } from "../middlewares/authStaff.js";
+import { authAdminOrStaff, forceRaisedByStaff } from "../middlewares/authStaff.js";
 import { tourUpload, queryUpload } from "../middlewares/multer.js";
 import { getAllEnquiries } from "../controllers/tourController.js";
 import { getPaymentTasks, markPaymentTaskDone } from "../controllers/aadhaarController.js";
+import { lookupTicketTnr, forceRaisedToFromTnr } from "../controllers/ticketTnrController.js";
 import { get } from "mongoose";
 // Admin + Staff. IT mattum routes ku authAdminStrict.
 const authAdmin = authAdminOrStaff();
@@ -196,8 +198,11 @@ touradminRouter.get("/query-types", authAdmin, getQueryTypes);
 touradminRouter.get("/queries/sync", authAdmin, getTourAdminQuerySync);
 touradminRouter.get("/queries/edit-history", authAdmin, getEditHistory);
 touradminRouter.get("/queries", authAdmin, getAdminQueries);
-touradminRouter.post("/queries", authAdmin, queryUpload, raiseQuery);
-touradminRouter.patch("/queries/:queryId", authAdmin, queryUpload, updateQuery);
+// touradminRouter.post("/queries", authAdmin, queryUpload, raiseQuery);
+touradminRouter.post("/queries", authAdmin, queryUpload, forceRaisedByStaff, forceRaisedToFromTnr, raiseQuery);
+touradminRouter.get("/queries/tnr-lookup/:tnr", authAdmin, lookupTicketTnr);
+// touradminRouter.patch("/queries/:queryId", authAdmin, queryUpload, updateQuery);
+touradminRouter.patch("/queries/:queryId", authAdmin, queryUpload, forceRaisedByStaff, forceRaisedToFromTnr, updateQuery);
 touradminRouter.delete("/queries/:queryId", authAdmin, deleteQuery);
 touradminRouter.patch("/queries/:queryId/reopen", authAdmin, reopenQuery);
 

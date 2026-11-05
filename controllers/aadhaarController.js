@@ -9434,6 +9434,17 @@ export const getAadhaarBookings = async (req, res) => {
         t.inRealBooking = !!realT;
 
         t.cancelStatus = status; // null | "request" | "rejected" | "cancelled"
+        // Yaaru request / approve / reject panna (frontend "Requested by / Approved by" box ku)
+        const rc = realT?.cancelled || {};
+        t.cancelInfo = status
+          ? {
+            status: status === "cancelled" ? "approved" : status === "request" ? "requested" : "rejected",
+            requestedBy: rc.requestedBy || cancelDoc?.requestedBy || null,
+            requestedAt: rc.requestedBy?.at || cancelDoc?.createdAt || null,
+            decidedBy: rc.decidedBy || cancelDoc?.decidedBy || null,
+            decidedAt: rc.decidedBy?.at || cancelDoc?.approvedAt || cancelDoc?.rejectedAt || null,
+          }
+          : null;
         // Aadhaar ZIP: only ACTIVE travellers — anyone with a cancellation
         // request, an approved cancellation or rejected by admin is left out.
         t.cancelled = status !== null;
@@ -10292,8 +10303,7 @@ export const searchUserBookings = async (req, res) => {
     const cancellationDocs = tnrs.length
       ? await cancellationModel
         .find({ tnr: { $in: tnrs } })
-        .select("tnr travellerIds raisedBy approvedBy rejectedAt createdAt updatedAt approvedAt")
-        .sort({ createdAt: 1 })
+        .select("tnr travellerIds raisedBy approvedBy rejectedAt createdAt updatedAt approvedAt requestedBy decidedBy").sort({ createdAt: 1 })
         .lean()
       : [];
     const cancelDocByTnrTraveller = new Map();

@@ -44,6 +44,11 @@ const cancellationSchema = new mongoose.Schema(
     gvCancellationPool: { type: Number, required: false },
     irctcCancellationPool: { type: Number, required: false },
     remarkText: { type: String, required: false }, // optional: store remark text
+    requestedBy: { type: Object, default: null },  // yaaru raise panna
+    decidedBy: { type: Object, default: null },  // approve / reject — Approvals page ku apram
+    approvedAt: { type: Date, default: null },
+    rejectedAt: { type: Date, default: null },
+
   },
   { timestamps: true },
 );

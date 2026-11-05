@@ -12865,6 +12865,7 @@ import Query, { QUERY_STATUS, REPLY_FROM } from "../models/queryModel.js";
 import staffModel from "../models/staffProfileModel.js";
 import "../models/staffRoleModel.js";
 import { attachTnrDetails } from "./ticketTnrController.js";
+import whoRaised from "../utils/whoRaised.js"; // cancellation approve / reject yaaru panna
 
 // ── Staff portal helpers (tickets) ──
 // Staff details browser ku — name, role mattum (bank / Aadhaar illa)
@@ -13726,6 +13727,8 @@ const approveCancellation = async (req, res) => {
         }
 
         const normalizedTnr = tnr.trim().toUpperCase();
+        // Yaaru approve panna (Admin / Tour admin / Staff portal)
+        const decidedBy = await whoRaised(req);
 
         const cancellation = await cancellationModel
             .findOne({
@@ -13882,6 +13885,7 @@ Kindly reject this and raise new request`,
             const elemKey = `elem${i}`;
             setObj[`travellers.$[${elemKey}].cancelled.byAdmin`] = true;
             setObj[`travellers.$[${elemKey}].cancelled.cancelledAt`] = new Date();
+            setObj[`travellers.$[${elemKey}].cancelled.decidedBy`] = decidedBy;
 
             // Clear seat allocation
             setObj[`travellers.$[${elemKey}].seatNumber`] = null;
@@ -13934,7 +13938,7 @@ Kindly reject this and raise new request`,
         // Approve the cancellation record
         await cancellationModel.findByIdAndUpdate(
             cancellationId,
-            { approvedBy: true, approvedAt: new Date(), raisedBy: false },
+            { approvedBy: true, approvedAt: new Date(), raisedBy: false, decidedBy },
             { session },
         );
 
@@ -14029,6 +14033,7 @@ const rejectCancellation = async (req, res) => {
                 raisedBy: false,
                 approvedBy: false,
                 rejectedAt: new Date(),
+                decidedBy: await whoRaised(req), // yaaru reject panna
             },
             { session },
         );
@@ -15103,6 +15108,7 @@ const bookingRejectAdmin = async (req, res) => {
         }
 
         // Proceed with valid travellers
+        const rejectWho = await whoRaised(req, booking);
         let totalDeduction = 0;
         const rejectedTravellers = [];
 
@@ -15112,6 +15118,7 @@ const bookingRejectAdmin = async (req, res) => {
             if (idsSet.has(travellerIdStr)) {
                 traveller.cancelled.byAdmin = true;
                 traveller.cancelled.cancelledAt = new Date();
+                traveller.cancelled.decidedBy = rejectWho; // yaaru reject panna
 
                 rejectedTravellers.push(traveller);
 
@@ -18175,7 +18182,10 @@ async function buildQueryFilter(q = {}) {
     const toStaff = [...to, ...(await staffIdsInRoles(toDept))];
     and.push({ $or: [{ raisedTo: { $in: toStaff } }, ...(toDept.length ? [{ raisedToRole: { $in: toDept } }] : [])] });
   }
-
+  // Booking TNR (exact) — Tour Bookings page la andha booking oda tickets
+  const tnrList = csvList(q.tnr).map((t) => t.toUpperCase());
+  if (tnrList.length === 1) filter.tnr = tnrList[0];
+  else if (tnrList.length) filter.tnr = { $in: tnrList };
   if (q.ticketNo?.trim()) filter.ticketNo = new RegExp(escapeRegex(q.ticketNo.trim()), "i");
   if (q.subject?.trim()) {
     const rx = new RegExp(escapeRegex(q.subject.trim()), "i");

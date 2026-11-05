@@ -17,6 +17,7 @@ import Query from "../models/queryModel.js";
 import aadhaarModel from "../models/aadhaarModel.js"; // add to top imports
 import userModel from "../models/userModel.js";
 import bcrypt from "bcrypt";
+import whoRaised from "../utils/whoRaised.js"; // cancellation request yaaru raise panna
 
 import {
   fetchQueries,
@@ -558,6 +559,27 @@ const bookingsTour = async (req, res) => {
       return acc;
     }, {});
 
+    // Yaaru request / approve / reject panna — ellaa records um (pending, rejected um)
+    const allCancelDocs = tnrs.length
+      ? await cancellationModel
+        .find({ tnr: { $in: tnrs } })
+        .select("tnr travellerIds raisedBy approvedBy rejectedAt approvedAt createdAt requestedBy decidedBy")
+        .sort({ createdAt: 1 })
+        .lean()
+      : [];
+    const cancelInfoByKey = new Map();
+    for (const c of allCancelDocs) {
+      for (const tid of c.travellerIds || []) {
+        cancelInfoByKey.set(`${c.tnr}::${tid}`, {
+          status: c.approvedBy ? "approved" : c.raisedBy ? "requested" : "rejected",
+          requestedAt: c.createdAt || null,
+          requestedBy: c.requestedBy || null,
+          decidedAt: c.approvedAt || c.rejectedAt || null,
+          decidedBy: c.decidedBy || null,
+        });
+      }
+    }
+
     const bookingsWithCancellation = bookings.map((b) => {
       const records = cancellationsByTnr[b.tnr] || [];
       const gvCancellationAmount = records.reduce(
@@ -579,6 +601,11 @@ const bookingsTour = async (req, res) => {
 
       return {
         ...b,
+        travellers: (b.travellers || []).map((t) => ({
+          ...t,
+          cancelInfo: cancelInfoByKey.get(`${b.tnr}::${t._id}`) || null,
+        })),
+
         cancellationSummary: {
           gvCancellationAmount: Number(gvCancellationAmount.toFixed(2)),
           irctcCancellationAmount: Number(irctcCancellationAmount.toFixed(2)),
@@ -872,10 +899,18 @@ const adminCancelTraveller = async (req, res) => {
       });
     }
 
+    // traveller.cancelled = {
+    //   ...traveller.cancelled,
+    //   byTraveller: true,
+    //   cancelledAt: new Date(),
+    // };
+
     traveller.cancelled = {
       ...traveller.cancelled,
       byTraveller: true,
       cancelledAt: new Date(),
+      // Yaaru, endha login la irundhu (Staff portal / Tour admin / Admin)
+      requestedBy: await whoRaised(req, bookingData),
     };
 
     await bookingData.save();

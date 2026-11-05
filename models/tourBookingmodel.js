@@ -219,6 +219,11 @@ const tourBookingSchema = new mongoose.Schema({
         // never persists — this is required for the trip-cancelled vs
         // proper-cancellation split in the analytics aggregations to work.
         viaTripCancel: { type: Boolean, default: false },
+        // Cancellation request YAARU raise panna — pazhaya travellers ku null
+        requestedBy: { type: Object, default: null },
+        // Approve / reject YAARU panna
+        decidedBy: { type: Object, default: null },
+
       },
     },
   ],

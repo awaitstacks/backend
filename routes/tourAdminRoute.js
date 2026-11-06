@@ -58,6 +58,8 @@ import {
   getStaffForQueries,
   getEditHistory,
   reopenQuery,
+  adminViewStaff,
+  adminViewEnquiries,
 
 
 } from "../controllers/tourAdminController.js";
@@ -192,6 +194,10 @@ touradminRouter.get(
   adminFetchTourVehicleSeatOverview,
 );
 touradminRouter.get("/staff/all", authAdmin, getStaffForQueries);
+
+// ── VIEW ONLY (Admin) — Staff Profile / FIT Enquiries list. Create / Edit / Delete illa. ──
+touradminRouter.get("/staff/view-all", authAdmin, adminViewStaff);
+touradminRouter.get("/enquiry/all", authAdmin, adminViewEnquiries);
 touradminRouter.get("/query-types", authAdmin, getQueryTypes);
 
 // Queries

@@ -83,6 +83,7 @@ import {
   adminCancelTraveller,
   closeEnquiry,
   reopenEnquiry,
+  cancelEnquiry,
 
 
 } from "../controllers/tourController.js";
@@ -135,7 +136,7 @@ tourRouter.post("/update-tour-balance/:tnr", authTour, updateTourBalance);
 tourRouter.post("/update-tour-advance/:tnr", authTour, updateTourAdvance);
 
 tourRouter.put("/mark-modify-receipt", authTour, updateModifyReceipt); // New route
-tourRouter.get("/view-booking-cancel/:tnr", viewBooking);
+tourRouter.get("/view-booking-cancel/:tnr", authTour, viewBooking);
 tourRouter.get("/invoice/:tnr", getBookingInvoice);// New route
 tourRouter.put("/invoice/:tnr", updateBookingInvoice);
 tourRouter.delete("/invoice/:tnr", deleteBookingInvoice);
@@ -286,6 +287,7 @@ tourRouter.patch("/queries/:queryId/close", authTour, closeQuery);
 tourRouter.patch("/queries/:queryId/reject", authTour, rejectQuery);
 tourRouter.put("/enquiry/:id/close",  authTour, closeEnquiry);
 tourRouter.put("/enquiry/:id/reopen", authTour, reopenEnquiry);
+tourRouter.put("/enquiry/:id/cancel", authTour, cancelEnquiry); // accepted trip cancel
 tourRouter.get("/queries/:queryId/replies", authTour, getAdminReplies);
 tourRouter.post("/queries/:queryId/replies", authTour, addAdminReply);
 tourRouter.patch("/queries/:queryId/replies/:replyId", authTour, editAdminReply);

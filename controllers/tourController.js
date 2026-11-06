@@ -2700,19 +2700,21 @@ const viewBooking = async (req, res) => {
     const { tnr } = req.params; // Changed from bookingId to tnr
     const tToken = req.header("ttoken");
 
-    if (!tToken) {
-      return res
-        .status(401)
-        .json({ success: false, message: "Not Authorized." });
-    }
+    // Staff portal → route la authTour already staff ah check pannidichu
+    if (req.userType !== "staff") {
+      if (!tToken) {
+        return res
+          .status(401)
+          .json({ success: false, message: "Not Authorized." });
+      }
 
-    let decoded;
-    try {
-      decoded = jwt.verify(tToken, process.env.JWT_SECRET);
-    } catch (error) {
-      return res
-        .status(401)
-        .json({ success: false, message: "Invalid token." });
+      try {
+        jwt.verify(tToken, process.env.JWT_SECRET);
+      } catch (error) {
+        return res
+          .status(401)
+          .json({ success: false, message: "Invalid token." });
+      }
     }
 
     // Validate TNR format (6 uppercase letters/digits)
@@ -2853,6 +2855,21 @@ const getCancellationsByBooking = async (req, res) => {
     });
   }
 };
+
+// Manage booking request YAARU, endha login la irundhu raise panna (Staff portal / Tour admin / Admin / Customer).
+// manageBookingModel schema la field illaadhaalum save aaga strict:false. Fail aanaalum request nikkaadhu.
+const stampManageRequestedBy = async (saved, req, booking) => {
+  try {
+    const who = await whoRaised(req, booking);
+    if (saved?._id && who) {
+      await manageBookingModel.updateOne({ _id: saved._id }, { $set: { requestedBy: who } }, { strict: false });
+    }
+  } catch (err) {
+    console.error("stampManageRequestedBy error:", err.message);
+  }
+};
+
+
 // const updateBookingBalance = async (req, res) => {
 //   try {
 //     const { bookingId } = req.params;
@@ -3406,6 +3423,7 @@ const updateBookingBalance = async (req, res) => {
       };
 
       const saved = await manageBookingModel.create(manageDoc);
+      await stampManageRequestedBy(saved, req, original); // yaaru raise panna
 
       console.log(
         "[CASE 5] Created manage doc with locked values → new _id:",
@@ -3700,6 +3718,7 @@ const updateBookingBalance = async (req, res) => {
     };
 
     const saved = await manageBookingModel.create(manageDoc);
+    await stampManageRequestedBy(saved, req, original); // yaaru raise panna
 
     console.log(`[SUCCESS] Manage booking created → _id: ${saved._id}`);
     console.log(
@@ -7146,6 +7165,18 @@ const updateEnquiry = async (req, res) => {
   try {
     const update = { ...req.body };
 
+    // Cancelled trip oda charge / reason — schema la illa, keezha thaniya save (strict:false)
+    const cancelFix = {};
+    if ("cancellationCharge" in update) {
+      const ch = Number(update.cancellationCharge);
+      if (Number.isFinite(ch) && ch >= 0) cancelFix.cancellationCharge = ch;
+      delete update.cancellationCharge;
+    }
+    if ("cancelReason" in update) {
+      cancelFix.cancelReason = String(update.cancelReason || "").trim();
+      delete update.cancelReason;
+    }
+
     if (update.status === "rejected") {
       const current = await enquiryModel.findById(req.params.id).select("status").lean();
       if (current && current.status !== "rejected") {
@@ -7160,6 +7191,18 @@ const updateEnquiry = async (req, res) => {
       { new: true, runValidators: false }
     );
     if (!enquiry) return res.status(404).json({ success: false, message: "Enquiry not found" });
+    // Cancelled aana trip na mattum charge / reason update + yaaru edit panna
+    if (Object.keys(cancelFix).length) {
+      const cur = await enquiryModel.findById(req.params.id).select("isCancelled cancellationCharge cancelReason").lean();
+      const changed = cur?.isCancelled && Object.keys(cancelFix).some((k) => String(cur[k] ?? "") !== String(cancelFix[k]));
+      if (changed) {
+        await enquiryModel.updateOne(
+          { _id: req.params.id },
+          { $set: { ...cancelFix, cancelEditedAt: new Date(), cancelEditedBy: await whoRaised(req) } },
+          { strict: false }
+        );
+      }
+    }
     return res.status(200).json({ success: true, message: "Enquiry updated successfully", data: enquiry });
   } catch (error) {
     return res.status(500).json({ success: false, message: "Internal server error", error: error.message });
@@ -7316,6 +7359,46 @@ const closeEnquiry = async (req, res) => {
 
     const updated = await enquiry.save({ validateBeforeSave: false });
     return res.status(200).json({ success: true, message: "Enquiry closed", data: updated });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "Internal server error", error: error.message });
+  }
+};
+// PUT /api/tour/enquiry/:id/cancel   body: { cancellationCharge, reason }
+// Accepted trip ah cancel panna. Charge mandatory (0 ok), reason optional.
+const cancelEnquiry = async (req, res) => {
+  try {
+    const enquiry = await enquiryModel.findById(req.params.id).lean();
+    if (!enquiry) return res.status(404).json({ success: false, message: "Enquiry not found" });
+    if (enquiry.status !== "accepted") {
+      return res.status(400).json({ success: false, message: "Only accepted enquiries can be cancelled" });
+    }
+    if (enquiry.isCancelled) {
+      return res.status(400).json({ success: false, message: "Enquiry already cancelled" });
+    }
+
+    const rawCharge = req.body?.cancellationCharge;
+    const charge = Number(rawCharge);
+    if (rawCharge === "" || rawCharge === null || rawCharge === undefined || !Number.isFinite(charge) || charge < 0) {
+      return res.status(400).json({ success: false, message: "Enter a valid cancellation charge (0 if none)" });
+    }
+    const reason = String(req.body?.reason || "").trim();
+
+    // strict:false → enquiryModel la field illaadhaalum save aagum (migration venaam)
+    const updated = await enquiryModel.findByIdAndUpdate(
+      req.params.id,
+      {
+        $set: {
+          isCancelled: true,
+          cancelledAt: new Date(),
+          cancellationCharge: charge,
+          cancelReason: reason,
+          cancelledBy: await whoRaised(req),
+        },
+      },
+      { new: true, strict: false }
+    ).lean();
+
+    return res.status(200).json({ success: true, message: "Trip cancelled", data: updated });
   } catch (error) {
     return res.status(500).json({ success: false, message: "Internal server error", error: error.message });
   }
@@ -7548,6 +7631,7 @@ export {
   rejectEnquiry,
   closeEnquiry,    // ← new
   reopenEnquiry,   // ← new
+  cancelEnquiry,   // accepted trip cancel
 
   getTourQueries,
   pickupQuery,

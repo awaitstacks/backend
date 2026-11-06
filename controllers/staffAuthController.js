@@ -37,9 +37,7 @@ const loginStaff = async (req, res) => {
 
     await staffModel.updateOne({ _id: staff._id }, { $set: { lastLogin: new Date() } });
 
-    const token = jwt.sign({ id: staff._id, type: "staff" }, process.env.STAFF_JWT_SECRET, {
-      expiresIn: "1d",
-    });
+    const token = jwt.sign({ id: staff._id, type: "staff" }, process.env.STAFF_JWT_SECRET);
 
     return res.status(200).json({
       success: true,

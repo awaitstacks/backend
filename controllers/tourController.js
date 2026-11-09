@@ -7069,6 +7069,59 @@ const getTourVehicleSeatOverview = async (req, res) => {
   }
 };
 
+// ══════════════════════════════════════════════════════════════════════════════
+// FIT Enquiry — oru oru action YAARU panna (login la irundhu).
+//   actionLog la { action, by, at } oru entry serkkum.
+// enquiryModel la field illaadhaalum strict:false la save aagum (migration venaam).
+// Fail aanaalum andha action nikkaadhu.
+// ══════════════════════════════════════════════════════════════════════════════
+const stampEnquiryAction = async (req, id, action, who = null) => {
+  try {
+    const by = who || (await whoRaised(req));
+    // Puthu field "actionLog" la mattum — pazhaya fields (raisedBy, acceptedAt…) edhaiyum thodaadhu
+    await enquiryModel.updateOne(
+      { _id: id },
+      { $push: { actionLog: { action, by, at: new Date() } } },
+      { strict: false }
+    );
+  } catch (err) {
+    console.error("stampEnquiryAction error:", err.message);
+  }
+};
+
+// PUT /api/tour/enquiry/:id/pickup
+// Pending enquiry ah oruthar pick up pannuvaanga. Oruthar pick pannitta innoruthar panna mudiyaadhu.
+const pickupEnquiry = async (req, res) => {
+  try {
+    const enquiry = await enquiryModel.findById(req.params.id).lean();
+    if (!enquiry) return res.status(404).json({ success: false, message: "Enquiry not found" });
+    if (enquiry.status !== "pending") {
+      return res.status(400).json({ success: false, message: "Only pending enquiries can be picked up" });
+    }
+    if (enquiry.isPickedUp) {
+      return res.status(409).json({ success: false, message: `Already picked up by ${enquiry.pickedUpBy?.name || "someone"}` });
+    }
+
+    const who = await whoRaised(req);
+    const at = new Date();
+    // Atomic — rendu peru ore neram click pannaalum oruthar ku mattum dhaan
+    const result = await enquiryModel.updateOne(
+      { _id: req.params.id, status: "pending", isPickedUp: { $ne: true } },
+      {
+        $set: { isPickedUp: true, pickedUpBy: who, pickedUpAt: at },
+        $push: { actionLog: { action: "pickedUp", by: who, at } },
+      },
+      { strict: false }
+    );
+    if (!result.modifiedCount) {
+      return res.status(409).json({ success: false, message: "Someone else just picked up this enquiry" });
+    }
+    return res.status(200).json({ success: true, message: `Picked up by ${who?.name || "you"}` });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "Internal server error", error: error.message });
+  }
+};
+
 
 const adminCreateEnquiry = async (req, res) => {
   try {
@@ -7096,6 +7149,7 @@ const adminCreateEnquiry = async (req, res) => {
       source: source || null,
       raisedBy: "admin",
     });
+    await stampEnquiryAction(req, enquiry._id, "created"); // yaaru raise panna
 
     return res.status(201).json({
       success: true,
@@ -7196,9 +7250,14 @@ const updateEnquiry = async (req, res) => {
       const cur = await enquiryModel.findById(req.params.id).select("isCancelled cancellationCharge cancelReason").lean();
       const changed = cur?.isCancelled && Object.keys(cancelFix).some((k) => String(cur[k] ?? "") !== String(cancelFix[k]));
       if (changed) {
+        const editBy = await whoRaised(req);
+        const editAt = new Date();
         await enquiryModel.updateOne(
           { _id: req.params.id },
-          { $set: { ...cancelFix, cancelEditedAt: new Date(), cancelEditedBy: await whoRaised(req) } },
+          {
+            $set: { ...cancelFix, cancelEditedAt: editAt, cancelEditedBy: editBy },
+            $push: { actionLog: { action: "cancelEdited", by: editBy, at: editAt } },
+          },
           { strict: false }
         );
       }
@@ -7244,6 +7303,7 @@ const toggleRatePassed = async (req, res) => {
 
     enquiry.isRatePassed = !enquiry.isRatePassed;
     const updated = await enquiry.save({ validateBeforeSave: false });
+    await stampEnquiryAction(req, enquiry._id, updated.isRatePassed ? "rateShared" : "rateCleared");
 
     return res.status(200).json({
       success: true,
@@ -7294,6 +7354,7 @@ const acceptEnquiry = async (req, res) => {
     enquiry.acceptedAt = new Date();
 
     const updated = await enquiry.save({ validateBeforeSave: false });
+    await stampEnquiryAction(req, enquiry._id, "accepted");
     return res.status(200).json({
       success: true,
       message: "Enquiry accepted successfully",
@@ -7335,6 +7396,7 @@ const rejectEnquiry = async (req, res) => {
     enquiry.rejectedAt = new Date();
 
     const updated = await enquiry.save({ validateBeforeSave: false });
+    await stampEnquiryAction(req, enquiry._id, "rejected");
     return res.status(200).json({ success: true, message: "Enquiry rejected", data: updated });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -7358,6 +7420,7 @@ const closeEnquiry = async (req, res) => {
     enquiry.closedAt = new Date();
 
     const updated = await enquiry.save({ validateBeforeSave: false });
+    await stampEnquiryAction(req, enquiry._id, "closed");
     return res.status(200).json({ success: true, message: "Enquiry closed", data: updated });
   } catch (error) {
     return res.status(500).json({ success: false, message: "Internal server error", error: error.message });
@@ -7384,16 +7447,19 @@ const cancelEnquiry = async (req, res) => {
     const reason = String(req.body?.reason || "").trim();
 
     // strict:false → enquiryModel la field illaadhaalum save aagum (migration venaam)
+    const who = await whoRaised(req);
+    const at = new Date();
     const updated = await enquiryModel.findByIdAndUpdate(
       req.params.id,
       {
         $set: {
           isCancelled: true,
-          cancelledAt: new Date(),
+          cancelledAt: at,
           cancellationCharge: charge,
           cancelReason: reason,
-          cancelledBy: await whoRaised(req),
+          cancelledBy: who,
         },
+        $push: { actionLog: { action: "cancelled", by: who, at } },
       },
       { new: true, strict: false }
     ).lean();
@@ -7423,6 +7489,7 @@ const reopenEnquiry = async (req, res) => {
     enquiry.skipAutoReject = true;
 
     const updated = await enquiry.save({ validateBeforeSave: false });
+    await stampEnquiryAction(req, enquiry._id, "reopened");
 
     const stageLabel =
       restoreTo === "accepted"
@@ -7632,6 +7699,7 @@ export {
   closeEnquiry,    // ← new
   reopenEnquiry,   // ← new
   cancelEnquiry,   // accepted trip cancel
+  pickupEnquiry,   // pending enquiry pick up
 
   getTourQueries,
   pickupQuery,

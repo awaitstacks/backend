@@ -84,6 +84,7 @@ import {
   closeEnquiry,
   reopenEnquiry,
   cancelEnquiry,
+  pickupEnquiry,
 
 
 } from "../controllers/tourController.js";
@@ -288,6 +289,7 @@ tourRouter.patch("/queries/:queryId/reject", authTour, rejectQuery);
 tourRouter.put("/enquiry/:id/close",  authTour, closeEnquiry);
 tourRouter.put("/enquiry/:id/reopen", authTour, reopenEnquiry);
 tourRouter.put("/enquiry/:id/cancel", authTour, cancelEnquiry); // accepted trip cancel
+tourRouter.put("/enquiry/:id/pickup", authTour, pickupEnquiry); // pending enquiry pick up
 tourRouter.get("/queries/:queryId/replies", authTour, getAdminReplies);
 tourRouter.post("/queries/:queryId/replies", authTour, addAdminReply);
 tourRouter.patch("/queries/:queryId/replies/:replyId", authTour, editAdminReply);

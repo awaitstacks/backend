@@ -795,6 +795,8 @@ import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
 import staffModel from "../models/staffProfileModel.js";
 import staffRoleModel from "../models/staffRoleModel.js";
+import Query from "../models/queryModel.js";
+import enquiryModel from "../models/enquiryModel.js";
 // ══════════════════════════════════════════════════════════════════════════════
 // STAFF PROFILES (admin only) — basic, contact & study details
 // ══════════════════════════════════════════════════════════════════════════════
@@ -968,7 +970,7 @@ const cleanupTempFiles = (req, res) => {
   ];
   if (!files.length) return;
   res.once("close", () => {
-    files.forEach((f) => fs.promises.unlink(f.path).catch(() => {}));
+    files.forEach((f) => fs.promises.unlink(f.path).catch(() => { }));
   });
 };
 
@@ -1109,7 +1111,7 @@ const getAllStaff = async (req, res) => {
   try {
     // Staff site (Raised by / Raised to dropdown): name + designation mattum,
     // bank / Aadhaar maari details staff ku anuppa koodadhu
-    if (req.userType === "staff") {
+    if (req.userType === "staff" && !(req.staff?.role?.tabs || []).includes("/staff-profile")) {
       const list = await staffModel
         .find({ status: { $ne: "Inactive" } })
         .select("fullName employeeId designation department status photo role")
@@ -1224,7 +1226,26 @@ const updateStaff = async (req, res) => {
 // ──────────────────────────────────────────────────────────────────────────────
 const deleteStaff = async (req, res) => {
   try {
-    const staff = await staffModel.findByIdAndDelete(req.params.id);
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: "Invalid staff id" });
+    }
+    const oid = new mongoose.Types.ObjectId(id);
+
+    // Ticket history (raised by / raised to) or picked-up enquiry irundhaa delete panna koodadhu
+    const hasTickets = await Query.exists({ $or: [{ raisedBy: oid }, { raisedTo: oid }] });
+    const hasEnquiries = await enquiryModel.collection.findOne(
+      { "pickedUpBy.staffId": { $in: [oid, id] } },
+      { projection: { _id: 1 } }
+    );
+    if (hasTickets || hasEnquiries) {
+      return res.status(409).json({
+        success: false,
+        message: "This staff member has tickets or enquiries in history. Mark them as Inactive (or turn off login) instead of deleting.",
+      });
+    }
+
+    const staff = await staffModel.findByIdAndDelete(id);
     if (!staff) return res.status(404).json({ success: false, message: "Staff not found" });
 
     if (staff.photo) await deleteStaffPhoto(staff.photo);
@@ -1237,10 +1258,47 @@ const deleteStaff = async (req, res) => {
   }
 };
 
+// ───────── ADD 2: paste this function just ABOVE "export {" at the bottom ─────────
+// GET /api/tour/staff/:id/open-work
+// Staff ah Inactive pannum bodhu — avanga kitta innum open ah irukura work.
+// GET /api/tour/staff/:id/open-work
+const getStaffOpenWork = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: "Invalid staff id" });
+    }
+    const oid = new mongoose.Types.ObjectId(id);
+
+    const tickets = await Query.find({ raisedTo: oid, status: { $nin: ["close", "reject"] } })
+      .select("ticketNo subject status tnr createdAt")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const enquiries = await enquiryModel.collection
+      .find(
+        { status: "pending", isPickedUp: true, "pickedUpBy.staffId": { $in: [oid, id] } },
+        { projection: { fullName: 1, fitCode: 1, destination: 1, pickedUpAt: 1 } }
+      )
+      .sort({ pickedUpAt: -1 })
+      .toArray();
+    const hasHistory =
+      !!(await Query.exists({ $or: [{ raisedBy: oid }, { raisedTo: oid }] })) ||
+      !!(await enquiryModel.collection.findOne({ "pickedUpBy.staffId": { $in: [oid, id] } }, { projection: { _id: 1 } }));
+
+    return res.status(200).json({ success: true, tickets, enquiries, total: tickets.length + enquiries.length, hasHistory });
+  } catch (error) {
+    console.error("getStaffOpenWork error:", error);
+    return res.status(500).json({ success: false, message: "Internal server error", error: error.message });
+  }
+};
+
 export {
   createStaff,
   getAllStaff,
   getStaffById,
   updateStaff,
   deleteStaff,
+  getStaffOpenWork,
+
 };

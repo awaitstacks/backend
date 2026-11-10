@@ -12867,6 +12867,7 @@ import "../models/staffRoleModel.js";
 import { attachTnrDetails } from "./ticketTnrController.js";
 import whoRaised from "../utils/whoRaised.js"; // cancellation approve / reject yaaru panna
 import enquiryModel from "../models/enquiryModel.js"; // Admin view only — FIT Enquiries
+import { attachBookedBy } from "../utils/bookedBy.js"; // Booked by — yaaru booking pottaanga
 
 // ── Staff portal helpers (tickets) ──
 // Staff details browser ku — name, role mattum (bank / Aadhaar illa)
@@ -13549,6 +13550,13 @@ const getBookings = async (req, res) => {
                 total: 0,
                 bookings: [],
             });
+        }
+
+        // Booked by — yaaru indha TNR booking pottaanga
+        try {
+            await attachBookedBy(bookings);
+        } catch (e) {
+            console.error("attachBookedBy error:", e.message); // fail aanaalum list varum
         }
 
         // Optional: Add quick stats
@@ -18240,8 +18248,9 @@ async function fetchQueries(reqQuery, req = null) {
     await ensureTicketNumbers();
     const filter = await buildQueryFilter(reqQuery);
     // Staff login la avanga tickets mattum (counts um adhe)
-    const scope = req ? staffTicketScope(req) : null;
-    if (scope) filter.$and = [...(filter.$and || []), scope];
+    // Tour Bookings / All Bookings page la TNR vachu kekkumbodhu (TnrTickets) — Tour Admin maadhiri
+    // andha TNR oda ellaa tickets um. Raise/View Tickets page la munnaadi maadhiriye staff scope.
+    const scope = req && !reqQuery.tnr ? staffTicketScope(req) : null; if (scope) filter.$and = [...(filter.$and || []), scope];
     const page = Math.max(parseInt(reqQuery.page) || 1, 1);
     const limit = Math.min(Math.max(parseInt(reqQuery.limit) || 20, 1), 100);
 
@@ -19305,7 +19314,7 @@ const reopenQuery = async (req, res) => {
 const adminViewStaff = async (req, res) => {
     try {
         // Staff portal la irundhu vandhaa bank / Aadhaar maari details anuppa koodaadhu
-        if (req.userType === "staff") {
+        if (req.userType === "staff" && !(req.staff?.role?.tabs || []).some((t) => ["/admin-staff-view", "/staff-profile"].includes(t))) {
             const list = await staffModel
                 .find({ status: { $ne: "Inactive" } })
                 .select("fullName employeeId designation department status photo")

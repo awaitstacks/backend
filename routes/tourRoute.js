@@ -91,12 +91,13 @@ import {
 // import authTour from "../middlewares/authTour.js";
 import authTourStrict from "../middlewares/authTour.js";
 
-import { authTourOrStaff, forceRaisedByStaff, stampStaffRaisedBy } from "../middlewares/authStaff.js";import { tourUpload } from "../middlewares/multer.js";
+import { authTourOrStaff, forceRaisedByStaff, stampStaffRaisedBy } from "../middlewares/authStaff.js"; import { tourUpload } from "../middlewares/multer.js";
 import { paymentQrUpload, staffPhotoUpload, queryUpload, aadhaarUpload, paymentScreenshotUpload } from "../middlewares/multer.js";
 import cancelBookingController from "../controllers/cancelController.js";
 import { extractAadhaar, uploadPaymentScreenshot, saveBookingNotes, saveAadhaarUpload, getAadhaarBookings, addCoTraveller, uploadGroupPayment, linkGroupTnr, editAadhaarTraveller, deleteAadhaarTraveller, linkGuestTnr, unlinkGuestTnr, deleteGroupPayment, getPaymentTasks, markPaymentTaskDone, searchUserBookings, uploadUserTravellerAadhaar, uploadUserBookingPayment, exportActiveTravellersPdfData, getPaymentRecords } from "../controllers/aadhaarController.js";
 import {
   createStaff, getAllStaff, getStaffById, updateStaff, deleteStaff,
+  getStaffOpenWork,
 } from "../controllers/staffController.js";
 import {
   getRoles, createRole, updateRole, deleteRole,
@@ -263,17 +264,18 @@ tourRouter.put('/enquiry/:id/reject', authTour, rejectEnquiry);
 // tourRouter.put('/staff-roles/:id', authTour, updateRole);
 // tourRouter.delete('/staff-roles/:id', authTour, deleteRole);
 
-tourRouter.post('/staff/create', authTourStrict, staffPhotoUpload, createStaff);
+// Staff Profile / Staff Roles — Tour Admin + andha tab kudutha staff
+tourRouter.post('/staff/create', authTourOrStaff("/staff-profile"), staffPhotoUpload, createStaff);
 // tourRouter.get('/staff/all', authTourStrict, getAllStaff);
 tourRouter.get('/staff/all', authTour, getAllStaff);
-tourRouter.get('/staff/:id', authTourStrict, getStaffById);
-tourRouter.put('/staff/:id/update', authTourStrict, staffPhotoUpload, updateStaff);
-tourRouter.delete('/staff/:id/delete', authTourStrict, deleteStaff);
-tourRouter.get('/staff-roles', authTourStrict, getRoles);
-tourRouter.post('/staff-roles', authTourStrict, createRole);
-tourRouter.put('/staff-roles/:id', authTourStrict, updateRole);
-tourRouter.delete('/staff-roles/:id', authTourStrict, deleteRole);
-
+tourRouter.get('/staff/:id/open-work', authTourOrStaff("/staff-profile"), getStaffOpenWork);
+tourRouter.get('/staff/:id', authTourOrStaff("/staff-profile"), getStaffById);
+tourRouter.put('/staff/:id/update', authTourOrStaff("/staff-profile"), staffPhotoUpload, updateStaff);
+tourRouter.delete('/staff/:id/delete', authTourOrStaff("/staff-profile"), deleteStaff);
+tourRouter.get('/staff-roles', authTour, getRoles); // list for all staff (role dropdown)
+tourRouter.post('/staff-roles', authTourOrStaff("/staff-roles"), createRole);
+tourRouter.put('/staff-roles/:id', authTourOrStaff("/staff-roles"), updateRole);
+tourRouter.delete('/staff-roles/:id', authTourOrStaff("/staff-roles"), deleteRole);
 tourRouter.get("/queries/sync", authTour, getAdminQuerySync);
 tourRouter.get("/queries", authTour, getTourQueries);
 // ← puthusu: tour admin raise (tourRoute.js top la: import { queryUpload } from "../middlewares/multer.js";)
@@ -286,7 +288,7 @@ tourRouter.patch("/queries/:queryId/pickup", authTour, pickupQuery);
 tourRouter.patch("/queries/:queryId/processing", authTour, processQuery);
 tourRouter.patch("/queries/:queryId/close", authTour, closeQuery);
 tourRouter.patch("/queries/:queryId/reject", authTour, rejectQuery);
-tourRouter.put("/enquiry/:id/close",  authTour, closeEnquiry);
+tourRouter.put("/enquiry/:id/close", authTour, closeEnquiry);
 tourRouter.put("/enquiry/:id/reopen", authTour, reopenEnquiry);
 tourRouter.put("/enquiry/:id/cancel", authTour, cancelEnquiry); // accepted trip cancel
 tourRouter.put("/enquiry/:id/pickup", authTour, pickupEnquiry); // pending enquiry pick up

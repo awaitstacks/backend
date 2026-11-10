@@ -86,7 +86,8 @@ touradminRouter.post("/generate-missing-tnrs", authAdminStrict, generateMissingT
 
 touradminRouter.post("/reject-bookingadmin", authAdmin, bookingRejectAdmin);
 // touradminRouter.post("/delete-booking", authAdmin, deleteBookingByTNR);
-touradminRouter.post("/delete-booking", authAdminStrict, deleteBookingByTNR);
+// touradminRouter.post("/delete-booking", authAdminStrict, deleteBookingByTNR);
+touradminRouter.post("/delete-booking", authAdmin, deleteBookingByTNR);
 touradminRouter.post("/release-bookingadmin", authAdmin, bookingRelease);
 touradminRouter.post(
   "/change-touravailablity",
@@ -139,33 +140,6 @@ touradminRouter.get("/analytics-month-wise", authAdmin, getAnalyticsMonthWise);
 touradminRouter.get("/analytics-cancellation", authAdmin, getAnalyticsCancellation);
 touradminRouter.get("/analytics-tour-list", authAdmin, getAnalyticsTourList);
 touradminRouter.get("/analytics-search", authAdmin, searchAnalyticsTours);
-// TEMP DEBUG — remove after testing
-touradminRouter.get("/analytics-cancel-debug", async (req, res) => {
-  try {
-    const data = await tourBookingModel.aggregate([
-      { $unwind: "$travellers" },
-      {
-        $match: {
-          "travellers.cancelled.byAdmin": true,
-          "travellers.cancelled.byTraveller": true,
-        }
-      },
-      {
-        $project: {
-          tnr: 1,
-          cancelledAt: "$travellers.cancelled.cancelledAt",
-          gvPool: "$gvCancellationPool",
-          irctcPool: "$irctcCancellationPool",
-        }
-      }
-    ]);
-    res.json({ count: data.length, data });
-  } catch (e) {
-    res.json({ error: e.message });
-  }
-});
-
-
 touradminRouter.post("/:tourId/vehicles", authAdmin, adminCreateTourVehicle);
 
 touradminRouter.patch(

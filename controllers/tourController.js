@@ -579,6 +579,45 @@ const bookingsTour = async (req, res) => {
         });
       }
     }
+    const notesRaisedByTnr = new Map();
+    if (tnrs.length) {
+      const tnrDocs = await aadhaarModel
+        .find({ tnr: { $in: tnrs }, groupId: { $ne: null } })
+        .select("tnr groupId")
+        .lean();
+      const tnrByGroup = new Map(tnrDocs.map((d) => [String(d.groupId), d.tnr]));
+      if (tnrByGroup.size) {
+        const notesDocs = await aadhaarModel
+          .find({ type: "bookingNotes", groupId: { $in: [...tnrByGroup.keys()] } })
+          .select("groupId raisedBy createdAt")
+          .lean();
+        for (const n of notesDocs) {
+          const t = tnrByGroup.get(String(n.groupId));
+          if (t && n.raisedBy?.name && !notesRaisedByTnr.has(t)) {
+            notesRaisedByTnr.set(t, {
+              type: "staff",
+              name: n.raisedBy.name,
+              employeeId: n.raisedBy.employeeId || "",
+              at: n.createdAt || null,
+            });
+          }
+        }
+      }
+    }
+    const bookedByFor = (b) => {
+      if (b.createdBy === "user") {
+        return {
+          type: "user",
+          name: b.userData?.name || b.userId?.name || "",
+          email: b.userData?.email || b.userId?.email || "",
+          at: b.bookingDate || null,
+        };
+      }
+      if (b.createdByWho?.name || b.createdByWho?.type) return b.createdByWho;
+      if (notesRaisedByTnr.has(b.tnr)) return notesRaisedByTnr.get(b.tnr);
+      return { type: "admin", name: "Admin", unknown: true, at: b.bookingDate || null };
+    };
+
 
     const bookingsWithCancellation = bookings.map((b) => {
       const records = cancellationsByTnr[b.tnr] || [];
@@ -601,6 +640,7 @@ const bookingsTour = async (req, res) => {
 
       return {
         ...b,
+        bookedBy: bookedByFor(b),
         travellers: (b.travellers || []).map((t) => ({
           ...t,
           cancelInfo: cancelInfoByKey.get(`${b.tnr}::${t._id}`) || null,
@@ -792,6 +832,12 @@ const adminAddBooking = async (req, res) => {
       bookingDate: new Date(),
       createdBy: "admin",
     }); await newBooking.save();
+    // Yaaru login la irundhu manual booking pottaanga (staff / tour admin) — strict:false, migration venaam
+    const createdWho = await whoRaised(req);
+    if (createdWho) {
+      await tourBookingModel.updateOne({ _id: newBooking._id }, { $set: { createdByWho: createdWho } }, { strict: false });
+    }
+
 
     // Aadhaar docs, now that travellers have real _ids
     await Promise.all(newBooking.travellers.map(async (t, i) => {
@@ -5031,6 +5077,42 @@ const getAvailableTourYears = async (req, res) => {
     });
   }
 };
+// ── Booking yaaru pottaanga (Booked by) — All Bookings (admin) page ku ──
+const attachBookedBy = async (bookings) => {
+  const tnrs = bookings.map((b) => b.tnr).filter(Boolean);
+  const notesRaisedByTnr = new Map();
+  if (tnrs.length) {
+    const tnrDocs = await aadhaarModel
+      .find({ tnr: { $in: tnrs }, groupId: { $ne: null } })
+      .select("tnr groupId")
+      .lean();
+    const tnrByGroup = new Map(tnrDocs.map((d) => [String(d.groupId), d.tnr]));
+    if (tnrByGroup.size) {
+      const notesDocs = await aadhaarModel
+        .find({ type: "bookingNotes", groupId: { $in: [...tnrByGroup.keys()] } })
+        .select("groupId raisedBy createdAt")
+        .lean();
+      for (const n of notesDocs) {
+        const t = tnrByGroup.get(String(n.groupId));
+        if (t && n.raisedBy?.name && !notesRaisedByTnr.has(t)) {
+          notesRaisedByTnr.set(t, { type: "staff", name: n.raisedBy.name, employeeId: n.raisedBy.employeeId || "", at: n.createdAt || null });
+        }
+      }
+    }
+  }
+  for (const b of bookings) {
+    if (b.createdBy === "user") {
+      b.bookedBy = { type: "user", name: b.userData?.name || b.userId?.name || "", email: b.userData?.email || b.userId?.email || "", at: b.bookingDate || null };
+    } else if (b.createdByWho?.name || b.createdByWho?.type) {
+      b.bookedBy = b.createdByWho;
+    } else if (notesRaisedByTnr.has(b.tnr)) {
+      b.bookedBy = notesRaisedByTnr.get(b.tnr);
+    } else {
+      b.bookedBy = { type: "admin", name: "Admin", unknown: true, at: b.bookingDate || null };
+    }
+  }
+  return bookings;
+};
 
 // Get ALL bookings (no tourId filter)
 const getAllBookings = async (req, res) => {
@@ -5057,6 +5139,12 @@ const getAllBookings = async (req, res) => {
         total: 0,
         bookings: [],
       });
+    }
+    // Booked by — yaaru indha TNR booking pottaanga
+    try {
+      await attachBookedBy(bookings);
+    } catch (e) {
+      console.error("attachBookedBy error:", e.message); // fail aanaalum list varum
     }
 
     // Optional: Add quick stats

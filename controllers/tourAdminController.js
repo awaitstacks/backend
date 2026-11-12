@@ -12872,7 +12872,7 @@ import { attachBookedBy } from "../utils/bookedBy.js"; // Booked by — yaaru bo
 // ── Staff portal helpers (tickets) ──
 // Staff details browser ku — name, role mattum (bank / Aadhaar illa)
 const STAFF_PUBLIC = {
-    select: "fullName employeeId designation department staffType photo role",
+    select: "fullName employeeId designation department staffType photo role status loginEnabled",
     populate: { path: "role", select: "name" },
 };
 const isStaffReq = (req) => req.userType === "staff" && !!req.staff;
@@ -12891,19 +12891,26 @@ const normTnr = (v) => String(v || "").trim().toUpperCase().slice(0, 12);
 const STAFF_TICKETS_FROM = process.env.STAFF_TICKETS_FROM
     ? new Date(`${process.env.STAFF_TICKETS_FROM}T00:00:00+05:30`)
     : null;
-const staffTicketScope = (req) =>
-    isStaffReq(req)
-        ? {
-            raisedByStaffLogin: true,
-            ...(STAFF_TICKETS_FROM ? { createdAt: { $gte: STAFF_TICKETS_FROM } } : {}),
-            $or: [
-                { raisedBy: req.staff._id },
-                { raisedTo: req.staff._id },
-                // Team ku raise aagi innum yaarum pick pannaadhadhu — andha team la ellarukkum
-                ...(staffRoleId(req) ? [{ raisedTo: null, raisedToRole: staffRoleId(req) }] : []),
-            ],
-        }
-        : null;
+const staffTicketScope = (req) => {
+    if (!isStaffReq(req)) return null;
+    const me = req.staff._id;
+    const role = staffRoleId(req);
+    const toMe = [{ raisedTo: me }, ...(role ? [{ raisedTo: null, raisedToRole: role }] : [])];
+    return {
+        $or: [
+            // Staff portal la raise aanadhu — naan raise pannadhu / enakku vandhadhu
+            {
+                raisedByStaffLogin: true,
+                ...(STAFF_TICKETS_FROM ? { createdAt: { $gte: STAFF_TICKETS_FROM } } : {}),
+                $or: [{ raisedBy: me }, ...toMe],
+            },
+            // Forward aagi enakku / en team ku vandhadhu
+            { delegatedCount: { $gt: 0 }, $or: toMe },
+            // Naan forward panna ticket — status paakka
+            { "delegations.from.staffId": me },
+        ],
+    };
+};
 // Staff: avanga reply mattum. Admin / Tour admin: avanga side reply, staff reply illa
 const canTouchReply = (req, reply, from) =>
     isStaffReq(req)
@@ -18244,13 +18251,14 @@ async function ensureTicketNumbers() {
     ticketsBackfilled = true;
 }
 
-async function fetchQueries(reqQuery, req = null) {
+async function fetchQueries(reqQuery, req = null, extraFilter = null) {
     await ensureTicketNumbers();
     const filter = await buildQueryFilter(reqQuery);
     // Staff login la avanga tickets mattum (counts um adhe)
     // Tour Bookings / All Bookings page la TNR vachu kekkumbodhu (TnrTickets) — Tour Admin maadhiri
     // andha TNR oda ellaa tickets um. Raise/View Tickets page la munnaadi maadhiriye staff scope.
     const scope = req && !reqQuery.tnr ? staffTicketScope(req) : null; if (scope) filter.$and = [...(filter.$and || []), scope];
+    if (extraFilter) filter.$and = [...(filter.$and || []), extraFilter]; // Assigned to me / Raised by me
     const page = Math.max(parseInt(reqQuery.page) || 1, 1);
     const limit = Math.min(Math.max(parseInt(reqQuery.limit) || 20, 1), 100);
 
@@ -18391,6 +18399,15 @@ async function raiseQueryCore(req, res, via = "admin") {
         if (req.body.raisedToRole && isStaffReq(req) && !raisedToRole) {
             return res.status(400).json({ success: false, message: "Choose a valid team" });
         }
+        if (raisedToRole) {
+            const others = await staffModel.countDocuments({
+                role: raisedToRole, status: { $ne: "Inactive" }, loginEnabled: true,
+                _id: { $ne: raisedBy },
+            });
+            if (!others) {
+                return res.status(400).json({ success: false, message: "No one else in this team is active right now — choose a person instead." });
+            }
+        }
         const raisedTo = raisedToRole ? null : req.body.raisedTo;
 
         // ── Field validation ──
@@ -18410,6 +18427,16 @@ async function raiseQueryCore(req, res, via = "admin") {
                 success: false,
                 message: "Raised by and raised to can't be the same staff",
             });
+        }
+        // Raised to — Active + login ON staff mattum (velaya vittu ponavanga / login off ku ticket illa)
+        if (raisedTo) {
+            const toStaff = await mongoose.model("staff").findById(raisedTo).select("fullName status loginEnabled").lean();
+            if (!toStaff || toStaff.status === "Inactive" || !toStaff.loginEnabled) {
+                return res.status(400).json({
+                    success: false,
+                    message: `${toStaff?.fullName || "This staff member"} is inactive or their login is off — raise the ticket to someone else.`,
+                });
+            }
         }
 
         // ── File validation (upload pannura munnadiye) ──
@@ -18549,7 +18576,7 @@ async function updateQueryCore(req, res, by = "admin", onlyOwn = false) {
         // Staff: Raised by = avanga (employee / staff profile match) na mattum. Admin / Tour admin: pazhaya maari
         const ownTicket = isStaffReq(req)
             ? String(query.raisedBy) === String(req.staff._id) // Raised by = indha staff na avanga ticket
-            : (query.raisedVia || "admin") === by; // Admin / Tour admin: pazhaya rule
+            : (query.raisedVia || "admin") === by && !(by === "touradmin" && query.raisedByStaffLogin); // Tour admin: staff portal ticket avangaladhu illa
         if ((onlyOwn || isStaffReq(req)) && !ownTicket) {
             return res.status(403).json({
                 success: false,
@@ -18624,6 +18651,16 @@ async function updateQueryCore(req, res, by = "admin", onlyOwn = false) {
                     return res
                         .status(400)
                         .json({ success: false, message: "Invalid raisedTo ID" });
+                }
+                // Pudhu aal ku maathuna — Active + login ON ah irukkanum
+                if (String(raisedTo) !== String(query.raisedTo || "")) {
+                    const toStaff = await mongoose.model("staff").findById(raisedTo).select("fullName status loginEnabled").lean();
+                    if (!toStaff || toStaff.status === "Inactive" || !toStaff.loginEnabled) {
+                        return res.status(400).json({
+                            success: false,
+                            message: `${toStaff?.fullName || "This staff member"} is inactive or their login is off — choose someone else.`,
+                        });
+                    }
                 }
                 query.raisedTo = raisedTo;
             }
@@ -18882,6 +18919,7 @@ async function deleteQueryCore(req, res, onlyVia = null) {
         const match = { _id: queryId, status: { $nin: ["close", "reject"] } };
         // Pazhaya queries la raisedVia illa — adhu admin raise pannadhu
         if (onlyVia) match.raisedVia = onlyVia === "admin" ? { $in: ["admin", null] } : onlyVia;
+        if (onlyVia === "touradmin" && !isStaffReq(req)) match.raisedByStaffLogin = { $ne: true }; // Tour admin: staff portal ticket delete panna koodadhu
         if (isStaffReq(req)) {
             // Staff: Raised by = avanga na delete pannalaam (endha page la irundhu raise aanaalum)
             delete match.raisedVia;
@@ -18890,13 +18928,13 @@ async function deleteQueryCore(req, res, onlyVia = null) {
         }
         const query = await Query.findOneAndDelete(match).lean();
         if (!query) {
-            const exists = await Query.findById(queryId).select("status raisedVia").lean();
+            const exists = await Query.findById(queryId).select("status raisedVia raisedByStaffLogin").lean();
             if (!exists) {
                 return res
                     .status(404)
                     .json({ success: false, message: "Query not found" });
             }
-            if (onlyVia && (exists.raisedVia || "admin") !== onlyVia) {
+            if (onlyVia && ((exists.raisedVia || "admin") !== onlyVia || (onlyVia === "touradmin" && !isStaffReq(req) && exists.raisedByStaffLogin))) {
                 return res.status(403).json({
                     success: false,
                     message: "You can only delete tickets you raised",
@@ -19278,7 +19316,7 @@ const reopenQuery = async (req, res) => {
 
         // Atomic — close la irundha mattum dhaan open aagum
         const updated = await Query.findOneAndUpdate(
-            { _id: queryId, status: { $in: ["close", "reject"] } },
+            { _id: queryId, status: "reject" }, // Rejected mattum — Closed reopen aagaadhu
             { $set: { status: "open", reopenedAt: new Date() }, $inc: { reopenCount: 1 } },
             { new: true },
         )
@@ -19294,7 +19332,9 @@ const reopenQuery = async (req, res) => {
             }
             return res.status(400).json({
                 success: false,
-                message: "Only closed or rejected queries can be reopened",
+                message: current.status === "close"
+                    ? "Closed tickets can't be reopened. Only rejected tickets can."
+                    : "Only rejected tickets can be reopened.",
             });
         }
 

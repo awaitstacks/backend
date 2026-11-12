@@ -1114,7 +1114,7 @@ const getAllStaff = async (req, res) => {
     if (req.userType === "staff" && !(req.staff?.role?.tabs || []).includes("/staff-profile")) {
       const list = await staffModel
         .find({ status: { $ne: "Inactive" } })
-        .select("fullName employeeId designation department status photo role")
+        .select("fullName employeeId designation department status photo role loginEnabled")
         .populate("role", "name") // Raised to dropdown role wise group ku
         .collation({ locale: "en", strength: 2 })
         .sort({ employeeId: 1 });

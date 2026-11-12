@@ -85,6 +85,8 @@ import {
   reopenEnquiry,
   cancelEnquiry,
   pickupEnquiry,
+  reopenTourQuery,
+  delegateTourQuery,
 
 
 } from "../controllers/tourController.js";
@@ -288,6 +290,8 @@ tourRouter.patch("/queries/:queryId/pickup", authTour, pickupQuery);
 tourRouter.patch("/queries/:queryId/processing", authTour, processQuery);
 tourRouter.patch("/queries/:queryId/close", authTour, closeQuery);
 tourRouter.patch("/queries/:queryId/reject", authTour, rejectQuery);
+tourRouter.patch("/queries/:queryId/reopen", authTour, reopenTourQuery);
+tourRouter.patch("/queries/:queryId/delegate", authTour, delegateTourQuery);
 tourRouter.put("/enquiry/:id/close", authTour, closeEnquiry);
 tourRouter.put("/enquiry/:id/reopen", authTour, reopenEnquiry);
 tourRouter.put("/enquiry/:id/cancel", authTour, cancelEnquiry); // accepted trip cancel

@@ -192,6 +192,18 @@ const enquirySchema = new mongoose.Schema(
       default: "user",
     },
     acceptedAt: { type: Date, default: null },
+
+    // ── Pickup / Zone / Forward (FIT flow) ──
+    // Munnaadi strict:false la save aanadhu — ippo schema la (filter / query la work aaga)
+    isPickedUp: { type: Boolean, default: false },
+    pickedUpBy: { type: mongoose.Schema.Types.Mixed, default: null }, // { type, staffId, name, employeeId, role }
+    pickedUpAt: { type: Date, default: null },
+    zone: { type: mongoose.Schema.Types.Mixed, default: null }, // { zoneId, name, states } — pickup la select panna zone
+    owner: { type: mongoose.Schema.Types.Mixed, default: null }, // ippo yaar kitta: staff { staffId… } / team { teamId, name } / touradmin
+    delegations: { type: [mongoose.Schema.Types.Mixed], default: [] }, // Forward history
+    delegatedCount: { type: Number, default: 0 },
+    delegatedAt: { type: Date, default: null },
+    actionLog: { type: [mongoose.Schema.Types.Mixed], default: [] }, // yaaru enna panna
   },
   { timestamps: true }
 );
@@ -247,3 +259,22 @@ enquirySchema.pre("save", async function (next) {
 
 const enquiryModel = mongoose.models.enquiry || mongoose.model("enquiry", enquirySchema);
 export default enquiryModel;
+
+// ══════════════════════════════════════════════════════════════
+// FIT Zone — pala states serndha oru group (Zone 1, Zone 2 …).
+// Thani file venaam nu inga ye. Pickup pannumbodhu indha zone la onnu select pannanum.
+//   import enquiryModel, { fitZoneModel } from "../models/enquiryModel.js";
+// ══════════════════════════════════════════════════════════════
+const fitZoneSchema = new mongoose.Schema(
+  {
+    seq: { type: Number, required: true, unique: true }, // Zone 1 → 1, Zone 2 → 2
+    name: { type: String, required: true, trim: true }, // "Zone 1"
+    states: { type: [String], default: [] },
+    // State wise districts: { "Tamil Nadu": ["Chennai", "Madurai"] } — state illana / [] na andha state full ah
+    districts: { type: mongoose.Schema.Types.Mixed, default: {} },
+    createdBy: { type: mongoose.Schema.Types.Mixed, default: null },
+    updatedBy: { type: mongoose.Schema.Types.Mixed, default: null },
+  },
+  { timestamps: true }
+);
+export const fitZoneModel = mongoose.models.fitzone || mongoose.model("fitzone", fitZoneSchema);

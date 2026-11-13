@@ -107,10 +107,18 @@ import {
 import { lookupTicketTnr, forceRaisedToFromTnr } from "../controllers/ticketTnrController.js";
 
 import { get } from "mongoose";
-// Tour Admin + Staff. HR mattum routes ku authTourStrict.
+import {
+  getAllEnquiriesScoped, pickupEnquiryZone, forwardEnquiry, enquiryGate,
+  listFitZones, createFitZone, updateFitZone, deleteFitZone,
+} from "../controllers/fitEnquiryFlowController.js";// Tour Admin + Staff. HR mattum routes ku authTourStrict.
 const authTour = authTourOrStaff();
 
 const tourRouter = express.Router();
+// FIT Enquiry Zones — Tour admin + staff ellarum
+tourRouter.get("/fit-zones", authTour, listFitZones);
+tourRouter.post("/fit-zones", authTour, createFitZone);
+tourRouter.put("/fit-zones/:id", authTour, updateFitZone);
+tourRouter.delete("/fit-zones/:id", authTour, deleteFitZone);
 
 // Balance Remarks
 tourRouter.put("/balance/:tnr/remark", authTour, updateBalanceRemark);           // Edit remark
@@ -249,14 +257,13 @@ tourRouter.put('/:tourId/update-payment-methods/:id',
 
 tourRouter.delete('/:tourId/delete-payment-methods/:id', authTour, deleteTourPaymentMethod);
 tourRouter.post('/enquiry/create', authTour, adminCreateEnquiry);
-tourRouter.get('/enquiry/all', authTour, getAllEnquiries);
+tourRouter.get('/enquiry/all', authTour, getAllEnquiriesScoped);
 tourRouter.get('/enquiry/:id', authTour, getEnquiryById);
-tourRouter.put('/enquiry/:id/update', authTour, updateEnquiry);
+tourRouter.put('/enquiry/:id/update', authTour, enquiryGate("edit"), updateEnquiry);
 // tourRouter.delete('/enquiry/:id/delete', authTour, deleteEnquiry);
-tourRouter.put('/enquiry/:id/rate-passed', authTour, toggleRatePassed);
-tourRouter.put('/enquiry/:id/accept', authTour, acceptEnquiry);
-tourRouter.put('/enquiry/:id/reject', authTour, rejectEnquiry);
-// tourRouter.post('/staff/create', authTour, staffPhotoUpload, createStaff);
+tourRouter.put('/enquiry/:id/rate-passed', authTour, enquiryGate("ratePassed"), toggleRatePassed);
+tourRouter.put('/enquiry/:id/accept', authTour, enquiryGate("accept"), acceptEnquiry);
+tourRouter.put('/enquiry/:id/reject', authTour, enquiryGate("reject"), rejectEnquiry);// tourRouter.post('/staff/create', authTour, staffPhotoUpload, createStaff);
 // tourRouter.get('/staff/all', authTour, getAllStaff); // '/staff/:id'-kku munnadi
 // tourRouter.get('/staff/:id', authTour, getStaffById);
 // tourRouter.put('/staff/:id/update', authTour, staffPhotoUpload, updateStaff);
@@ -292,13 +299,14 @@ tourRouter.patch("/queries/:queryId/close", authTour, closeQuery);
 tourRouter.patch("/queries/:queryId/reject", authTour, rejectQuery);
 tourRouter.patch("/queries/:queryId/reopen", authTour, reopenTourQuery);
 tourRouter.patch("/queries/:queryId/delegate", authTour, delegateTourQuery);
-tourRouter.put("/enquiry/:id/close", authTour, closeEnquiry);
-tourRouter.put("/enquiry/:id/reopen", authTour, reopenEnquiry);
-tourRouter.put("/enquiry/:id/cancel", authTour, cancelEnquiry); // accepted trip cancel
-tourRouter.put("/enquiry/:id/pickup", authTour, pickupEnquiry); // pending enquiry pick up
+tourRouter.put("/enquiry/:id/close", authTour, enquiryGate("close"), closeEnquiry);
+tourRouter.put("/enquiry/:id/reopen", authTour, enquiryGate("reopen"), reopenEnquiry);
+tourRouter.put("/enquiry/:id/cancel", authTour, enquiryGate("cancel"), cancelEnquiry);
+tourRouter.put("/enquiry/:id/pickup", authTour, pickupEnquiryZone);
+tourRouter.put("/enquiry/:id/forward", authTour, forwardEnquiry); // pending enquiry pick up
 tourRouter.get("/queries/:queryId/replies", authTour, getAdminReplies);
-tourRouter.post("/queries/:queryId/replies", authTour, addAdminReply);
-tourRouter.patch("/queries/:queryId/replies/:replyId", authTour, editAdminReply);
+tourRouter.post("/queries/:queryId/replies", authTour, queryUpload, addAdminReply);
+tourRouter.patch("/queries/:queryId/replies/:replyId", authTour, queryUpload, editAdminReply);
 tourRouter.delete("/queries/:queryId/replies/:replyId", authTour, deleteAdminReply);
 
 tourRouter.post("/ocr/aadhaar", authTour, aadhaarUpload, extractAadhaar);

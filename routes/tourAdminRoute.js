@@ -188,8 +188,8 @@ touradminRouter.patch("/queries/:queryId/reopen", authAdmin, reopenQuery);
 
 // Replies
 touradminRouter.get("/queries/:queryId/replies", authAdmin, getTourAdminReplies);
-touradminRouter.post("/queries/:queryId/replies", authAdmin, addTourAdminReply);
-touradminRouter.patch("/queries/:queryId/replies/:replyId", authAdmin, editTourAdminReply);
+touradminRouter.post("/queries/:queryId/replies", authAdmin, queryUpload, addTourAdminReply);
+touradminRouter.patch("/queries/:queryId/replies/:replyId", authAdmin, queryUpload, editTourAdminReply);
 touradminRouter.delete("/queries/:queryId/replies/:replyId", authAdmin, deleteTourAdminReply);
 // Payment Tasks dashboard — same backend as Tour Admin side, authAdmin-oda gate pannirukom mattum.
 touradminRouter.get("/payment-tasks", authAdmin, getPaymentTasks);

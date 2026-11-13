@@ -12891,7 +12891,9 @@ const normTnr = (v) => String(v || "").trim().toUpperCase().slice(0, 12);
 const STAFF_TICKETS_FROM = process.env.STAFF_TICKETS_FROM
     ? new Date(`${process.env.STAFF_TICKETS_FROM}T00:00:00+05:30`)
     : null;
-const staffTicketScope = (req) => {
+// forwarded: false → naan forward panni koduththa ticket (ippo vera aal kitta) list la varaadhu.
+//   "Forwarded by me" tab la mattum list la varum (fetchQueries). Reply / open panna default true.
+const staffTicketScope = (req, { forwarded = true } = {}) => {
     if (!isStaffReq(req)) return null;
     const me = req.staff._id;
     const role = staffRoleId(req);
@@ -12906,8 +12908,8 @@ const staffTicketScope = (req) => {
             },
             // Forward aagi enakku / en team ku vandhadhu
             { delegatedCount: { $gt: 0 }, $or: toMe },
-            // Naan forward panna ticket — status paakka
-            { "delegations.from.staffId": me },
+            // Naan forward panna ticket — "Forwarded by me" tab la mattum status paakka
+            ...(forwarded ? [{ "delegations.from.staffId": me }] : []),
         ],
     };
 };
@@ -18257,7 +18259,8 @@ async function fetchQueries(reqQuery, req = null, extraFilter = null) {
     // Staff login la avanga tickets mattum (counts um adhe)
     // Tour Bookings / All Bookings page la TNR vachu kekkumbodhu (TnrTickets) — Tour Admin maadhiri
     // andha TNR oda ellaa tickets um. Raise/View Tickets page la munnaadi maadhiriye staff scope.
-    const scope = req && !reqQuery.tnr ? staffTicketScope(req) : null; if (scope) filter.$and = [...(filter.$and || []), scope];
+    // Forward panni koduththa ticket — "Forwarded by me" tab la mattum; All / Assigned / Raised la varaadhu
+    const scope = req && !reqQuery.tnr ? staffTicketScope(req, { forwarded: reqQuery.mine === "delegated" }) : null; if (scope) filter.$and = [...(filter.$and || []), scope];
     if (extraFilter) filter.$and = [...(filter.$and || []), extraFilter]; // Assigned to me / Raised by me
     const page = Math.max(parseInt(reqQuery.page) || 1, 1);
     const limit = Math.min(Math.max(parseInt(reqQuery.limit) || 20, 1), 100);
@@ -18776,6 +18779,9 @@ const updateQuery = (req, res) => updateQueryCore(req, res, "admin", true);
 
 // POST body: { message, staff? }   from = "admin" (Launching) | "touradmin" (Landing)
 async function saveQueryReply(req, res, from) {
+    // WhatsApp maadhiri reply la photo / PDF (multer queryUpload → req.files)
+    const files = getQueryFiles(req);
+    let replyFiles = [];
     try {
         const { queryId } = req.params;
         const message = String(req.body?.message || "").trim();
@@ -18791,10 +18797,11 @@ async function saveQueryReply(req, res, from) {
                 .status(400)
                 .json({ success: false, message: "Invalid reply source" });
         }
-        if (!message) {
+        // Message illaama file mattum anuppalaam (WhatsApp maadhiri)
+        if (!message && !files.length) {
             return res
                 .status(400)
-                .json({ success: false, message: "Reply message is required" });
+                .json({ success: false, message: "Write a message or attach a file" });
         }
         if (message.length > 2000) {
             return res.status(400).json({
@@ -18802,19 +18809,39 @@ async function saveQueryReply(req, res, from) {
                 message: "Reply can be at most 2000 characters",
             });
         }
+        if (files.length > QUERY_MAX_FILES) {
+            return res.status(400).json({ success: false, message: `You can attach up to ${QUERY_MAX_FILES} files in one reply` });
+        }
+        const badType = files.find((f) => !QUERY_FILE_TYPES[f.mimetype]);
+        if (badType) {
+            return res.status(400).json({ success: false, message: `"${badType.originalname}" is not allowed. Only JPG, PNG, WEBP or PDF.` });
+        }
+        const tooBig = files.find((f) => f.size > QUERY_MAX_FILE_SIZE);
+        if (tooBig) {
+            return res.status(400).json({ success: false, message: `"${tooBig.originalname}" is larger than 5 MB` });
+        }
         if (staff && !mongoose.isValidObjectId(staff)) {
             return res
                 .status(400)
                 .json({ success: false, message: "Invalid staff ID" });
         }
 
+        // Ticket close aagala nu mudhalla paathuttu dhaan upload (close ticket ku Cloudinary la waste aagaadhu)
+        if (files.length) {
+            const open = await Query.exists({ _id: queryId, status: { $ne: "close" }, ...(staffTicketScope(req) || {}) });
+            if (!open) {
+                return res.status(400).json({ success: false, message: "This ticket is closed — replies are turned off." });
+            }
+            replyFiles = await uploadQueryAttachments(files);
+        }
+
         const now = new Date();
-        const reply = { message, from, staff: staff || null, byStaffLogin: isStaffReq(req), createdAt: now };
+        const reply = { message, attachments: replyFiles, from, staff: staff || null, byStaffLogin: isStaffReq(req), createdAt: now };
 
         // Close / Reject aana query ku reply panna mudiyadhu.
         // Oru single atomic update — rendu per same time la reply pannalum ok.
         const updated = await Query.findOneAndUpdate(
-            { _id: queryId, status: { $nin: ["close", "reject"] }, ...(staffTicketScope(req) || {}) },
+            { _id: queryId, status: { $ne: "close" }, ...(staffTicketScope(req) || {}) }, // Reject la reply OK, Close la mattum illa
             {
                 $push: { replies: reply },
                 $inc: { replyCount: 1 },
@@ -18827,6 +18854,7 @@ async function saveQueryReply(req, res, from) {
             .lean();
 
         if (!updated) {
+            if (replyFiles.length) await destroyAttachments(replyFiles); // save aagala na upload pannadha remove
             const exists = await Query.findOne({ _id: queryId, ...(staffTicketScope(req) || {}) }).select("status").lean();
             if (!exists) {
                 return res
@@ -18835,7 +18863,7 @@ async function saveQueryReply(req, res, from) {
             }
             return res.status(400).json({
                 success: false,
-                message: `This query is ${exists.status === "close" ? "closed" : "rejected"} — replies are closed`,
+                message: "This ticket is closed — replies are turned off.",
             });
         }
 
@@ -18847,10 +18875,14 @@ async function saveQueryReply(req, res, from) {
         });
     } catch (err) {
         console.error("saveQueryReply error:", err);
+        if (replyFiles.length) await destroyAttachments(replyFiles);
         if (err.name === "ValidationError") {
             return res.status(400).json({ success: false, message: err.message });
         }
         return res.status(500).json({ success: false, message: err.message });
+    }
+    finally {
+        if (files.length) removeTempFiles(files); // temp files background la remove
     }
 }
 
@@ -18880,7 +18912,7 @@ async function loadQueryReplies(req, res) {
             queryId: query._id,
             subject: query.subject,
             status: query.status,
-            canReply: !["close", "reject"].includes(query.status),
+            canReply: query.status !== "close", // Rejected la reply pannalaam
             // Frontend idha vechu "maariducha?" nu check pannum (sync)
             version: query.updatedAt,
             count: query.replies.length,
@@ -18969,27 +19001,42 @@ const deleteQuery = (req, res) => deleteQueryCore(req, res, "admin");
 //  Close / Reject aana query la maatha mudiyadhu.
 // ════════════════════════════════════════════════════════════════
 
-const CLOSED_STATUS_TEXT = { close: "closed", reject: "rejected" };
+const CLOSED_STATUS_TEXT = { close: "closed" }; // Rejected la reply edit / delete pannalaam
 
 // PATCH body: { message }
 async function editQueryReply(req, res, from) {
+    // Photo / PDF reply um edit: message maathalaam, photo remove, pudhu photo add (multer queryUpload → req.files)
+    const files = getQueryFiles(req);
+    let added = [];
     try {
         const { queryId, replyId } = req.params;
         const message = String(req.body?.message || "").trim();
+        let removeIds = [];
+        if (req.body?.removeAttachmentIds) {
+            try {
+                const parsed = JSON.parse(req.body.removeAttachmentIds);
+                removeIds = Array.isArray(parsed) ? parsed.map(String) : [];
+            } catch {
+                return res.status(400).json({ success: false, message: "removeAttachmentIds must be a JSON array" });
+            }
+        }
 
         if (!mongoose.isValidObjectId(queryId) || !mongoose.isValidObjectId(replyId)) {
             return res.status(400).json({ success: false, message: "Invalid ID" });
-        }
-        if (!message) {
-            return res
-                .status(400)
-                .json({ success: false, message: "Reply message is required" });
         }
         if (message.length > 2000) {
             return res.status(400).json({
                 success: false,
                 message: "Reply can be at most 2000 characters",
             });
+        }
+        const badType = files.find((f) => !QUERY_FILE_TYPES[f.mimetype]);
+        if (badType) {
+            return res.status(400).json({ success: false, message: `"${badType.originalname}" is not allowed. Only JPG, PNG, WEBP or PDF.` });
+        }
+        const tooBig = files.find((f) => f.size > QUERY_MAX_FILE_SIZE);
+        if (tooBig) {
+            return res.status(400).json({ success: false, message: `"${tooBig.originalname}" is larger than 5 MB` });
         }
 
         const query = await Query.findById(queryId).select("status replies editHistory editCount");
@@ -19018,22 +19065,44 @@ async function editQueryReply(req, res, from) {
             });
         }
 
-        const oldMessage = reply.message;
-        if (oldMessage === message) {
+        const oldFiles = (reply.attachments || []).map((a) => (a.toObject ? a.toObject() : a));
+        const keep = oldFiles.filter((a) => !removeIds.includes(String(a._id)));
+        const dropped = oldFiles.filter((a) => removeIds.includes(String(a._id)));
+        if (keep.length + files.length > QUERY_MAX_FILES) {
+            return res.status(400).json({ success: false, message: `A reply can have up to ${QUERY_MAX_FILES} files` });
+        }
+        // Edit apram message um illa, file um illa na — adhu Delete
+        if (!message && !keep.length && !files.length) {
+            return res.status(400).json({ success: false, message: "Write a message or keep at least one file. To remove everything, delete the reply." });
+        }
+
+        const oldMessage = reply.message || "";
+        if (oldMessage === message && !dropped.length && !files.length) {
             return res.status(200).json({ success: true, message: "Nothing changed", reply: reply.toObject() });
         }
+
+        if (files.length) added = await uploadQueryAttachments(files);
         reply.message = message;
+        dropped.forEach((a) => reply.attachments.pull(a._id));
+        added.forEach((a) => reply.attachments.push(a));
         reply.editedAt = new Date();
 
-        // Edit history la reply before / after
+        // Edit history la reply before / after (files count um)
+        const fileNote = (n) => (n ? ` [📎 ${n} file${n > 1 ? "s" : ""}]` : "");
         query.editHistory.push({
             editedAt: new Date(),
             kind: "reply-edit",
             by: from,
-            changes: [{ field: "reply", label: "Reply", before: oldMessage, after: message }],
+            changes: [{
+                field: "reply",
+                label: "Reply",
+                before: `${oldMessage}${fileNote(oldFiles.length)}`.trim(),
+                after: `${message}${fileNote(keep.length + added.length)}`.trim(),
+            }],
         });
         query.editCount = query.editHistory.length;
         await query.save();
+        if (dropped.length) destroyAttachments(dropped); // save aanadhum dhaan Cloudinary la irundhu remove
 
         return res.status(200).json({
             success: true,
@@ -19042,10 +19111,13 @@ async function editQueryReply(req, res, from) {
         });
     } catch (err) {
         console.error("editQueryReply error:", err);
+        if (added.length) await destroyAttachments(added);
         if (err.name === "ValidationError") {
             return res.status(400).json({ success: false, message: err.message });
         }
         return res.status(500).json({ success: false, message: err.message });
+    } finally {
+        if (files.length) removeTempFiles(files);
     }
 }
 
@@ -19084,7 +19156,8 @@ async function removeQueryReply(req, res, from) {
             });
         }
 
-        const deletedMessage = reply.message;
+        const replyFilesToDrop = (reply.attachments || []).map((a) => (a.toObject ? a.toObject() : a));
+        const deletedMessage = reply.message || (replyFilesToDrop.length ? `📎 ${replyFilesToDrop.length} file(s)` : "");
         query.replies.pull(replyId); // ellaa mongoose version layum work aagum
 
         // Edit history la delete aana reply um save aagum
@@ -19102,6 +19175,7 @@ async function removeQueryReply(req, res, from) {
         query.lastReplyAt = last ? last.createdAt : null;
         query.lastReplyFrom = last ? last.from : null;
         await query.save();
+        if (replyFilesToDrop.length) destroyAttachments(replyFilesToDrop); // Cloudinary la irundhum (background)
 
         return res.status(200).json({
             success: true,
@@ -19314,11 +19388,18 @@ const reopenQuery = async (req, res) => {
             return res.status(400).json({ success: false, message: "Invalid query ID" });
         }
 
-        // Atomic — close la irundha mattum dhaan open aagum
+        // Endha stage la reject aacho (rejectedFrom) adhe stage ku thirumba; pazhaya tickets la illana Processing
+        const cur = await Query.findById(queryId).select("rejectedFrom").lean();
+        const backTo = ["open", "pickup", "processing"].includes(cur?.rejectedFrom) ? cur.rejectedFrom : "processing";
         const updated = await Query.findOneAndUpdate(
             { _id: queryId, status: "reject" }, // Rejected mattum — Closed reopen aagaadhu
-            { $set: { status: "open", reopenedAt: new Date() }, $inc: { reopenCount: 1 } },
-            { new: true },
+            {
+                $set: { status: backTo, reopenedAt: new Date(), reopenReason: "" },
+                // Yaaru reopen panna (Admin) — ticket la "Reopened by" nu theriyum
+                $push: { reopens: { reason: "", toStatus: backTo, by: await whoRaised(req), at: new Date() } },
+                $inc: { reopenCount: 1 },
+            },
+            { new: true, strict: false },
         )
             .select("-replies -editHistory")
             .populate({ path: "raisedBy", ...STAFF_PUBLIC })
@@ -19338,7 +19419,8 @@ const reopenQuery = async (req, res) => {
             });
         }
 
-        return res.status(200).json({ success: true, message: "Query reopened", query: updated });
+        const STAGE_TEXT = { open: "Open", pickup: "Picked up", processing: "Processing" };
+        return res.status(200).json({ success: true, message: `Ticket reopened — back to ${STAGE_TEXT[backTo]}`, query: updated });
     } catch (err) {
         console.error("reopenQuery error:", err);
         return res.status(500).json({ success: false, message: err.message });

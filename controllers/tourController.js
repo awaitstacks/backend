@@ -15684,8 +15684,8 @@ const ticketAccess = (req, q) => {
     const me = String(req.staff._id);
     const isAssignee = String(q.raisedTo?._id || q.raisedTo || "") === me;
     const isRaiser = String(q.raisedBy?._id || q.raisedBy || "") === me;
-    // Reopen (Reject aanadhu): reject panna assign aana aal mattum — avanga login laye (raise pannavangaluku illa)
-    return { isStaff, isAssignee, isRaiser, canWork: isAssignee, canDelegate: isAssignee, canReopen: isAssignee };
+    // Reopen (Reject aanadhu): reject panna assign aana aal + raise pannavanga — avanga login laye
+    return { isStaff, isAssignee, isRaiser, canWork: isAssignee, canDelegate: isAssignee, canReopen: isAssignee || isRaiser };
   }
   const raisedByTourAdmin = q.raisedVia === "touradmin" && !q.raisedByStaffLogin;
   // Tour admin: staff / team ku assign aana ticket la status maatha mudiyaadhu — andha aal dhaan.
@@ -15760,13 +15760,14 @@ const changeQueryStatus = async (req, res, nextStatus) => {
     const set = { status: rule.to || nextStatus, [rule.dateField]: new Date() };
     if (nextStatus === "reject") {
       set.rejectReason = String(req.body?.reason || "").trim();
+      set.rejectedFrom = current0.status; // Reopen pannumbodhu indha stage ku dhaan thirumba pogum
     }
 
     // Atomic — rendu per same time la click pannalum oru change dhaan nadakkum
     const updated = await Query.findOneAndUpdate(
       { _id: queryId, status: { $in: rule.from } },
       rule.inc ? { $set: set, $inc: rule.inc } : { $set: set },
-      { new: true },
+      { new: true, strict: false },
     )
       .select("-replies -editHistory")
       .populate("raisedBy", "-password")
@@ -15818,23 +15819,25 @@ const reopenTourQuery = async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid query ID" });
     }
     const q = await Query.findById(queryId)
-      .select("status raisedBy raisedTo raisedVia raisedByStaffLogin")
+      .select("status raisedBy raisedTo raisedVia raisedByStaffLogin rejectedFrom")
       .lean();
     if (!q) return res.status(404).json({ success: false, message: "Query not found" });
     const access = ticketAccess(req, q);
     if (!access.canReopen) {
-      return res.status(403).json({ success: false, message: "Only the person who rejected this ticket can reopen it." });
+      return res.status(403).json({ success: false, message: "Only the person who raised or rejected this ticket can reopen it." });
     }
     const reason = String(req.body?.reason || "").trim().slice(0, 1000); // optional
     // Reject aanadhu mattum reopen — Close aanadhu mudinjadhu
     if (q.status === "close") {
       return res.status(400).json({ success: false, message: "Closed tickets can't be reopened — only rejected ones." });
     }
+    // Endha stage la reject aacho adhe stage ku thirumba (pazhaya tickets la rejectedFrom illa → Processing)
+    const backTo = ACTIVE_TICKET.includes(q.rejectedFrom) ? q.rejectedFrom : "processing";
     const updated = await Query.findOneAndUpdate(
       { _id: queryId, status: "reject" },
       {
-        $set: { status: "open", reopenedAt: new Date(), reopenReason: reason },
-        $push: { reopens: { reason, by: await whoRaised(req), at: new Date() } },
+        $set: { status: backTo, reopenedAt: new Date(), reopenReason: reason },
+        $push: { reopens: { reason, toStatus: backTo, by: await whoRaised(req), at: new Date() } },
         $inc: { reopenCount: 1 },
       },
       { new: true, strict: false },
@@ -15844,7 +15847,8 @@ const reopenTourQuery = async (req, res) => {
     if (!updated) {
       return res.status(400).json({ success: false, message: "Only rejected tickets can be reopened." });
     }
-    return res.status(200).json({ success: true, message: "Ticket reopened", query: updated });
+    const STAGE_TEXT = { open: "Open", pickup: "Picked up", processing: "Processing" };
+    return res.status(200).json({ success: true, message: `Ticket reopened — back to ${STAGE_TEXT[backTo]}`, query: updated });
   } catch (err) {
     console.error("reopenTourQuery error:", err);
     return res.status(500).json({ success: false, message: err.message });
@@ -15899,6 +15903,10 @@ const delegateTourQuery = async (req, res) => {
     if (toStaff) {
       if (String(q.raisedTo?._id || "") === toStaff) {
         return res.status(400).json({ success: false, message: "This ticket is already with that person." });
+      }
+      // Raise pannavangalukke thirumba forward panna koodaadhu
+      if (String(q.raisedBy?._id || q.raisedBy || "") === toStaff) {
+        return res.status(400).json({ success: false, message: "You can't forward a ticket back to the person who raised it." });
       }
       const s = await mongoose.model("staff").findById(toStaff).select("fullName employeeId status loginEnabled").lean();
       // Active + login ON staff ku mattum forward

@@ -66,9 +66,10 @@ const replySchema = new mongoose.Schema(
     message: {
       type: String,
       trim: true,
-      required: [true, "Reply message is required"],
+      default: "",
       maxlength: [2000, "Reply can be at most 2000 characters"],
     },
+    attachments: { type: [attachmentSchema], default: [] }, // reply la photo / PDF
     from: { type: String, enum: REPLY_FROM, required: true },
     // Optional — yaar reply pannanga nu staff theriyum na
     staff: { type: mongoose.Schema.Types.ObjectId, ref: STAFF_REF, default: null },
@@ -171,11 +172,10 @@ const querySchema = new mongoose.Schema(
     reopenCount: { type: Number, default: 0 },
     reopenReason: { type: String, trim: true, default: "" },
     reopens: { type: [mongoose.Schema.Types.Mixed], default: [] },
-
-    // Forward (delegate) history — yaar kitta irundhu yaar ku, reason
     delegations: { type: [mongoose.Schema.Types.Mixed], default: [] },
     delegatedCount: { type: Number, default: 0 },
     delegatedAt: { type: Date, default: null },
+    rejectedFrom: { type: String, default: "" },
 
     // Edit history (before / after)
     editHistory: { type: [editHistorySchema], default: [] },

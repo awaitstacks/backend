@@ -13,6 +13,10 @@ const RESET_REQUEST_GAP_MS = 10 * 60 * 1000; // oru staff 10 min ku oru thadava 
 // ──────────────────────────────────────────────────────────────────────────────
 // POST /api/staff/login   { username, password }
 // ──────────────────────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────────────────────
+// POST /api/staff/login   { username, password }
+// Ovvoru case kum thani message — login set aagala / disabled / role illa / password thappu
+// ──────────────────────────────────────────────────────────────────────────────
 const loginStaff = async (req, res) => {
   try {
     const username = String(req.body.username || "").trim().toLowerCase();
@@ -21,23 +25,39 @@ const loginStaff = async (req, res) => {
       return res.status(400).json({ success: false, message: "Username and password are required" });
     }
 
+    // Username illana employee ID (GVEMP003) vechu kooda staff ah kandupidi — enna kuraiyudhu nu solla
     const staff = await staffModel
-      .findOne({ username })
+      .findOne({ $or: [{ username }, { employeeId: username.toUpperCase() }] })
       .select("+password")
       .populate("role", "name tabs");
 
-    // Username thappa ah password thappa ah nu sollaadhu — rendukkum same message
-    if (!staff || !staff.password || !(await bcrypt.compare(password, staff.password))) {
-      return res.status(401).json({ success: false, message: "Invalid username or password" });
+    if (!staff) {
+      return res.status(401).json({ success: false, message: "Incorrect username. Please check and try again." });
     }
-
-    if (staff.status === "Inactive" || !staff.loginEnabled) {
-      return res.status(403).json({ success: false, message: "Your login is disabled. Please contact HR." });
+    if (staff.status === "Inactive") {
+      return res.status(403).json({ success: false, message: "This account is inactive. Please contact HR." });
+    }
+    if (!staff.username || !staff.password) {
+      return res.status(403).json({ success: false, message: "Your login has not been set up yet. Please contact HR." });
+    }
+    if (staff.username !== username) {
+      return res.status(401).json({ success: false, message: "Incorrect username. Please check and try again." });
+    }
+    if (!(await bcrypt.compare(password, staff.password))) {
+      return res.status(401).json({ success: false, message: "Incorrect password. Please try again." });
+    }
+    if (!staff.loginEnabled) {
+      return res.status(403).json({ success: false, message: "Your login is not enabled yet. Please contact HR." });
+    }
+    if (!staff.role || !(staff.role.tabs || []).length) {
+      return res.status(403).json({ success: false, message: "No role has been assigned to your login yet. Please contact HR." });
     }
 
     await staffModel.updateOne({ _id: staff._id }, { $set: { lastLogin: new Date() } });
 
-    const token = jwt.sign({ id: staff._id, type: "staff" }, process.env.STAFF_JWT_SECRET);
+    const token = jwt.sign({ id: staff._id, type: "staff" }, process.env.STAFF_JWT_SECRET, {
+      expiresIn: "1d",
+    });
 
     return res.status(200).json({
       success: true,
@@ -62,29 +82,35 @@ const loginStaff = async (req, res) => {
 // Tour Admin Staff Profile la andha staff card highlight aagum.
 // Username irukko illaiyo, ore message dhaan (yaarum username guess panna mudiyaadhu)
 // ──────────────────────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────────────────────
+// POST /api/staff/forgot-password   { username }
+// Username thappu na "Incorrect username" — request anuppa koodaadhu.
+// Correct na Tour Admin Staff Profile la andha staff card highlight aagum.
+// ──────────────────────────────────────────────────────────────────────────────
 const forgotPassword = async (req, res) => {
-  const reply = {
-    success: true,
-    message: "Request sent. HR will contact you with a new password.",
-  };
   try {
     const username = String(req.body.username || "").trim().toLowerCase();
     if (!username) {
       return res.status(400).json({ success: false, message: "Please enter your username" });
     }
 
-    const staff = await staffModel.findOne({ username }).select("resetRequestedAt").lean();
-    if (staff) {
-      const last = staff.resetRequestedAt ? new Date(staff.resetRequestedAt).getTime() : 0;
-      if (Date.now() - last > RESET_REQUEST_GAP_MS) {
-        await staffModel.updateOne(
-          { _id: staff._id },
-          { $set: { resetRequested: true, resetRequestedAt: new Date() } }
-        );
-      }
+    const staff = await staffModel.findOne({ username }).select("resetRequestedAt status").lean();
+    if (!staff) {
+      return res.status(404).json({ success: false, message: "Incorrect username. Please check and try again." });
+    }
+    if (staff.status === "Inactive") {
+      return res.status(403).json({ success: false, message: "This account is inactive. Please contact HR." });
     }
 
-    return res.status(200).json(reply);
+    const last = staff.resetRequestedAt ? new Date(staff.resetRequestedAt).getTime() : 0;
+    if (Date.now() - last > RESET_REQUEST_GAP_MS) {
+      await staffModel.updateOne(
+        { _id: staff._id },
+        { $set: { resetRequested: true, resetRequestedAt: new Date() } }
+      );
+    }
+
+    return res.status(200).json({ success: true, message: "Request sent. HR will contact you with a new password." });
   } catch (error) {
     console.error("forgotPassword error:", error);
     return res.status(500).json({ success: false, message: "Could not send request. Please try again." });

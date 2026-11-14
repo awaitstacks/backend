@@ -14774,6 +14774,8 @@ export const linkGroupTnr = async (req, res) => {
 
 // GET /ocr/payment-records?from=YYYY-MM-DD&to=YYYY-MM-DD&type=advance|balance|partial
 // Every payment screenshot saved from the Aadhaar Upload page, newest first.
+// GET /ocr/payment-records?from=YYYY-MM-DD&to=YYYY-MM-DD&type=advance|balance|partial
+// Every payment screenshot saved from the Aadhaar Upload page, newest first.
 export const getPaymentRecords = async (req, res) => {
     try {
         const { from, to, type } = req.query;
@@ -14827,20 +14829,21 @@ export const getPaymentRecords = async (req, res) => {
             ),
         ];
         const realDocs = tnrs.length
-            ? await tourBookingModel.find({ tnr: { $in: tnrs } }).select("tnr tourId travellers createdBy userData.email contact.email").lean()
+            ? await tourBookingModel.find({ tnr: { $in: tnrs } }).select("tnr tourId travellers createdBy createdByWho userData.email contact.email").lean()
             : [];
         const realByTnr = new Map(realDocs.map((b) => [b.tnr, b]));
         // ── Advance paid bookings (tourBookingModel) — per day ethana booking advance pay pannaanga ──
         // payment.advance.paid = true; naal = payment.advance.paidAt (IST). Balance count aagaadhu.
+        // Tour booking la advance.paid === true; naal = booking date
         const advQuery = { "payment.advance.paid": true };
         if (from || to) {
-            advQuery["payment.advance.paidAt"] = {};
-            if (from) advQuery["payment.advance.paidAt"].$gte = new Date(`${from}T00:00:00+05:30`);
-            if (to) advQuery["payment.advance.paidAt"].$lte = new Date(`${to}T23:59:59.999+05:30`);
+            advQuery.bookingDate = {};
+            if (from) advQuery.bookingDate.$gte = new Date(`${from}T00:00:00+05:30`);
+            if (to) advQuery.bookingDate.$lte = new Date(`${to}T23:59:59.999+05:30`);
         }
         const advDocs = await tourBookingModel
             .find(advQuery)
-            .select("tnr tourId bookingDate payment.advance.paidAt payment.advance.amount travellers createdBy userData.email contact.email")
+            .select("tnr tourId bookingDate createdAt payment.advance.paidAt payment.advance.amount travellers createdBy userData.email contact.email")
             .lean();
 
         const tourIds = [
@@ -14878,13 +14881,15 @@ export const getPaymentRecords = async (req, res) => {
                 tourTitle: tourId ? tourTitleById.get(tourId) || "" : "",
                 bookingSource: real ? bookingSourceOf(real) : "admin",
                 taskCleared: !!p.taskCleared,
-                // Yaaru upload panna: puthusu → uploader; pazhaya advance (booking oda serndhu upload aanadhu) → booking raise panna staff
+                // Yaaru upload panna (advance / balance / partial moonukum):
+                //   1. Individual login la upload → save aana uploader
+                //   2. Individual login ku munnaadi → booking la employee ID map aana staff (bookingNotes.raisedBy)
+                //   3. Rendum illana → Tour admin
                 uploader:
                     p.uploader ||
-                    (p.type === "paymentAdvance" && g?.raisedBy && g.notesAt &&
-                        Math.abs(new Date(p.createdAt) - new Date(g.notesAt)) < 5 * 60 * 1000
-                        ? g.raisedBy
-                        : null),
+                    g?.raisedBy ||
+                    (real?.createdByWho?.type === "staff" ? real.createdByWho : null) ||
+                    { type: "touradmin", name: "Tour admin" },
             };
         });
 
@@ -14893,6 +14898,7 @@ export const getPaymentRecords = async (req, res) => {
                 const t0 = b.travellers?.[0];
                 return {
                     tnr: b.tnr || "",
+                    bookedAt: b.bookingDate || b.createdAt || null, // tour booking date — per day / average idha vechu
                     paidAt: b.payment?.advance?.paidAt || b.bookingDate || null,
                     amount: b.payment?.advance?.amount ?? null,
                     name: t0 ? [t0.title, t0.firstName, t0.lastName].filter(Boolean).join(" ") : "",
@@ -14900,7 +14906,7 @@ export const getPaymentRecords = async (req, res) => {
                     bookingSource: bookingSourceOf(b),
                 };
             })
-            .filter((b) => b.paidAt);
+            .filter((b) => b.bookedAt || b.paidAt);
 
         return res.status(200).json({ success: true, records, advancePaid });
     } catch (error) {

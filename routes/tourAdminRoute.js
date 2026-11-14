@@ -71,6 +71,7 @@ import { tourUpload, queryUpload } from "../middlewares/multer.js";
 import { getAllEnquiries } from "../controllers/tourController.js";
 import { getPaymentTasks, markPaymentTaskDone } from "../controllers/aadhaarController.js";
 import { lookupTicketTnr, forceRaisedToFromTnr } from "../controllers/ticketTnrController.js";
+import { getStaffPerformance, getFitPerformance } from "../controllers/performanceController.js";
 import { get } from "mongoose";
 // Admin + Staff. IT mattum routes ku authAdminStrict.
 const authAdmin = authAdminOrStaff();
@@ -102,6 +103,9 @@ touradminRouter.post("/tour/:tourId/reopen-trip", authAdmin, reopenEntireTrip);
 touradminRouter.get("/bookings", authAdmin, bookingsAdmin);
 touradminRouter.get("/get-bookings", authAdmin, getBookings);
 touradminRouter.get("/touradmindashboard", authAdmin, tourAdminDashboard);
+// Employee Performance (Tickets + Bookings) / FIT Performance — Admin + andha tab assign aana staff (CEO)
+touradminRouter.get("/employee-performance", authAdminOrStaff("/employee-performance"), getStaffPerformance);
+touradminRouter.get("/fit-performance", authAdminOrStaff("/fit-performance"), getFitPerformance);
 touradminRouter.post(
   "/touradmincancelrule",
   authAdmin,

@@ -12913,6 +12913,18 @@ const staffTicketScope = (req, { forwarded = true } = {}) => {
         ],
     };
 };
+// Staff reply panna mudiyumaa — raise pannavanga / assign aanavanga / (innum yaarum pick pannaadha) en team.
+// Forward panni koduththavanga ("Forwarded by me") paakka mattum — reply / edit / delete illa.
+const staffCanReply = (req, q) => {
+    if (!isStaffReq(req)) return true;
+    const me = String(req.staff._id);
+    const role = String(staffRoleId(req) || "");
+    if (String(q.raisedBy?._id || q.raisedBy || "") === me) return true;
+    if (String(q.raisedTo?._id || q.raisedTo || "") === me) return true;
+    if (!q.raisedTo && q.raisedToRole && String(q.raisedToRole?._id || q.raisedToRole) === role) return true;
+    return false;
+};
+const FORWARDED_VIEW_ONLY = "You forwarded this ticket — you can view it, but replies are off for you.";
 // Staff: avanga reply mattum. Admin / Tour admin: avanga side reply, staff reply illa
 const canTouchReply = (req, reply, from) =>
     isStaffReq(req)
@@ -18826,6 +18838,11 @@ async function saveQueryReply(req, res, from) {
                 .json({ success: false, message: "Invalid staff ID" });
         }
 
+        // Forward panni koduththavanga reply panna mudiyaadhu (paakka mattum)
+        if (isStaffReq(req)) {
+            const q = await Query.findOne({ _id: queryId, ...(staffTicketScope(req) || {}) }).select("raisedBy raisedTo raisedToRole").lean();
+            if (q && !staffCanReply(req, q)) return res.status(403).json({ success: false, message: FORWARDED_VIEW_ONLY });
+        }
         // Ticket close aagala nu mudhalla paathuttu dhaan upload (close ticket ku Cloudinary la waste aagaadhu)
         if (files.length) {
             const open = await Query.exists({ _id: queryId, status: { $ne: "close" }, ...(staffTicketScope(req) || {}) });
@@ -18897,7 +18914,7 @@ async function loadQueryReplies(req, res) {
         }
 
         const query = await Query.findOne({ _id: queryId, ...(staffTicketScope(req) || {}) })
-            .select("subject status replies replyCount lastReplyAt lastReplyFrom updatedAt")
+            .select("subject status replies replyCount lastReplyAt lastReplyFrom updatedAt raisedBy raisedTo raisedToRole")
             .populate({ path: "replies.staff", ...STAFF_PUBLIC })
             .lean();
 
@@ -18912,7 +18929,9 @@ async function loadQueryReplies(req, res) {
             queryId: query._id,
             subject: query.subject,
             status: query.status,
-            canReply: query.status !== "close", // Rejected la reply pannalaam
+            // Rejected la reply pannalaam; Close la illa; forward panni koduththavangaluku illa
+            canReply: query.status !== "close" && staffCanReply(req, query),
+            replyOffReason: query.status === "close" ? "This ticket is closed, so replies are turned off." : !staffCanReply(req, query) ? FORWARDED_VIEW_ONLY : "",
             // Frontend idha vechu "maariducha?" nu check pannum (sync)
             version: query.updatedAt,
             count: query.replies.length,
@@ -19039,12 +19058,13 @@ async function editQueryReply(req, res, from) {
             return res.status(400).json({ success: false, message: `"${tooBig.originalname}" is larger than 5 MB` });
         }
 
-        const query = await Query.findById(queryId).select("status replies editHistory editCount");
+        const query = await Query.findById(queryId).select("status replies editHistory editCount raisedBy raisedTo raisedToRole");
         if (!query) {
             return res
                 .status(404)
                 .json({ success: false, message: "Query not found" });
         }
+        if (!staffCanReply(req, query)) return res.status(403).json({ success: false, message: FORWARDED_VIEW_ONLY });
         if (CLOSED_STATUS_TEXT[query.status]) {
             return res.status(400).json({
                 success: false,
@@ -19083,6 +19103,7 @@ async function editQueryReply(req, res, from) {
 
         if (files.length) added = await uploadQueryAttachments(files);
         reply.message = message;
+        // Array ah full ah replace pannaama — remove aanadhai pull, pudhusai push (Mongoose cast error varaadhu)
         dropped.forEach((a) => reply.attachments.pull(a._id));
         added.forEach((a) => reply.attachments.push(a));
         reply.editedAt = new Date();
@@ -19129,13 +19150,14 @@ async function removeQueryReply(req, res, from) {
         }
 
         const query = await Query.findById(queryId).select(
-            "status replies replyCount lastReplyAt lastReplyFrom editHistory editCount",
+            "status replies replyCount lastReplyAt lastReplyFrom editHistory editCount raisedBy raisedTo raisedToRole",
         );
         if (!query) {
             return res
                 .status(404)
                 .json({ success: false, message: "Query not found" });
         }
+        if (!staffCanReply(req, query)) return res.status(403).json({ success: false, message: FORWARDED_VIEW_ONLY });
         if (CLOSED_STATUS_TEXT[query.status]) {
             return res.status(400).json({
                 success: false,

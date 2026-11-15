@@ -92,7 +92,7 @@ import {
 } from "../controllers/tourController.js";
 // import authTour from "../middlewares/authTour.js";
 import authTourStrict from "../middlewares/authTour.js";
-
+import authAdminStrict from "../middlewares/authAdmin.js"; // Admin view-only routes ku
 import { authTourOrStaff, forceRaisedByStaff, stampStaffRaisedBy } from "../middlewares/authStaff.js"; import { tourUpload } from "../middlewares/multer.js";
 import { paymentQrUpload, staffPhotoUpload, queryUpload, aadhaarUpload, paymentScreenshotUpload } from "../middlewares/multer.js";
 import cancelBookingController from "../controllers/cancelController.js";
@@ -113,10 +113,16 @@ import {
 } from "../controllers/fitEnquiryFlowController.js";// Tour Admin + Staff. HR mattum routes ku authTourStrict.
 const authTour = authTourOrStaff();
 
+// Admin login (atoken mattum) → view only. Tour Admin / Staff → munnaadi maadhiriye authTour.
+const authTourOrAdminView = (req, res, next) => {
+  const { ttoken, stoken, atoken } = req.headers;
+  if (atoken && !ttoken && !stoken) return authAdminStrict(req, res, next);
+  return authTour(req, res, next);
+};
 const tourRouter = express.Router();
 tourRouter.get("/check-session", authTourStrict, (req, res) => res.json({ success: true }));
 // FIT Enquiry Zones — Tour admin + staff ellarum
-tourRouter.get("/fit-zones", authTour, listFitZones);
+tourRouter.get("/fit-zones", authTourOrAdminView, listFitZones);
 tourRouter.post("/fit-zones", authTour, createFitZone);
 tourRouter.put("/fit-zones/:id", authTour, updateFitZone);
 tourRouter.delete("/fit-zones/:id", authTour, deleteFitZone);

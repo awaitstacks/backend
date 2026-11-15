@@ -359,8 +359,6 @@ export const createFitZone = async (req, res) => {
     const states = cleanStates(req.body?.states);
     if (!states.length) return res.status(400).json({ success: false, message: "Select at least one state" });
     const districts = cleanDistricts(req.body?.districts, states);
-    const noDist = states.filter((st) => !districts[st]);
-    if (noDist.length) return res.status(400).json({ success: false, message: `Select districts for ${noDist.join(", ")}` });
     // Ore state pala zone la irukkalaam — clash check illa
 
     const who = await whoRaised(req);

@@ -114,6 +114,7 @@ import {
 const authTour = authTourOrStaff();
 
 const tourRouter = express.Router();
+tourRouter.get("/check-session", authTourStrict, (req, res) => res.json({ success: true }));
 // FIT Enquiry Zones — Tour admin + staff ellarum
 tourRouter.get("/fit-zones", authTour, listFitZones);
 tourRouter.post("/fit-zones", authTour, createFitZone);
@@ -327,9 +328,8 @@ tourRouter.post("/edit-traveller", editAadhaarTraveller);
 tourRouter.post("/delete-traveller", deleteAadhaarTraveller);
 tourRouter.post("/guest/link", linkGuestTnr);
 tourRouter.post("/guest/unlink", unlinkGuestTnr);
-tourRouter.get("/payment-tasks", getPaymentTasks);
-tourRouter.post("/payment-tasks/mark-done", markPaymentTaskDone);
-// "User Bookings" tab — attach Aadhaar/payment proof to a real ONLINE
+tourRouter.get("/payment-tasks", authTour, getPaymentTasks);
+tourRouter.post("/payment-tasks/mark-done", authTour, markPaymentTaskDone);// "User Bookings" tab — attach Aadhaar/payment proof to a real ONLINE
 // booking the guest already made on the website themselves (found by tour
 // + email), instead of the walk-in Save Booking flow above.
 tourRouter.get("/user-bookings", authTour, searchUserBookings);

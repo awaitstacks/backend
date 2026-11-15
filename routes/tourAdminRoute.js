@@ -76,6 +76,7 @@ import { get } from "mongoose";
 // Admin + Staff. IT mattum routes ku authAdminStrict.
 const authAdmin = authAdminOrStaff();
 const touradminRouter = express.Router();
+touradminRouter.get("/check-session", authAdminStrict, (req, res) => res.json({ success: true }));
 
 // ✅ Route: Add a new tour with images
 touradminRouter.post("/add-tour", authAdmin, tourUpload, addTour);

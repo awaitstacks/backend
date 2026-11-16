@@ -185,7 +185,11 @@ const enquirySchema = new mongoose.Schema(
     pickupDate: { type: Date, default: null },
     pickupTime: { type: String, trim: true, default: null },
     pickupPlace: { type: String, trim: true, default: null },
-
+    dropDate: { type: Date, default: null },
+    dropTime: { type: String, trim: true, default: null },
+    dropPlace: { type: String, trim: true, default: null },
+    autoClosed: { type: Boolean, default: false },
+    gvShare: { type: mongoose.Schema.Types.Mixed, default: null, select: false },
     raisedBy: {
       type: String,
       enum: ["user", "admin"],

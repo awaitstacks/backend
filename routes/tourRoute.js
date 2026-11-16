@@ -109,8 +109,8 @@ import { lookupTicketTnr, forceRaisedToFromTnr } from "../controllers/ticketTnrC
 import { get } from "mongoose";
 import {
   getAllEnquiriesScoped, pickupEnquiryZone, forwardEnquiry, enquiryGate,
-  listFitZones, createFitZone, updateFitZone, deleteFitZone,
-} from "../controllers/fitEnquiryFlowController.js";// Tour Admin + Staff. HR mattum routes ku authTourStrict.
+  listFitZones, createFitZone, updateFitZone, deleteFitZone, updateEnquiryZones, gvShareAccess, reopenClosedEnquiry,
+} from "../controllers/fitEnquiryFlowController.js";
 const authTour = authTourOrStaff();
 
 // Admin login (atoken mattum) → view only. Tour Admin / Staff → munnaadi maadhiriye authTour.
@@ -310,6 +310,9 @@ tourRouter.put("/enquiry/:id/close", authTour, enquiryGate("close"), closeEnquir
 tourRouter.put("/enquiry/:id/reopen", authTour, enquiryGate("reopen"), reopenEnquiry);
 tourRouter.put("/enquiry/:id/cancel", authTour, enquiryGate("cancel"), cancelEnquiry);
 tourRouter.put("/enquiry/:id/pickup", authTour, pickupEnquiryZone);
+tourRouter.put("/enquiry/:id/zones", authTour, enquiryGate("edit"), updateEnquiryZones);
+tourRouter.get("/gv-share/access", authTourOrAdminView, gvShareAccess);
+tourRouter.put("/enquiry/:id/reopen-closed", authTour, enquiryGate("reopen"), reopenClosedEnquiry);
 tourRouter.put("/enquiry/:id/forward", authTour, forwardEnquiry); // pending enquiry pick up
 tourRouter.get("/queries/:queryId/replies", authTour, getAdminReplies);
 tourRouter.post("/queries/:queryId/replies", authTour, queryUpload, addAdminReply);

@@ -19484,7 +19484,7 @@ const adminViewStaff = async (req, res) => {
 // GET /api/touradmin/enquiry/all
 const adminViewEnquiries = async (req, res) => {
     try {
-        const enquiries = await enquiryModel.find().sort({ createdAt: -1 }).lean();
+        const enquiries = await enquiryModel.find().select("+gvShare").sort({ createdAt: -1 }).lean();
         return res.status(200).json({ success: true, data: enquiries });
     } catch (error) {
         console.error("adminViewEnquiries error:", error);

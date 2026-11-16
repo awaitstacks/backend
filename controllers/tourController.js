@@ -8044,6 +8044,7 @@ import aadhaarModel from "../models/aadhaarModel.js"; // add to top imports
 import userModel from "../models/userModel.js";
 import bcrypt from "bcrypt";
 import whoRaised from "../utils/whoRaised.js"; // cancellation request yaaru raise panna
+import { canSeeGvShare, cleanGvShare } from "../utils/gvShare.js";
 
 import {
   fetchQueries,
@@ -15332,6 +15333,10 @@ const getEnquiryById = async (req, res) => {
 const updateEnquiry = async (req, res) => {
   try {
     const update = { ...req.body };
+    if ("gvShare" in update) {
+      if (canSeeGvShare(req)) update.gvShare = cleanGvShare(update.gvShare);
+      else delete update.gvShare;
+    }
 
     // Cancelled trip oda charge / reason — schema la illa, keezha thaniya save (strict:false)
     const cancelFix = {};
@@ -15433,11 +15438,8 @@ const toggleRatePassed = async (req, res) => {
 
 const acceptEnquiry = async (req, res) => {
   try {
-    const { salesValue, fitStates, pickupDate, pickupTime, pickupPlace } = req.body;
+    const { salesValue, fitStates, pickupDate, pickupTime, pickupPlace, dropDate, dropTime, dropPlace } = req.body;
 
-    // Validation — FIT states is OPTIONAL (no longer required to accept).
-    // It's fine for fitStates to be missing, empty, or undefined here;
-    // we simply default it to [] further down before saving.
     if (!salesValue || isNaN(Number(salesValue)) || Number(salesValue) <= 0) {
       return res.status(400).json({ success: false, message: "Valid sales value is required" });
     }
@@ -15449,6 +15451,9 @@ const acceptEnquiry = async (req, res) => {
     }
     if (!pickupPlace || !pickupPlace.trim()) {
       return res.status(400).json({ success: false, message: "Pickup place is required" });
+    }
+    if (dropDate && dropTime && `${dropDate}T${dropTime}` < `${pickupDate}T${pickupTime}`) {
+      return res.status(400).json({ success: false, message: "Drop date and time must be after pickup" });
     }
 
     const enquiry = await enquiryModel.findById(req.params.id);
@@ -15465,6 +15470,10 @@ const acceptEnquiry = async (req, res) => {
     enquiry.pickupDate = new Date(pickupDate);
     enquiry.pickupTime = pickupTime.trim();
     enquiry.pickupPlace = pickupPlace.trim();
+    enquiry.dropDate = dropDate ? new Date(dropDate) : null;
+    enquiry.dropTime = dropTime ? String(dropTime).trim() : null;
+    enquiry.dropPlace = dropPlace ? String(dropPlace).trim() : null;
+    if (canSeeGvShare(req) && req.body.gvShare) enquiry.gvShare = cleanGvShare(req.body.gvShare);
     enquiry.acceptedAt = new Date();
 
     const updated = await enquiry.save({ validateBeforeSave: false });

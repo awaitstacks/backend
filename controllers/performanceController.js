@@ -503,6 +503,7 @@ import enquiryModel from "../models/enquiryModel.js";
 import staffModel from "../models/staffProfileModel.js";
 import "../models/staffRoleModel.js";
 import { attachBookedBy } from "../utils/bookedBy.js";
+import { canSeeGvShare } from "../utils/gvShare.js";
 
 // ─── Helpers ──────────────────────────────────────────────────
 const IST = "+05:30";
@@ -743,9 +744,9 @@ const bookingStats = async (emps, from, to, wantKey) => {
   const tnrs = bookings.map((b) => b.tnr).filter(Boolean);
   const cancels = tnrs.length
     ? await cancellationModel
-        .find({ tnr: { $in: tnrs }, approvedBy: true })
-        .select("tnr gvCancellationAmount irctcCancellationAmount totalCancellationAmount refundAmount")
-        .lean()
+      .find({ tnr: { $in: tnrs }, approvedBy: true })
+      .select("tnr gvCancellationAmount irctcCancellationAmount totalCancellationAmount refundAmount")
+      .lean()
     : [];
   const cancelByTnr = new Map();
   cancels.forEach((c) => {
@@ -836,7 +837,7 @@ const FIT_ACTIONS = {
 const fitStats = async (emps, from, to, wantKey) => {
   const enquiries = await enquiryModel
     .find()
-    .select("fitCode fullName destination status isPickedUp isRatePassed isClosed isCancelled salesValue cancellationCharge actionLog pickedUpBy pickedUpAt cancelledBy cancelledAt owner createdAt preferredTravelDate zone delegations mobileNumber tourType numberOfDays numberOfNights adults children infants raisedBy pickupDate")
+    .select("fitCode fullName destination status isPickedUp isRatePassed isClosed isCancelled salesValue cancellationCharge actionLog pickedUpBy pickedUpAt cancelledBy cancelledAt owner createdAt preferredTravelDate zone delegations mobileNumber tourType numberOfDays numberOfNights adults children infants raisedBy pickupDate gvShare")
     .lean();
 
   const blank = () => ({
@@ -919,6 +920,9 @@ const fitStats = async (emps, from, to, wantKey) => {
           return e.raisedBy === "admin" ? { key: "", name: "Admin (old login)" } : { key: "", name: "Website (customer)" };
         })(),
         cancellationCharge: e.isCancelled ? num(e.cancellationCharge) : 0,
+        gvVinoth: e.status === "accepted" && !e.isCancelled ? num(e.gvShare?.vinoth) : 0,
+        gvGiridhar: e.status === "accepted" && !e.isCancelled ? num(e.gvShare?.giridhar) : 0,
+
         zones: Array.isArray(e.zone?.list) && e.zone.list.length ? e.zone.list.map((z) => z.name).filter(Boolean) : String(e.zone?.name || "").split(",").map((z) => z.trim()).filter(Boolean),
         // Kadaisi action yaar panna (status keezha "by …")
         lastBy: (() => {
@@ -975,6 +979,12 @@ export const getEmployeePerformance = async (req, res) => {
       want("bookings") ? bookingStats(emps, from, to, wantKey) : null,
       want("fit") ? fitStats(emps, from, to, wantKey) : null,
     ]);
+
+    // ↓↓↓ inga paste pannunga
+    if (fit && !canSeeGvShare(req)) {
+      fit.details = fit.details.map(({ gvVinoth, gvGiridhar, ...rest }) => rest); // eslint-disable-line no-unused-vars
+    }
+
 
     return res.status(200).json({
       success: true,

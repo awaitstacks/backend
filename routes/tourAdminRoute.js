@@ -72,10 +72,15 @@ import { getAllEnquiries } from "../controllers/tourController.js";
 import { getPaymentTasks, markPaymentTaskDone } from "../controllers/aadhaarController.js";
 import { lookupTicketTnr, forceRaisedToFromTnr } from "../controllers/ticketTnrController.js";
 import { getStaffPerformance, getFitPerformance } from "../controllers/performanceController.js";
+import { trackVisit, trafficReport, trafficVisitors, trafficVisitorJourney } from "../controllers/trafficController.js";
 import { get } from "mongoose";
 // Admin + Staff. IT mattum routes ku authAdminStrict.
 const authAdmin = authAdminOrStaff();
 const touradminRouter = express.Router();
+touradminRouter.post("/traffic/track", express.text({ type: "text/plain", limit: "10kb" }), trackVisit);
+touradminRouter.get("/traffic/report", authAdminOrStaff("/website-traffic"), trafficReport);
+touradminRouter.get("/traffic/visitors", authAdminOrStaff("/website-traffic"), trafficVisitors);
+touradminRouter.get("/traffic/visitor/:visitorId", authAdminOrStaff("/website-traffic"), trafficVisitorJourney);
 touradminRouter.get("/check-session", authAdminStrict, (req, res) => res.json({ success: true }));
 
 // ✅ Route: Add a new tour with images

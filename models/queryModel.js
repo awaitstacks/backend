@@ -151,6 +151,9 @@ const querySchema = new mongoose.Schema(
 
     // Booking TNR (optional) — indha ticket endha booking pathi
     tnr: { type: String, trim: true, uppercase: true, default: "" },
+    priority: { type: String, enum: ["low", "medium", "high"], default: "low" },
+    etaDate: { type: Date, default: null },
+    
 
     // ────────────────────────────────────────────────
     // Status — raise pannum bodhu "open"
@@ -203,6 +206,7 @@ querySchema.index({ queryType: 1, createdAt: -1 });
 querySchema.index({ raisedTo: 1, status: 1 });
 querySchema.index({ tnr: 1 });
 querySchema.index({ raisedToRole: 1, raisedTo: 1 });
+querySchema.index({ priority: 1, createdAt: -1 });
 
 const Query = mongoose.model("Query", querySchema);
 

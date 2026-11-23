@@ -105,6 +105,7 @@ import {
   getRoles, createRole, updateRole, deleteRole,
 } from "../controllers/staffRoleController.js";
 import { lookupTicketTnr, forceRaisedToFromTnr } from "../controllers/ticketTnrController.js";
+import { getMyEditHistory } from "../controllers/tourAdminController.js";
 
 import { get } from "mongoose";
 import {
@@ -294,6 +295,7 @@ tourRouter.put('/staff-roles/:id', authTourOrStaff("/staff-roles"), updateRole);
 tourRouter.delete('/staff-roles/:id', authTourOrStaff("/staff-roles"), deleteRole);
 tourRouter.get("/queries/sync", authTour, getAdminQuerySync);
 tourRouter.get("/queries", authTour, getTourQueries);
+tourRouter.get("/queries/edit-history/mine", authTour, getMyEditHistory);
 // ← puthusu: tour admin raise (tourRoute.js top la: import { queryUpload } from "../middlewares/multer.js";)
 // tourRouter.post("/queries", authTour, queryUpload, raiseTourQuery);
 tourRouter.get("/queries/tnr-lookup/:tnr", authTour, lookupTicketTnr);

@@ -5373,6 +5373,30 @@ async function buildQueryFilter(q = {}) {
             : { priority: { $in: prios } });
     }
 
+    const isEtaDay = (d) => /^\d{4}-\d{2}-\d{2}$/.test(String(d || ""));
+
+    // ETA — "overdue,today,tomorrow,week,later,none" (IST naal)
+    const etaStates = csvList(q.etaState);
+    if (etaStates.length) {
+        const t0 = new Date(`${istTodayStr()}T00:00:00+05:30`);
+        const day = (n) => new Date(t0.getTime() + n * 86400000);
+        const ors = [];
+        if (etaStates.includes("overdue")) ors.push({ etaDate: { $lt: day(0) }, status: { $nin: ["close", "reject"] } });
+        if (etaStates.includes("today")) ors.push({ etaDate: { $gte: day(0), $lt: day(1) } });
+        if (etaStates.includes("tomorrow")) ors.push({ etaDate: { $gte: day(1), $lt: day(2) } });
+        if (etaStates.includes("week")) ors.push({ etaDate: { $gte: day(0), $lt: day(7) } });
+        if (etaStates.includes("later")) ors.push({ etaDate: { $gte: day(7) } });
+        if (etaStates.includes("none")) ors.push({ etaDate: null });
+        if (ors.length) and.push({ $or: ors });
+    }
+    // ETA date / range — "30 Dec" thedalaam (etaFrom / etaTo, future date um)
+    if (isEtaDay(q.etaFrom) || isEtaDay(q.etaTo)) {
+        const r = {};
+        if (isEtaDay(q.etaFrom)) r.$gte = new Date(`${q.etaFrom}T00:00:00+05:30`);
+        if (isEtaDay(q.etaTo)) r.$lte = new Date(`${q.etaTo}T23:59:59.999+05:30`);
+        and.push({ etaDate: r });
+    }
+
     // Raised to — staff + department (andha team staff ku, illa andha team ku raise aanadhu)
     const to = csvIds(q.raisedTo);
     const toDept = csvIds(q.raisedToDept);
@@ -5443,16 +5467,28 @@ async function fetchQueries(reqQuery, req = null, extraFilter = null) {
     // Tab counts la status filter apply panna koodadhu
     const { status, ...countFilter } = filter;
 
+    // Staff portal: ETA munnaadi irukkuradhu mudhal (25 → 27 → 2 Dec…), ETA illaadhadhu kadaisila (puthusu mudhal).
+    // Tour admin / Admin page la munnaadi maadhiriye puthu ticket mudhal.
+    const listBase = (f) => Query.find(f)
+        .select("-replies -editHistory") // replies / history thani API la varum
+        .populate({ path: "raisedBy", ...STAFF_PUBLIC })
+        .populate({ path: "raisedTo", ...STAFF_PUBLIC })
+        .populate(TEAM_PUBLIC);
+    const skip = (page - 1) * limit;
+    const listQueries = req && isStaffReq(req)
+        ? (async () => {
+            const withEta = { $and: [filter, { etaDate: { $ne: null } }] };
+            const noEta = { $and: [filter, { etaDate: null }] }; // null / field illaadha pazhaya tickets
+            const nEta = await Query.countDocuments(withEta);
+            const a = skip < nEta ? await listBase(withEta).sort({ etaDate: 1, createdAt: 1 }).skip(skip).limit(limit).lean() : [];
+            const left = limit - a.length;
+            const b = left > 0 ? await listBase(noEta).sort({ createdAt: -1 }).skip(Math.max(0, skip - nEta)).limit(left).lean() : [];
+            return [...a, ...b];
+        })()
+        : listBase(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean();
+
     const [queries, total, counts, queryTypes] = await Promise.all([
-        Query.find(filter)
-            .select("-replies -editHistory") // replies / history thani API la varum
-            .populate({ path: "raisedBy", ...STAFF_PUBLIC })
-            .populate({ path: "raisedTo", ...STAFF_PUBLIC })
-            .populate(TEAM_PUBLIC)
-            .sort({ createdAt: -1 })
-            .skip((page - 1) * limit)
-            .limit(limit)
-            .lean(),
+        listQueries,
         Query.countDocuments(filter),
         Query.aggregate([
             { $match: countFilter },

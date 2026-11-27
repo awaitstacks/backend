@@ -71,6 +71,7 @@ import { tourUpload, queryUpload } from "../middlewares/multer.js";
 import { getAllEnquiries } from "../controllers/tourController.js";
 import { getPaymentTasks, markPaymentTaskDone } from "../controllers/aadhaarController.js";
 import { lookupTicketTnr, forceRaisedToFromTnr } from "../controllers/ticketTnrController.js";
+import { getCancellationAnalytics } from "../controllers/cancellationAnalyticsController.js";
 import { getStaffPerformance, getFitPerformance } from "../controllers/performanceController.js";
 import { trackVisit, trafficReport, trafficVisitors, trafficVisitorJourney } from "../controllers/trafficController.js";
 import { get } from "mongoose";
@@ -150,6 +151,7 @@ touradminRouter.get("/analytics-month-wise", authAdmin, getAnalyticsMonthWise);
 touradminRouter.get("/analytics-cancellation", authAdmin, getAnalyticsCancellation);
 touradminRouter.get("/analytics-tour-list", authAdmin, getAnalyticsTourList);
 touradminRouter.get("/analytics-search", authAdmin, searchAnalyticsTours);
+touradminRouter.get("/cancellation-analytics", authAdmin, getCancellationAnalytics);
 touradminRouter.post("/:tourId/vehicles", authAdmin, adminCreateTourVehicle);
 
 touradminRouter.patch(

@@ -9903,6 +9903,7 @@ const updateTourProfile = async (req, res) => {
                 class: flight.class || "",
                 departureTime: flight.departureTime || "",
                 arrivalTime: flight.arrivalTime || "",
+                tripType: flight.tripType || "", // ← flight trip type (Boarding / Middle / Deboarding)
                 // ── NEW: flight-wise addons for this variant ──
                 addons: parseAddonsArray(flight.addons),
               }))
@@ -14278,6 +14279,7 @@ const addTour = async (req, res) => {
                   class: f.class || "",
                   departureTime: f.departureTime || "",
                   arrivalTime: f.arrivalTime || "",
+                  tripType: f.tripType || "", // ← flight trip type
                   // ── NEW: flight-wise addons for this variant ──
                   addons: parseAddonsArray(f.addons),
                 }))
@@ -14370,6 +14372,7 @@ const addTour = async (req, res) => {
           class: f.class || "",
           departureTime: f.departureTime || "",
           arrivalTime: f.arrivalTime || "",
+          tripType: f.tripType || "", // ← flight trip type
           // ── NEW: flight-wise addons ──
           addons: parseAddonsArray(f.addons),
         }))
